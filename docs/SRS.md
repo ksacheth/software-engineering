@@ -521,8 +521,5 @@ All detectors in this list are restricted by F.5: idempotent methods, benign mar
 
 ## Version History
 
-- **0.1** (31 July 2026) – Initial draft: scope and overall description.
-- **0.2** (1 August 2026) – Functional requirements, detector catalogue.
-- **1.0** (2 August 2026) – Non-functional requirements, data model; baselined.
-- **1.1** (3 August 2026) – Positioning vs infrastructure VA; declarative detectors; evidence re-evaluation; EPSS. Full text archived at `docs/archive/SRS-v1.1-detailed.md`.
-- **2.1** (3 August 2026) – Restructured into the reference description/input/output format; tables replaced by prose and bullets throughout, with the role-permission matrix removed from the appendices.
+- **1.0** (31 July 2026) – Initial SRS draft.
+- **2.0** (3 August 2026) – Final revised SRS.
