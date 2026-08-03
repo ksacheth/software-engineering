@@ -300,6 +300,7 @@ A web dashboard shall be provided as the sole user interface, covering authentic
 **Output:**
 
 - **Sign in / Register** — authentication and email confirmation.
+- **Footer** - contains links to the privacy policy and terms of service and contact details.
 - **Dashboard home** — posture across all targets, recent scans, severity distribution.
 - **Targets list** — all targets with verification status and last scan result.
 - **Target detail** — scope configuration, verification state, scan history, trend.

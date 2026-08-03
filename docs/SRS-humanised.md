@@ -314,6 +314,7 @@ Dashboard home — posture across all targets, recent scans, severity distributi
 
 Targets list — all targets with verification status and last scan result.
 Target detail — scope configuration, verification state, scan history, trend.
+Footer — contains links to the privacy policy and terms of service and contact details.
 New scan — profile selection, configuration, quota display.
 Live scan view — phase, counters, streaming findings, pause/cancel controls.
 Findings list — filterable, sortable, colour- and label-coded by severity.
