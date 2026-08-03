@@ -119,48 +119,54 @@ WVS is a new, self-contained, multi-tenant hosted product. It is decomposed into
               └──────────────────┘   └──────────────────┘
 ```
 
-| Subsystem | Responsibility |
-|---|---|
-| **Web Dashboard** | Single-page application: authentication, target management, scan control, live progress, finding triage, report export. |
-| **Application API** | Stateless HTTP API: validation, authentication/authorisation, persistence, job enqueueing, report generation. |
-| **Job Queue** | Durable queue decoupling scan requests from execution; retry, priority, cancellation. |
-| **Scan Engine Workers** | Horizontally scalable processes consuming scan jobs and running the crawl + detection pipeline. |
-| **Scope Guard** | The safety kernel: every outbound request passes through it (authorisation, scope, rate limits, network blocks). |
-| **Database** | Durable store for users, targets, scans, findings, evidence, and audit records. |
+- **Web Dashboard** – Single-page application: authentication, target management, scan control, live progress, finding triage, report export.
+- **Application API** – Stateless HTTP API: validation, authentication and authorisation, persistence, job enqueueing, report generation.
+- **Job Queue** – Durable queue decoupling scan requests from execution; retry, priority, cancellation.
+- **Scan Engine Workers** – Horizontally scalable processes consuming scan jobs and running the crawl and detection pipeline.
+- **Scope Guard** – The safety kernel: every outbound request passes through it (authorisation, scope, rate limits, network blocks).
+- **Database** – Durable store for users, targets, scans, findings, evidence, and audit records.
 
 **Positioning.** WVS belongs to the Dynamic Application Security Testing (DAST) category, comparable to OWASP ZAP, Burp Suite, and Acunetix, rather than to infrastructure vulnerability assessment products such as Nessus or Qualys. It probes an application's own code for defects rather than matching installed software against CVE feeds. Because WVS is a publicly reachable hosted service that originates its own outbound traffic, unlike installed scanners, which can devolve authorisation to their operator, authorisation is enforced as a mandatory safety kernel (C.2, F.2, F.8). Without it, the product would constitute an anonymous, internet-facing attack platform.
 
 ## 2.2 Product Functions
 
 **F.1 Account and Access Management**
+
 - Register, confirm, authenticate, and manage user accounts and sessions.
 - Enforce role-based authorisation and organisation-scoped data isolation.
 
 **F.2 Target Management and Authorisation**
+
 - Register targets and prove ownership before any scan is permitted.
 - Define per-target scope and manage the target lifecycle.
 
 **F.3 Scan Configuration and Execution**
+
 - Configure scans by profile and run them immediately or on a recurring schedule.
 - Queue, execute, pause, resume, and cancel scans with live progress reporting.
 
 **F.4 Discovery (Crawling)**
+
 - Enumerate in-scope URLs, forms, and parameters within the defined scope.
 - Render JavaScript-driven pages to reach client-side routes and API calls.
 
 **F.5 Vulnerability Detection**
-- Execute the passive and safe-active detector catalogue (Appendix B).
+
+- Execute the passive and safe-active detector set defined for this release.
 - Classify each finding by severity, CWE, OWASP category, and confidence.
 
 **F.6 Findings Management**
+
 - Deduplicate findings and compare them across successive scans of a target.
 - Retain sanitised evidence and record triage decisions.
 
 **F.7 Reporting and Export**
+
 - Generate reports in PDF, HTML, JSON, CSV, and SARIF.
 - Serve technical and summary audiences through distinct report templates.
 
 **F.8 Safety, Auditing, and Administration**
+
 - Enforce rate limits, blocklists, and SSRF protection on all outbound traffic.
 - Maintain an immutable audit log and provide administration and a kill switch.
 
@@ -195,15 +201,13 @@ The dashboard accommodates this spread with a layered view: plain-language summa
 
 **Dependencies:**
 
-| # | Dependency | Type |
-|---|---|---|
-| D-1 | Node.js LTS runtime (v22 or later) | Runtime |
-| D-2 | PostgreSQL 16 or later | Runtime |
-| D-3 | Redis 7 or later | Runtime |
-| D-4 | Headless Chromium (via Playwright) for JavaScript rendering | Runtime |
-| D-5 | OSV advisory API and FIRST EPSS API | External service |
-| D-6 | SMTP relay for transactional email | External service |
-| D-7 | A registered domain and TLS certificate for the WVS deployment itself | Deployment |
+- **D-1** Node.js LTS runtime, v22 or later – runtime.
+- **D-2** PostgreSQL 16 or later – runtime.
+- **D-3** Redis 7 or later – runtime.
+- **D-4** Headless Chromium, via Playwright, for JavaScript rendering – runtime.
+- **D-5** OSV advisory API and FIRST EPSS API – external service.
+- **D-6** SMTP relay for transactional email – external service.
+- **D-7** A registered domain and TLS certificate for the WVS deployment itself – deployment.
 
 ---
 
@@ -215,7 +219,7 @@ One requirement per function group (F.1–F.8, §2.2). **Shall** = mandatory, **
 
 ### F.1 Account and Access Management
 
-**Description:** The system shall support registration with email confirmation, passwords of at least 12 characters stored only as Argon2id salted hashes, and token-based sessions with short-lived access tokens and account lockout after repeated failed logins. It shall support the roles `ADMIN`, `ANALYST`, `DEVELOPER`, and `VIEWER`, associate every user with exactly one organisation, and prevent all access to another organisation's data. It should also allow session termination, TOTP two-factor authentication, and account deletion.
+**Description:** The system shall support registration with email confirmation, passwords of at least 12 characters and account lockout after repeated failed logins. It shall support the roles `ADMIN`, `ANALYST`, `DEVELOPER`, and `VIEWER`, associate every user with exactly one organisation, and prevent all access to another organisation's data. It should also allow session termination, TOTP two-factor authentication, and account deletion.
 
 **Input:** Registration details, the emailed confirmation link, login credentials, refresh tokens, TOTP codes, and role and organisation assignments.
 
@@ -247,7 +251,7 @@ One requirement per function group (F.1–F.8, §2.2). **Shall** = mandatory, **
 
 ### F.5 Vulnerability Detection
 
-**Description:** The system shall implement all detectors marked **M** in Appendix B, expressed as declarative YAML templates validated against a published JSON Schema wherever request-and-match logic suffices and as native modules otherwise. Passive detectors shall run against every in-scope response without additional requests; active detectors shall be restricted to non-destructive, idempotent probes with benign markers that never modify data, exfiltrate, execute commands, or write files. Each finding shall carry a CVSS v3.1 base score with severity derived from the CVSS v3.1 qualitative scale [4], a CWE, an OWASP Top 10:2021 category, and a confidence of `CONFIRMED`, `FIRM`, or `TENTATIVE`; severity shall not be silently downgraded on the basis of low confidence, both values being reported so the user decides; component versions should be correlated against OSV, with EPSS shown alongside CVSS where a CVE exists. Detector failures shall be logged and isolated, and a scan shall halt as `ABORTED_SAFETY` if its own traffic degrades the target.
+**Description:** The system shall implement the required passive and safe-active detector set for this release, expressed as declarative YAML templates validated against a published JSON Schema wherever request-and-match logic suffices and as native modules otherwise. Passive detectors shall run against every in-scope response without additional requests; active detectors shall be restricted to non-destructive, idempotent probes with benign markers that never modify data, exfiltrate, execute commands, or write files. Each finding shall carry a CVSS v3.1 base score with severity derived from the CVSS v3.1 qualitative scale [4], a CWE, an OWASP Top 10:2021 category, and a confidence of `CONFIRMED`, `FIRM`, or `TENTATIVE`; severity shall not be silently downgraded on the basis of low confidence, both values being reported so the user decides; component versions should be correlated against OSV, with EPSS shown alongside CVSS where a CVE exists. Detector failures shall be logged and isolated, and a scan shall halt as `ABORTED_SAFETY` if its own traffic degrades the target.
 
 **Input:** The responses, forms, and parameters produced by discovery (F.4), the loaded detector registry, fingerprinted component versions, and OSV and EPSS responses.
 
@@ -282,7 +286,7 @@ One requirement per function group (F.1–F.8, §2.2). **Shall** = mandatory, **
 ### 3.2.1 User Interfaces
 
 **Description:**
-A web dashboard shall be provided as the sole user interface, covering authentication, target management, scan control, findings triage, reporting, and administration. Views shall be layered, presenting a plain-language summary by default with technical evidence disclosed on demand (NFR-USE-1). Severity shall be conveyed by label and shape as well as colour; all views shall be operable by keyboard alone; the layout shall be responsive per NFR-USE-2.
+A web dashboard shall be provided as the sole user interface, covering authentication, target management, scan control, findings triage, reporting, and administration. Views shall be layered, presenting a plain-language summary by default with technical evidence disclosed on demand (NFR-USE-1). Severity shall be conveyed by label and shape as well as colour; all views shall be operable by keyboard alone.
 
 **Input:**
 
@@ -318,7 +322,7 @@ The system requires no specialised hardware beyond a standard server or workstat
 ### 3.2.3 Software Interfaces
 
 **Description:**
-The system shall interface with external services for advisory data, transactional email, name resolution, and JavaScript rendering. Failure of any one of these shall degrade only the feature that depends on it (NFR-REL-1), and the degradation shall be recorded rather than silently absorbed:
+The system shall interface with external services for advisory data, transactional email, name resolution, and JavaScript rendering. Failure of any one of these shall degrade only the feature that depends on it, and the degradation shall be recorded rather than silently absorbed:
 
 - **OSV / EPSS advisory APIs** — map fingerprinted component versions to known CVEs and supply exploitation-probability scores (F.5). On failure the scan proceeds, affected findings are suppressed, and the degradation is recorded on the scan.
 - **SMTP relay** — verification and notification email. On failure, messages are queued for retry and account creation is not blocked.
@@ -382,10 +386,6 @@ Each requirement is identified as `NFR-CAT-n` (§1.3) and stated so that it can 
 
 **Description:** All input crossing a trust boundary shall be validated against an explicit schema; all database access shall use parameterised queries or an ORM; every endpoint shall enforce object-level authorisation verifying the principal's organisation owns the resource.
 
-### NFR-SEC-3 Data Protection and Supply-Chain Security
-
-**Description:** Retained evidence shall be encrypted at rest; secrets shall come from environment configuration or a secret manager, never version control; dependency scanning shall fail any build introducing a Critical or High advisory; the system shall pass a Standard-profile scan of itself with no finding of `HIGH` or above.
-
 ### NFR-SEC-4 Endpoint Rate Limiting and Error Disclosure
 
 **Description:** Authentication, registration, target verification, and scan initiation endpoints shall be rate-limited; error responses shall not disclose stack traces, framework versions, internal hostnames, or SQL fragments.
@@ -393,14 +393,6 @@ Each requirement is identified as `NFR-CAT-n` (§1.3) and stated so that it can 
 ### NFR-USE-1 Self-Service Onboarding and Layered Explanation
 
 **Description:** A first-time user shall be able to register a target, verify ownership, and complete a scan using only in-product guidance; every finding shall be explained in plain language before technical detail, with evidence progressively disclosed.
-
-### NFR-USE-2 Accessibility and Interface Safety
-
-**Description:** The interface shall conform to WCAG 2.1 AA, be usable at 360–2560 px viewport widths, require explicit confirmation naming the resource for every destructive action, and present error messages that state what failed and what the user can do about it.
-
-### NFR-REL-1 Job Durability and Recovery
-
-**Description:** No scan job shall be lost to a worker crash (jobs are redelivered and resumed); the system shall recover from transient database/queue unavailability of up to 60 s without data loss; failure of an external dependency shall degrade only the affected feature; the database shall be backed up daily (RPO 24 h, RTO 4 h).
 
 ### NFR-MAINT-1 Testability, Code Quality, and Observability
 
@@ -446,7 +438,7 @@ Each requirement is identified as `NFR-CAT-n` (§1.3) and stated so that it can 
 
 ### A.1 Scan Workflow
 
-The block diagram below illustrates the overall workflow of the proposed system. The process begins with the user registering a target and proving ownership of it, without which no scan may proceed. An authorised scan request selects a profile and scope, after which discovery crawls the target to enumerate URLs, forms, and parameters, rendering JavaScript where necessary. The detection stage runs passive detectors against every captured response and safe active detectors against the discovered injection points; every outbound request in both stages passes through the Scope Guard, which enforces verification, scope, blocklist, and rate limits before any packet leaves the system. Raw results are then normalised, deduplicated, classified by severity and confidence, and compared against the previous scan of the same target. Finally, the retained findings and sanitised evidence are rendered as a report in the requested format.
+The block diagram below summarises the scan workflow. A user registers and verifies a target before requesting an in-scope scan. Discovery identifies reachable URLs and inputs, then passive and safe-active detectors assess the target through the Scope Guard. Findings are normalised and retained with sanitised evidence before a report is produced.
 
 ```
   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
@@ -470,91 +462,10 @@ The block diagram below illustrates the overall workflow of the proposed system.
   └──────────────┘
 ```
 
-## Appendix B: Detector Catalogue
-
-### B.1 Passive Detectors
-
-Each entry reads: **ID** name — CWE, OWASP 2021 category, default severity, priority.
-
-- **P-01** Missing or weak Content-Security-Policy — CWE-693, A05, Medium, M.
-- **P-02** Missing HTTP Strict-Transport-Security — CWE-319, A02, Medium, M.
-- **P-03** Missing `X-Content-Type-Options: nosniff` — CWE-693, A05, Low, M.
-- **P-04** Missing or permissive frame-ancestors / X-Frame-Options — CWE-1021, A05, Medium, M.
-- **P-05** Missing or overly permissive Referrer-Policy — CWE-200, A01, Low, M.
-- **P-06** Missing Permissions-Policy — CWE-693, A05, Info, S.
-- **P-07** Cookie without `Secure` attribute — CWE-614, A05, Medium, M.
-- **P-08** Cookie without `HttpOnly` attribute — CWE-1004, A05, Medium, M.
-- **P-09** Cookie without or with weak `SameSite` — CWE-1275, A01, Low, M.
-- **P-10** Cookie scoped too broadly (parent domain) — CWE-565, A01, Low, S.
-- **P-11** Deprecated TLS protocol offered (TLS 1.0 / 1.1 / SSLv3) — CWE-327, A02, High, M.
-- **P-12** Weak cipher suite offered — CWE-327, A02, High, M.
-- **P-13** Certificate expired, not yet valid, or expiring within 30 days — CWE-324, A02, High, M.
-- **P-14** Certificate hostname mismatch — CWE-297, A07, High, M.
-- **P-15** Self-signed or untrusted certificate chain — CWE-295, A07, High, M.
-- **P-16** Weak certificate signature algorithm or key size — CWE-327, A02, Medium, S.
-- **P-17** Server / framework version disclosure in headers — CWE-200, A05, Low, M.
-- **P-18** Technology and component fingerprinting — no CWE/OWASP mapping, Info, M.
-- **P-19** Known-vulnerable component version (OSV/CVE correlation) — CWE-1104, A06, varies by CVE, S.
-- **P-20** Verbose error page or stack trace disclosure — CWE-209, A05, Medium, M.
-- **P-21** Exposed version control directory (`.git`, `.svn`, `.hg`) — CWE-527, A05, Critical, M.
-- **P-22** Exposed environment or configuration file (`.env`, `web.config`) — CWE-538, A05, Critical, M.
-- **P-23** Directory listing enabled — CWE-548, A05, Medium, M.
-- **P-24** Backup or temporary file exposure (`.bak`, `~`, `.old`) — CWE-530, A05, High, S.
-- **P-25** Mixed active content on HTTPS page — CWE-311, A02, Medium, M.
-- **P-26** External script without Subresource Integrity — CWE-353, A08, Low, S.
-- **P-27** Secret or credential pattern in response body — CWE-540, A05, Critical, M.
-- **P-28** Email or personal data disclosure in response — CWE-200, A01, Low, S.
-- **P-29** Sensitive page cacheable by intermediaries — CWE-525, A04, Low, S.
-- **P-30** Missing or malformed `security.txt` (RFC 9116) — no CWE/OWASP mapping, Info, C.
-- **P-31** Autocomplete enabled on password or sensitive field — CWE-522, A07, Low, C.
-
-### B.2 Safe Active Detectors
-
-All detectors in this table are restricted by F.5: idempotent methods, benign marker payloads, no data modification, no command execution, no file writing. Each entry reads: **ID** name — detection technique, CWE, OWASP 2021 category, default severity, priority.
-
-- **A-01** Reflected Cross-Site Scripting — benign marker reflected unencoded into an executable context. CWE-79, A03, High, M.
-- **A-02** SQL Injection (error-based) — syntax-breaking characters matched against database error signatures. CWE-89, A03, Critical, M.
-- **A-03** SQL Injection (boolean-based) — responses to logically true and false conditions compared. CWE-89, A03, Critical, S.
-- **A-04** Open Redirect — redirect parameter pointed at a sentinel host; `Location` confirmed. CWE-601, A01, Medium, M.
-- **A-05** CORS misconfiguration — varied `Origin` values; reflection, `null`, or credentialed wildcard detected. CWE-942, A05, High, M.
-- **A-06** Clickjacking — page confirmed framable without frame-ancestor restrictions. CWE-1021, A05, Medium, M.
-- **A-07** Dangerous HTTP methods enabled — `OPTIONS` enumeration; `TRACE`/`PUT`/`DELETE` verified non-destructively. CWE-650, A05, Medium, M.
-- **A-08** Host header injection — alternate `Host` reflected unvalidated into links or redirects. CWE-644, A03, Medium, S.
-- **A-09** Sensitive file and directory enumeration — bounded, rate-limited wordlist of administrative and backup paths. CWE-538, A05, varies, M.
-- **A-10** Missing anti-CSRF token on state-changing form — forms analysed structurally for a token field and its unpredictability. CWE-352, A01, Medium, S.
-- **A-11** Path traversal (read-only probe) — traversal sequences matched against read-only file signatures. CWE-22, A01, High, S.
-- **A-12** Server-side template injection (detection only) — arithmetic marker expression evaluated; no further exploitation. CWE-1336, A03, High, C.
-- **A-13** Unauthenticated access to administrative interface — known admin paths classified as gated or open. CWE-306, A01, High, S.
-- **A-14** Improper HTTPS redirection — plaintext origin verified to redirect to HTTPS. CWE-319, A02, Medium, M.
-
-### B.3 Explicitly Excluded Techniques
-
-- **Time-based blind SQL injection** – Indistinguishable from network variance within the response budget; high false-positive rate.
-- **OS command injection** – Cannot be probed without risk of execution on the target.
-- **File upload exploitation** – Necessarily writes to the target, violating C.1.
-- **XML External Entity with outbound resolution** – Constitutes SSRF against third parties.
-- **Server-side request forgery exploitation** – Would make the target attack other systems.
-- **Insecure deserialisation exploitation** – Cannot be probed without risk of code execution.
-- **Brute force / credential stuffing** – Attacks accounts rather than assessing configuration.
-- **Denial of service, stress, resource exhaustion** – Directly harms the target.
-
-## Appendix C: Role-Permission Matrix
-
-- **`ADMIN`** – Every capability available to an `ANALYST`, plus managing users and quotas, editing the blocklist, viewing the audit log, and activating the kill switch.
-- **`ANALYST`** – Register and verify targets, configure scope, initiate and fully configure scans, pause and cancel own scans, view findings and raw evidence, triage findings, export technical and executive reports, and delete targets and scans. Cannot perform system administration.
-- **`DEVELOPER`** – Initiate scans with default configuration, pause and cancel own scans, view findings and raw evidence, triage findings, and export technical and executive reports. Cannot register or verify targets, configure scope or scan settings, or delete targets and scans.
-- **`VIEWER`** – View findings and export the executive report only. Cannot view raw evidence, triage findings, initiate scans, or modify any resource.
-
-
 ## Version History
 
-| Version | Date | Description |
-|---|---|---|
-| 0.1 | 2026-07-18 | Initial draft: scope and overall description |
-| 0.2 | 2026-07-25 | Functional requirements, detector catalogue |
-| 1.0 | 2026-08-01 | Non-functional requirements, data model; baselined |
-| 1.1 | 2026-08-02 | Positioning vs infrastructure VA; declarative detectors; evidence re-evaluation; EPSS (full text archived at `docs/archive/SRS-v1.1-detailed.md`) |
-
----
-
-*End of document.*
+- **0.1** (18 July 2026) – Initial draft: scope and overall description.
+- **0.2** (25 July 2026) – Functional requirements, detector catalogue.
+- **1.0** (1 August 2026) – Non-functional requirements, data model; baselined.
+- **1.1** (2 August 2026) – Positioning vs infrastructure VA; declarative detectors; evidence re-evaluation; EPSS. Full text archived at `docs/archive/SRS-v1.1-detailed.md`.
+- **2.1** (2 August 2026) – Restructured into the reference description/input/output format; tables replaced by prose and bullets throughout, with the appendix reduced to the workflow block diagram.
