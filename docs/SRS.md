@@ -4,7 +4,7 @@
 
 **Version 2.1 - 2 August 2026**
 
-Prepared in accordance with IEEE Std 830-1998, *Recommended Practice for Software Requirements Specifications*.
+Prepared in accordance with IEEE Std 830-1998
 
 ---
 
