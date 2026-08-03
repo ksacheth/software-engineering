@@ -519,21 +519,10 @@ All detectors in this list are restricted by F.5: idempotent methods, benign mar
 - **A-13** Unauthenticated access to administrative interface — known admin paths classified as gated or open. CWE-306, A01, High, S.
 - **A-14** Improper HTTPS redirection — plaintext origin verified to redirect to HTTPS. CWE-319, A02, Medium, M.
 
-### B.3 Explicitly Excluded Techniques
-
-- **Time-based blind SQL injection** – Indistinguishable from network variance within the response budget; high false-positive rate.
-- **OS command injection** – Cannot be probed without risk of execution on the target.
-- **File upload exploitation** – Necessarily writes to the target, violating C.1.
-- **XML External Entity with outbound resolution** – Constitutes SSRF against third parties.
-- **Server-side request forgery exploitation** – Would make the target attack other systems.
-- **Insecure deserialisation exploitation** – Cannot be probed without risk of code execution.
-- **Brute force / credential stuffing** – Attacks accounts rather than assessing configuration.
-- **Denial of service, stress, resource exhaustion** – Directly harms the target.
-
 ## Version History
 
-- **0.1** (18 July 2026) – Initial draft: scope and overall description.
-- **0.2** (25 July 2026) – Functional requirements, detector catalogue.
-- **1.0** (1 August 2026) – Non-functional requirements, data model; baselined.
-- **1.1** (2 August 2026) – Positioning vs infrastructure VA; declarative detectors; evidence re-evaluation; EPSS. Full text archived at `docs/archive/SRS-v1.1-detailed.md`.
-- **2.1** (2 August 2026) – Restructured into the reference description/input/output format; tables replaced by prose and bullets throughout, with the role-permission matrix removed from the appendices.
+- **0.1** (31 July 2026) – Initial draft: scope and overall description.
+- **0.2** (1 August 2026) – Functional requirements, detector catalogue.
+- **1.0** (2 August 2026) – Non-functional requirements, data model; baselined.
+- **1.1** (3 August 2026) – Positioning vs infrastructure VA; declarative detectors; evidence re-evaluation; EPSS. Full text archived at `docs/archive/SRS-v1.1-detailed.md`.
+- **2.1** (3 August 2026) – Restructured into the reference description/input/output format; tables replaced by prose and bullets throughout, with the role-permission matrix removed from the appendices.
