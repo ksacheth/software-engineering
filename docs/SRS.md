@@ -251,11 +251,11 @@ One requirement per function group (F.1–F.8, §2.2). **Shall** = mandatory, **
 
 ### F.5 Vulnerability Detection
 
-**Description:** The system shall implement the required passive and safe-active detector set for this release, expressed as declarative YAML templates validated against a published JSON Schema wherever request-and-match logic suffices and as native modules otherwise. Passive detectors shall run against every in-scope response without additional requests; active detectors shall be restricted to non-destructive, idempotent probes with benign markers that never modify data, exfiltrate, execute commands, or write files. Each finding shall carry a CVSS v3.1 base score with severity derived from the CVSS v3.1 qualitative scale [4], a CWE, an OWASP Top 10:2021 category, and a confidence of `CONFIRMED`, `FIRM`, or `TENTATIVE`; severity shall not be silently downgraded on the basis of low confidence, both values being reported so the user decides; component versions should be correlated against OSV, with EPSS shown alongside CVSS where a CVE exists. Detector failures shall be logged and isolated, and a scan shall halt as `ABORTED_SAFETY` if its own traffic degrades the target.
+**Description:** The system shall check the pages, forms, and inputs found during discovery for security issues using the detector catalogue in Appendix B. It shall review collected responses without making extra requests and may run safe tests where needed. These tests must never change the target, access private data, run commands, or upload files. Each finding shall explain the issue in plain language and include its severity, confidence, relevant CWE and OWASP categories, affected location, and advice for fixing it. Known component versions should also be checked against public vulnerability information. If a check fails, the system shall record the failure and continue; if its own traffic appears to harm the target, it shall stop the scan immediately.
 
-**Input:** The responses, forms, and parameters produced by discovery (F.4), the loaded detector registry, fingerprinted component versions, and OSV and EPSS responses.
+**Input:** The pages, forms, parameters, and component-version information found during discovery (F.4), plus public vulnerability information.
 
-**Output:** Classified findings carrying severity, CWE, OWASP category, and confidence; per-template validation results; logged detector failures leaving the scan intact; and an `ABORTED_SAFETY` termination on target degradation.
+**Output:** Clear, classified findings with severity, confidence, affected location, and remediation advice; a record of any failed checks; and a stopped scan if target safety is affected.
 
 ### F.6 Findings Management
 
@@ -462,10 +462,78 @@ The block diagram below summarises the scan workflow. A user registers and verif
   └──────────────┘
 ```
 
+## Appendix B: Detector Catalogue
+
+### B.1 Passive Detectors
+
+Each entry reads: **ID** name — CWE, OWASP 2021 category, default severity, priority.
+
+- **P-01** Missing or weak Content-Security-Policy — CWE-693, A05, Medium, M.
+- **P-02** Missing HTTP Strict-Transport-Security — CWE-319, A02, Medium, M.
+- **P-03** Missing `X-Content-Type-Options: nosniff` — CWE-693, A05, Low, M.
+- **P-04** Missing or permissive frame-ancestors / X-Frame-Options — CWE-1021, A05, Medium, M.
+- **P-05** Missing or overly permissive Referrer-Policy — CWE-200, A01, Low, M.
+- **P-06** Missing Permissions-Policy — CWE-693, A05, Info, S.
+- **P-07** Cookie without `Secure` attribute — CWE-614, A05, Medium, M.
+- **P-08** Cookie without `HttpOnly` attribute — CWE-1004, A05, Medium, M.
+- **P-09** Cookie without or with weak `SameSite` — CWE-1275, A01, Low, M.
+- **P-10** Cookie scoped too broadly (parent domain) — CWE-565, A01, Low, S.
+- **P-11** Deprecated TLS protocol offered (TLS 1.0 / 1.1 / SSLv3) — CWE-327, A02, High, M.
+- **P-12** Weak cipher suite offered — CWE-327, A02, High, M.
+- **P-13** Certificate expired, not yet valid, or expiring within 30 days — CWE-324, A02, High, M.
+- **P-14** Certificate hostname mismatch — CWE-297, A07, High, M.
+- **P-15** Self-signed or untrusted certificate chain — CWE-295, A07, High, M.
+- **P-16** Weak certificate signature algorithm or key size — CWE-327, A02, Medium, S.
+- **P-17** Server / framework version disclosure in headers — CWE-200, A05, Low, M.
+- **P-18** Technology and component fingerprinting — no CWE/OWASP mapping, Info, M.
+- **P-19** Known-vulnerable component version (OSV/CVE correlation) — CWE-1104, A06, varies by CVE, S.
+- **P-20** Verbose error page or stack trace disclosure — CWE-209, A05, Medium, M.
+- **P-21** Exposed version control directory (`.git`, `.svn`, `.hg`) — CWE-527, A05, Critical, M.
+- **P-22** Exposed environment or configuration file (`.env`, `web.config`) — CWE-538, A05, Critical, M.
+- **P-23** Directory listing enabled — CWE-548, A05, Medium, M.
+- **P-24** Backup or temporary file exposure (`.bak`, `~`, `.old`) — CWE-530, A05, High, S.
+- **P-25** Mixed active content on HTTPS page — CWE-311, A02, Medium, M.
+- **P-26** External script without Subresource Integrity — CWE-353, A08, Low, S.
+- **P-27** Secret or credential pattern in response body — CWE-540, A05, Critical, M.
+- **P-28** Email or personal data disclosure in response — CWE-200, A01, Low, S.
+- **P-29** Sensitive page cacheable by intermediaries — CWE-525, A04, Low, S.
+- **P-30** Missing or malformed `security.txt` (RFC 9116) — no CWE/OWASP mapping, Info, C.
+- **P-31** Autocomplete enabled on password or sensitive field — CWE-522, A07, Low, C.
+
+### B.2 Safe Active Detectors
+
+All detectors in this list are restricted by F.5: idempotent methods, benign marker payloads, no data modification, no command execution, and no file writing. Each entry reads: **ID** name — detection technique, CWE, OWASP 2021 category, default severity, priority.
+
+- **A-01** Reflected Cross-Site Scripting — benign marker reflected unencoded into an executable context. CWE-79, A03, High, M.
+- **A-02** SQL Injection (error-based) — syntax-breaking characters matched against database error signatures. CWE-89, A03, Critical, M.
+- **A-03** SQL Injection (boolean-based) — responses to logically true and false conditions compared. CWE-89, A03, Critical, S.
+- **A-04** Open Redirect — redirect parameter pointed at a sentinel host; `Location` confirmed. CWE-601, A01, Medium, M.
+- **A-05** CORS misconfiguration — varied `Origin` values; reflection, `null`, or credentialed wildcard detected. CWE-942, A05, High, M.
+- **A-06** Clickjacking — page confirmed framable without frame-ancestor restrictions. CWE-1021, A05, Medium, M.
+- **A-07** Dangerous HTTP methods enabled — `OPTIONS` enumeration; `TRACE`/`PUT`/`DELETE` verified non-destructively. CWE-650, A05, Medium, M.
+- **A-08** Host header injection — alternate `Host` reflected unvalidated into links or redirects. CWE-644, A03, Medium, S.
+- **A-09** Sensitive file and directory enumeration — bounded, rate-limited wordlist of administrative and backup paths. CWE-538, A05, varies, M.
+- **A-10** Missing anti-CSRF token on state-changing form — forms analysed structurally for a token field and its unpredictability. CWE-352, A01, Medium, S.
+- **A-11** Path traversal (read-only probe) — traversal sequences matched against read-only file signatures. CWE-22, A01, High, S.
+- **A-12** Server-side template injection (detection only) — arithmetic marker expression evaluated; no further exploitation. CWE-1336, A03, High, C.
+- **A-13** Unauthenticated access to administrative interface — known admin paths classified as gated or open. CWE-306, A01, High, S.
+- **A-14** Improper HTTPS redirection — plaintext origin verified to redirect to HTTPS. CWE-319, A02, Medium, M.
+
+### B.3 Explicitly Excluded Techniques
+
+- **Time-based blind SQL injection** – Indistinguishable from network variance within the response budget; high false-positive rate.
+- **OS command injection** – Cannot be probed without risk of execution on the target.
+- **File upload exploitation** – Necessarily writes to the target, violating C.1.
+- **XML External Entity with outbound resolution** – Constitutes SSRF against third parties.
+- **Server-side request forgery exploitation** – Would make the target attack other systems.
+- **Insecure deserialisation exploitation** – Cannot be probed without risk of code execution.
+- **Brute force / credential stuffing** – Attacks accounts rather than assessing configuration.
+- **Denial of service, stress, resource exhaustion** – Directly harms the target.
+
 ## Version History
 
 - **0.1** (18 July 2026) – Initial draft: scope and overall description.
 - **0.2** (25 July 2026) – Functional requirements, detector catalogue.
 - **1.0** (1 August 2026) – Non-functional requirements, data model; baselined.
 - **1.1** (2 August 2026) – Positioning vs infrastructure VA; declarative detectors; evidence re-evaluation; EPSS. Full text archived at `docs/archive/SRS-v1.1-detailed.md`.
-- **2.1** (2 August 2026) – Restructured into the reference description/input/output format; tables replaced by prose and bullets throughout, with the appendix reduced to the workflow block diagram.
+- **2.1** (2 August 2026) – Restructured into the reference description/input/output format; tables replaced by prose and bullets throughout, with the role-permission matrix removed from the appendices.
