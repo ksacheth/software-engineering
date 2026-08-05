@@ -172,8 +172,6 @@ The dashboard accommodates this spread with a layered view: plain-language summa
 - **D-6** SMTP relay for transactional email – external service.
 - **D-7** A registered domain and TLS certificate for the WVS deployment itself – deployment.
 
----
-
 # 3. Specific Requirements
 
 ## 3.1 Functional Requirements
