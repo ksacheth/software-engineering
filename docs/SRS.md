@@ -190,7 +190,7 @@ One requirement per function group (F.1–F.8, §2.2). **Shall** = mandatory, **
 
 ### F.2 Target Management and Authorisation
 
-**Description:** The system shall allow registration of a target by origin and label with an immutable authorisation acknowledgement, and shall require proof of control — a system-issued token published as a DNS TXT record or at a well-known URL — before any scan, re-verified at least every 90 days. It shall refuse any target resolving to a private, loopback, link-local, or cloud-metadata address, or matching the administrator-editable blocklist. It shall allow per-target scope definition, and should allow archiving and permanent deletion.
+**Description:** The system shall allow registration of a target by origin and label with an immutable authorisation acknowledgement, and shall require proof of control - a system-issued token published as a DNS TXT record or at a well-known URL - before any scan, re-verified at least every 90 days. It shall refuse any target resolving to a private, loopback, link-local, or cloud-metadata address, or matching the administrator-editable blocklist. It shall allow per-target scope definition, and should allow archiving and permanent deletion.
 
 **Input:** Target origin and label, the authorisation acknowledgement, the published verification token, the scope definition, and archive or delete requests.
 
@@ -262,17 +262,17 @@ A web dashboard shall be provided as the sole user interface, covering authentic
 
 **Output:**
 
-- **Sign in / Register** — authentication and email confirmation.
+- **Sign in / Register** - authentication and email confirmation.
 - **Footer** - contains links to the privacy policy and terms of service and contact details.
-- **Dashboard home** — posture across all targets, recent scans, severity distribution.
-- **Targets list** — all targets with verification status and last scan result.
-- **Target detail** — scope configuration, verification state, scan history, trend.
-- **New scan** — profile selection, configuration, quota display.
-- **Live scan view** — phase, counters, streaming findings, pause/cancel controls.
-- **Findings list** — filterable, sortable, colour- *and* label-coded by severity.
-- **Finding detail** — plain-language explanation, evidence, remediation, triage controls.
-- **Reports** — template and format selection, generation status, download.
-- **Administration** — users, quotas, blocklist, audit log, kill switch.
+- **Dashboard home** - posture across all targets, recent scans, severity distribution.
+- **Targets list** - all targets with verification status and last scan result.
+- **Target detail** - scope configuration, verification state, scan history, trend.
+- **New scan** - profile selection, configuration, quota display.
+- **Live scan view** - phase, counters, streaming findings, pause/cancel controls.
+- **Findings list** - filterable, sortable, colour- *and* label-coded by severity.
+- **Finding detail** - plain-language explanation, evidence, remediation, triage controls.
+- **Reports** - template and format selection, generation status, download.
+- **Administration** - users, quotas, blocklist, audit log, kill switch.
 
 ### 3.2.2 Hardware Interfaces
 
@@ -288,10 +288,10 @@ The system requires no specialised hardware beyond a standard server or workstat
 **Description:**
 The system shall interface with external services for advisory data, transactional email, name resolution, and JavaScript rendering. Failure of any one of these shall degrade only the feature that depends on it, and the degradation shall be recorded rather than silently absorbed:
 
-- **OSV / EPSS advisory APIs** — map fingerprinted component versions to known CVEs and supply exploitation-probability scores (F.5). On failure the scan proceeds, affected findings are suppressed, and the degradation is recorded on the scan.
-- **SMTP relay** — verification and notification email. On failure, messages are queued for retry and account creation is not blocked.
-- **Public DNS resolvers** — target resolution and TXT-record ownership verification. On failure the scan fails with a clear diagnostic.
-- **Headless Chromium (Playwright)** — JavaScript rendering during the crawl. On failure, pages are crawled as static HTML and the coverage limitation is recorded.
+- **OSV / EPSS advisory APIs** - map fingerprinted component versions to known CVEs and supply exploitation-probability scores (F.5). On failure the scan proceeds, affected findings are suppressed, and the degradation is recorded on the scan.
+- **SMTP relay** - verification and notification email. On failure, messages are queued for retry and account creation is not blocked.
+- **Public DNS resolvers** - target resolution and TXT-record ownership verification. On failure the scan fails with a clear diagnostic.
+- **Headless Chromium (Playwright)** - JavaScript rendering during the crawl. On failure, pages are crawled as static HTML and the coverage limitation is recorded.
 
 **Input:**
 
@@ -313,10 +313,10 @@ The system shall interface with external services for advisory data, transaction
 **Description:**
 Communication between the client and the API shall use REST over HTTPS with JSON payloads, with live scan updates delivered over an authenticated WebSocket channel. Outbound scan traffic to targets shall use HTTP/1.1 and HTTP/2, rate-limited and scope-enforced (F.8). Internal traffic to the database and queue shall be authenticated and encrypted in transit.
 
-- **Client ↔ API** — HTTPS (TLS 1.2+), REST/JSON under `/api/v1`, documented by a generated OpenAPI 3.1 specification. Bearer-token authentication; RFC 9457 problem-details errors; cursor pagination; idempotency keys on mutating endpoints.
-- **Client ↔ live updates** — WSS at `/ws/scans/{id}`, open to authorised subscribers only.
-- **Worker ↔ Target** — HTTP/1.1 and HTTP/2 over TCP/TLS.
-- **API ↔ Database / Queue** — PostgreSQL wire protocol over TLS; Redis protocol, authenticated.
+- **Client ↔ API** - HTTPS (TLS 1.2+), REST/JSON under `/api/v1`, documented by a generated OpenAPI 3.1 specification. Bearer-token authentication; RFC 9457 problem-details errors; cursor pagination; idempotency keys on mutating endpoints.
+- **Client ↔ live updates** - WSS at `/ws/scans/{id}`, open to authorised subscribers only.
+- **Worker ↔ Target** - HTTP/1.1 and HTTP/2 over TCP/TLS.
+- **API ↔ Database / Queue** - PostgreSQL wire protocol over TLS; Redis protocol, authenticated.
 
 **Input:**
 
@@ -430,58 +430,58 @@ The block diagram below summarises the scan workflow. A user registers and verif
 
 ### B.1 Passive Detectors
 
-Each entry reads: **ID** name — CWE, OWASP 2021 category, default severity, priority.
+Each entry reads: **ID** name - CWE, OWASP 2021 category, default severity, priority.
 
-- **P-01** Missing or weak Content-Security-Policy — CWE-693, A05, Medium, M.
-- **P-02** Missing HTTP Strict-Transport-Security — CWE-319, A02, Medium, M.
-- **P-03** Missing `X-Content-Type-Options: nosniff` — CWE-693, A05, Low, M.
-- **P-04** Missing or permissive frame-ancestors / X-Frame-Options — CWE-1021, A05, Medium, M.
-- **P-05** Missing or overly permissive Referrer-Policy — CWE-200, A01, Low, M.
-- **P-06** Missing Permissions-Policy — CWE-693, A05, Info, S.
-- **P-07** Cookie without `Secure` attribute — CWE-614, A05, Medium, M.
-- **P-08** Cookie without `HttpOnly` attribute — CWE-1004, A05, Medium, M.
-- **P-09** Cookie without or with weak `SameSite` — CWE-1275, A01, Low, M.
-- **P-10** Cookie scoped too broadly (parent domain) — CWE-565, A01, Low, S.
-- **P-11** Deprecated TLS protocol offered (TLS 1.0 / 1.1 / SSLv3) — CWE-327, A02, High, M.
-- **P-12** Weak cipher suite offered — CWE-327, A02, High, M.
-- **P-13** Certificate expired, not yet valid, or expiring within 30 days — CWE-324, A02, High, M.
-- **P-14** Certificate hostname mismatch — CWE-297, A07, High, M.
-- **P-15** Self-signed or untrusted certificate chain — CWE-295, A07, High, M.
-- **P-16** Weak certificate signature algorithm or key size — CWE-327, A02, Medium, S.
-- **P-17** Server / framework version disclosure in headers — CWE-200, A05, Low, M.
-- **P-18** Technology and component fingerprinting — no CWE/OWASP mapping, Info, M.
-- **P-19** Known-vulnerable component version (OSV/CVE correlation) — CWE-1104, A06, varies by CVE, S.
-- **P-20** Verbose error page or stack trace disclosure — CWE-209, A05, Medium, M.
-- **P-21** Exposed version control directory (`.git`, `.svn`, `.hg`) — CWE-527, A05, Critical, M.
-- **P-22** Exposed environment or configuration file (`.env`, `web.config`) — CWE-538, A05, Critical, M.
-- **P-23** Directory listing enabled — CWE-548, A05, Medium, M.
-- **P-24** Backup or temporary file exposure (`.bak`, `~`, `.old`) — CWE-530, A05, High, S.
-- **P-25** Mixed active content on HTTPS page — CWE-311, A02, Medium, M.
-- **P-26** External script without Subresource Integrity — CWE-353, A08, Low, S.
-- **P-27** Secret or credential pattern in response body — CWE-540, A05, Critical, M.
-- **P-28** Email or personal data disclosure in response — CWE-200, A01, Low, S.
-- **P-29** Sensitive page cacheable by intermediaries — CWE-525, A04, Low, S.
-- **P-30** Missing or malformed `security.txt` (RFC 9116) — no CWE/OWASP mapping, Info, C.
-- **P-31** Autocomplete enabled on password or sensitive field — CWE-522, A07, Low, C.
+- **P-01** Missing or weak Content-Security-Policy - CWE-693, A05, Medium, M.
+- **P-02** Missing HTTP Strict-Transport-Security - CWE-319, A02, Medium, M.
+- **P-03** Missing `X-Content-Type-Options: nosniff` - CWE-693, A05, Low, M.
+- **P-04** Missing or permissive frame-ancestors / X-Frame-Options - CWE-1021, A05, Medium, M.
+- **P-05** Missing or overly permissive Referrer-Policy - CWE-200, A01, Low, M.
+- **P-06** Missing Permissions-Policy - CWE-693, A05, Info, S.
+- **P-07** Cookie without `Secure` attribute - CWE-614, A05, Medium, M.
+- **P-08** Cookie without `HttpOnly` attribute - CWE-1004, A05, Medium, M.
+- **P-09** Cookie without or with weak `SameSite` - CWE-1275, A01, Low, M.
+- **P-10** Cookie scoped too broadly (parent domain) - CWE-565, A01, Low, S.
+- **P-11** Deprecated TLS protocol offered (TLS 1.0 / 1.1 / SSLv3) - CWE-327, A02, High, M.
+- **P-12** Weak cipher suite offered - CWE-327, A02, High, M.
+- **P-13** Certificate expired, not yet valid, or expiring within 30 days - CWE-324, A02, High, M.
+- **P-14** Certificate hostname mismatch - CWE-297, A07, High, M.
+- **P-15** Self-signed or untrusted certificate chain - CWE-295, A07, High, M.
+- **P-16** Weak certificate signature algorithm or key size - CWE-327, A02, Medium, S.
+- **P-17** Server / framework version disclosure in headers - CWE-200, A05, Low, M.
+- **P-18** Technology and component fingerprinting - no CWE/OWASP mapping, Info, M.
+- **P-19** Known-vulnerable component version (OSV/CVE correlation) - CWE-1104, A06, varies by CVE, S.
+- **P-20** Verbose error page or stack trace disclosure - CWE-209, A05, Medium, M.
+- **P-21** Exposed version control directory (`.git`, `.svn`, `.hg`) - CWE-527, A05, Critical, M.
+- **P-22** Exposed environment or configuration file (`.env`, `web.config`) - CWE-538, A05, Critical, M.
+- **P-23** Directory listing enabled - CWE-548, A05, Medium, M.
+- **P-24** Backup or temporary file exposure (`.bak`, `~`, `.old`) - CWE-530, A05, High, S.
+- **P-25** Mixed active content on HTTPS page - CWE-311, A02, Medium, M.
+- **P-26** External script without Subresource Integrity - CWE-353, A08, Low, S.
+- **P-27** Secret or credential pattern in response body - CWE-540, A05, Critical, M.
+- **P-28** Email or personal data disclosure in response - CWE-200, A01, Low, S.
+- **P-29** Sensitive page cacheable by intermediaries - CWE-525, A04, Low, S.
+- **P-30** Missing or malformed `security.txt` (RFC 9116) - no CWE/OWASP mapping, Info, C.
+- **P-31** Autocomplete enabled on password or sensitive field - CWE-522, A07, Low, C.
 
 ### B.2 Safe Active Detectors
 
-All detectors in this list are restricted by F.5: idempotent methods, benign marker payloads, no data modification, no command execution, and no file writing. Each entry reads: **ID** name — detection technique, CWE, OWASP 2021 category, default severity, priority.
+All detectors in this list are restricted by F.5: idempotent methods, benign marker payloads, no data modification, no command execution, and no file writing. Each entry reads: **ID** name - detection technique, CWE, OWASP 2021 category, default severity, priority.
 
-- **A-01** Reflected Cross-Site Scripting — benign marker reflected unencoded into an executable context. CWE-79, A03, High, M.
-- **A-02** SQL Injection (error-based) — syntax-breaking characters matched against database error signatures. CWE-89, A03, Critical, M.
-- **A-03** SQL Injection (boolean-based) — responses to logically true and false conditions compared. CWE-89, A03, Critical, S.
-- **A-04** Open Redirect — redirect parameter pointed at a sentinel host; `Location` confirmed. CWE-601, A01, Medium, M.
-- **A-05** CORS misconfiguration — varied `Origin` values; reflection, `null`, or credentialed wildcard detected. CWE-942, A05, High, M.
-- **A-06** Clickjacking — page confirmed framable without frame-ancestor restrictions. CWE-1021, A05, Medium, M.
-- **A-07** Dangerous HTTP methods enabled — `OPTIONS` enumeration; `TRACE`/`PUT`/`DELETE` verified non-destructively. CWE-650, A05, Medium, M.
-- **A-08** Host header injection — alternate `Host` reflected unvalidated into links or redirects. CWE-644, A03, Medium, S.
-- **A-09** Sensitive file and directory enumeration — bounded, rate-limited wordlist of administrative and backup paths. CWE-538, A05, varies, M.
-- **A-10** Missing anti-CSRF token on state-changing form — forms analysed structurally for a token field and its unpredictability. CWE-352, A01, Medium, S.
-- **A-11** Path traversal (read-only probe) — traversal sequences matched against read-only file signatures. CWE-22, A01, High, S.
-- **A-12** Server-side template injection (detection only) — arithmetic marker expression evaluated; no further exploitation. CWE-1336, A03, High, C.
-- **A-13** Unauthenticated access to administrative interface — known admin paths classified as gated or open. CWE-306, A01, High, S.
-- **A-14** Improper HTTPS redirection — plaintext origin verified to redirect to HTTPS. CWE-319, A02, Medium, M.
+- **A-01** Reflected Cross-Site Scripting - benign marker reflected unencoded into an executable context. CWE-79, A03, High, M.
+- **A-02** SQL Injection (error-based) - syntax-breaking characters matched against database error signatures. CWE-89, A03, Critical, M.
+- **A-03** SQL Injection (boolean-based) - responses to logically true and false conditions compared. CWE-89, A03, Critical, S.
+- **A-04** Open Redirect - redirect parameter pointed at a sentinel host; `Location` confirmed. CWE-601, A01, Medium, M.
+- **A-05** CORS misconfiguration - varied `Origin` values; reflection, `null`, or credentialed wildcard detected. CWE-942, A05, High, M.
+- **A-06** Clickjacking - page confirmed framable without frame-ancestor restrictions. CWE-1021, A05, Medium, M.
+- **A-07** Dangerous HTTP methods enabled - `OPTIONS` enumeration; `TRACE`/`PUT`/`DELETE` verified non-destructively. CWE-650, A05, Medium, M.
+- **A-08** Host header injection - alternate `Host` reflected unvalidated into links or redirects. CWE-644, A03, Medium, S.
+- **A-09** Sensitive file and directory enumeration - bounded, rate-limited wordlist of administrative and backup paths. CWE-538, A05, varies, M.
+- **A-10** Missing anti-CSRF token on state-changing form - forms analysed structurally for a token field and its unpredictability. CWE-352, A01, Medium, S.
+- **A-11** Path traversal (read-only probe) - traversal sequences matched against read-only file signatures. CWE-22, A01, High, S.
+- **A-12** Server-side template injection (detection only) - arithmetic marker expression evaluated; no further exploitation. CWE-1336, A03, High, C.
+- **A-13** Unauthenticated access to administrative interface - known admin paths classified as gated or open. CWE-306, A01, High, S.
+- **A-14** Improper HTTPS redirection - plaintext origin verified to redirect to HTTPS. CWE-319, A02, Medium, M.
 
 ## Version History
 
