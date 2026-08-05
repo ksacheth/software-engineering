@@ -76,8 +76,6 @@ WVS is a **detection** tool, not an exploitation tool. It does not:
 
 Section 2 describes the product in context. Section 3 lists the numbered, testable requirements, which are the core of this document. Section 4 contains supporting catalogues and reference material.
 
----
-
 # 2. Overall Description
 
 ## 2.1 Product Perspective
