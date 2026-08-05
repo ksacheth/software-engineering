@@ -2,7 +2,7 @@
 
 ## Website Vulnerability Scanner
 
-**Version 2.1 - 2 August 2026**
+**Version 1.0 - 31 July 2026**
 
 Prepared in accordance with IEEE Std 830-1998
 
@@ -488,4 +488,3 @@ All detectors in this list are restricted by F.5: idempotent methods, benign mar
 ## Version History
 
 - **1.0** (31 July 2026) – Initial SRS draft.
-- **2.0** (3 August 2026) – Final revised SRS.

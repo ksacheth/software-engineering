@@ -2,7 +2,7 @@
 
 ## Website Vulnerability Scanner
 
-**Version 2.1 - 2 August 2026**
+**Version 1.0 - 31 July 2026**
 
 Prepared in accordance with IEEE Std 830-1998, *Recommended Practice for Software Requirements Specifications*.
 
@@ -507,4 +507,3 @@ A-14 Improper HTTPS redirection — plaintext origin verified to redirect to HTT
 ## Version History
 
 - **1.0** (31 July 2026) – Initial SRS draft.
-- **2.0** (3 August 2026) – Final revised SRS.
