@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-native-design": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/agent-native-design/skills/agent-native-design/SKILL.md",
+      "computedHash": "636eecf8c8fd8c8c5896c7912a242d849aa07745727bbd6d0f9cd3726a273abd"
+    },
+    "creating-mermaid-diagrams": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mermaid/skills/mermaid-skill/SKILL.md",
+      "computedHash": "e83ca03c06ff40176fe78e75216637bc272d1497007cc1a97fb9d1b11b9cddf9"
+    },
+    "drawio-skill": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/drawio/skills/drawio-skill/SKILL.md",
+      "computedHash": "0cc2f76bafe46796691efba4ece4e1efefd328d7e6502a08faae10377aac596e"
+    },
+    "excalidraw": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/excalidraw/skills/excalidraw-skill/SKILL.md",
+      "computedHash": "5789f1a049e1697a54cfb61d6b08461a4c8125523a4fc27ecd68d5f75d7596d6"
+    },
+    "tldraw-skill": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tldraw/skills/tldraw-skill/SKILL.md",
+      "computedHash": "90e593a6dc22c94a4bbfa6e9f368a56bd75a767ba83a1b0946cd7b083a99af09"
+    }
+  }
+}
