@@ -23,6 +23,7 @@ flowchart TD
 
     %% Sequential Main Pipeline Flow
     User -->|"request"| P01
+    P01 -->|"session / authorisation decision"| User
     P01 -->|"session"| P02
     P02 -->|"scope"| P03
     P03 -->|"job"| P04

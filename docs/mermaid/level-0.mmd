@@ -9,8 +9,8 @@ flowchart TD
     SMTP["SMTP Relay"]
     OSV["OSV / EPSS Advisory APIs"]
 
-    User -->|"scan actions / reports"| P0
-    Admin -->|"controls / audit"| P0
+    User <-->|"scan actions / reports"| P0
+    Admin <-->|"controls / audit records"| P0
     P0 <-->|"safe HTTP"| Target
     P0 <-->|"DNS + TXT"| DNS
     P0 <-->|"email status"| SMTP
