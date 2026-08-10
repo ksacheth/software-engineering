@@ -1,0 +1,34 @@
+flowchart TD
+    %% Level 2 DFD - F.5 Vulnerability Detection
+
+    I_From["From 0.4 Discovery"]
+    I_To["To 0.6 Findings Management"]
+    I_ScopeGuard["To 0.8 Scope Guard"]
+
+    P51(("5.1 Run passive response checks"))
+    P52(("5.2 Prepare safe active checks"))
+    P53(("5.3 Enrich component versions"))
+
+    D5[("D5 Findings, Triage & Evidence")]
+    Target["Target Website"]
+    OSV["OSV / EPSS APIs"]
+
+    I_From -->|"discovered pages"| P51
+    P51 -->|"passive evidence"| P52
+    P52 -->|"active-check plan"| P53
+    P53 -->|"enriched findings"| I_To
+
+    P52 -->|"safe-test candidate / guard decision"| I_ScopeGuard
+    I_ScopeGuard <-->|"approved request / response"| Target
+    P53 <-->|"advisory query / result"| OSV
+    P53 -->|"finding evidence"| D5
+
+    %% Styling
+    classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;
+    classDef entity fill:#f3f4f6,stroke:#374151,stroke-width:2px,color:#111827;
+    classDef store fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef iface fill:#e5e7eb,stroke:#4b5563,stroke-width:1px,stroke-dasharray: 5 5,color:#1f2937;
+    class P51,P52,P53 process;
+    class Target,OSV entity;
+    class D5 store;
+    class I_From,I_To,I_ScopeGuard iface;

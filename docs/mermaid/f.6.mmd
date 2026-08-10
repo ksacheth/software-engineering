@@ -1,0 +1,29 @@
+flowchart TD
+    %% Level 2 DFD - F.6 Findings Management
+
+    I_From["From 0.5 Detection"]
+    User["WVS User"]
+
+    P61(("6.1 Normalise, redact and deduplicate"))
+    P62(("6.2 Compare prior scan and retain evidence"))
+    P63(("6.3 Apply triage, filtering and sorting"))
+
+    D5[("D5 Findings, Triage & Evidence")]
+
+    I_From -->|"raw findings"| P61
+    P61 -->|"normalised findings"| P62
+    P62 -->|"comparison result"| P63
+    P63 -->|"finding views"| User
+
+    D5 -->|"prior evidence"| P62
+    User -->|"triage action / filters"| P63
+
+    %% Styling
+    classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;
+    classDef entity fill:#f3f4f6,stroke:#374151,stroke-width:2px,color:#111827;
+    classDef store fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef iface fill:#e5e7eb,stroke:#4b5563,stroke-width:1px,stroke-dasharray: 5 5,color:#1f2937;
+    class P61,P62,P63 process;
+    class User entity;
+    class D5 store;
+    class I_From iface;

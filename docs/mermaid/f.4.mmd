@@ -1,0 +1,35 @@
+flowchart TD
+    %% Level 2 DFD - F.4 Discovery (Crawling)
+
+    I_From["From 0.3 Scan Execution"]
+    I_To["To 0.5 Detection"]
+    I_ScopeGuard["To 0.8 Scope Guard"]
+
+    P41(("4.1 Load scope and crawl ceilings"))
+    P42(("4.2 Discover links, forms, robots and sitemap"))
+    P43(("4.3 Render JS, deduplicate and record limits"))
+
+    D2[("D2 Targets & Scope")]
+    D4[("D4 Scan Records")]
+    Target["Target Website"]
+
+    I_From -->|"scan job"| P41
+    P41 -->|"scope / ceilings"| P42
+    P42 -->|"discovered resources"| P43
+    P43 -->|"crawl evidence"| I_To
+
+    D2 -->|"scope definition / crawl ceilings"| P41
+    P42 -->|"crawl candidate"| I_ScopeGuard
+    I_ScopeGuard -->|"approved request"| Target
+    Target -->|"HTTP response / page content"| P43
+    P43 -->|"page inventory / limit"| D4
+
+    %% Styling
+    classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;
+    classDef entity fill:#f3f4f6,stroke:#374151,stroke-width:2px,color:#111827;
+    classDef store fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef iface fill:#e5e7eb,stroke:#4b5563,stroke-width:1px,stroke-dasharray: 5 5,color:#1f2937;
+    class P41,P42,P43 process;
+    class Target entity;
+    class D2,D4 store;
+    class I_From,I_To,I_ScopeGuard iface;
