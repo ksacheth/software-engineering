@@ -25,13 +25,10 @@
     font=\sffamily\small
   },
   datastore/.style={
-    draw=entitystroke, line width=0.85pt, minimum width=5.2cm,
-    minimum height=1.15cm, align=center, inner sep=2pt, font=\sffamily\small,
-    path picture={
-      \draw[entitystroke,line width=0.85pt]
-        (path picture bounding box.south west) -- (path picture bounding box.south east);
-    }
+    minimum width=5.2cm, minimum height=1.15cm,
+    align=center, inner sep=2pt, font=\sffamily\small
   },
+  datastoreline/.style={draw=entitystroke,line width=0.85pt},
   flow/.style={
     -{Stealth[length=1.9mm,width=1.3mm]}, draw=flowstroke, line width=0.6pt,
     rounded corners=3pt
@@ -50,6 +47,8 @@
   \node[process] (p13) at (10.70,5.70) {0.1.3 Audit login \& enforce\\lockout};
   \node[entity] (smtp) at (4.85,5.55) {SMTP Relay};
   \node[datastore] (d1) at (8.55,1.55) {D1 Accounts, Organisations\\\& Sessions};
+  \draw[datastoreline] (d1.north west) -- (d1.north east);
+  \draw[datastoreline] (d1.south west) -- (d1.south east);
 
   % User authentication and session workflow.
   \draw[flow] (user.west) to[bend right=7]

@@ -45,11 +45,13 @@
         <mxCell id="d4-bottom-line" parent="16" style="shape=line;strokeWidth=2;strokeColor=#111827;fillColor=none;" vertex="1">
           <mxGeometry height="1" width="132" x="-220" y="64" as="geometry" />
         </mxCell>
-        <UserObject label="D5 Findings, Triage &amp; Evidence" mermaidId="n:D5" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D5 Findings, Triage &amp; Evidence" id="8">
-          <mxCell parent="16" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+        <UserObject label="D5 Findings, Triage &amp; Evidence" mermaidId="n:D5" mermaidBaseStyle="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D5 Findings, Triage &amp; Evidence" id="8">
+          <mxCell parent="16" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
             <mxGeometry height="32" width="236" x="431" y="303" as="geometry" />
           </mxCell>
         </UserObject>
+        <mxCell id="d5-top-line" parent="16" style="shape=line;strokeWidth=2;strokeColor=#111827;fillColor=none;" vertex="1"><mxGeometry height="1" width="236" x="431" y="303" as="geometry" /></mxCell>
+        <mxCell id="d5-bottom-line" parent="16" style="shape=line;strokeWidth=2;strokeColor=#111827;fillColor=none;" vertex="1"><mxGeometry height="1" width="236" x="431" y="335" as="geometry" /></mxCell>
         <UserObject label="report options" mermaidId="e:User-&gt;P71#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.06;exitY=1;entryX=0.3;entryY=0;" mermaidBaseValue="report options" id="9">
           <mxCell edge="1" parent="16" source="2" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.06;exitY=1;entryX=0.3;entryY=0;" target="4">
             <mxGeometry relative="1" as="geometry">
