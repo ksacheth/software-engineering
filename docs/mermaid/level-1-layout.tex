@@ -99,8 +99,8 @@
 
   % Scope Guard and safety routing.
   \draw[flow]
-    (p04.south east) -- (10.35,11.35) -- (10.35,5.45)
-    -- node[flowlabel,right,pos=0.45] {crawl candidate} (p08.north east);
+    (p04.south east) -- (10.35,11.10) -- (15.25,11.10) -- (15.25,5.45)
+    -- node[flowlabel,above,pos=0.45] {crawl candidate} (p08.north east);
   \draw[flow] (p05.south) -- node[flowlabel,right] {safe-test candidate} (p08.north);
   \draw[flow]
     (admin.west) -- node[flowlabel,above] {admin controls} (p08.east);
