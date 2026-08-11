@@ -74,11 +74,11 @@
   \node[process] (p08) at (8.10,4.65) {0.8 Safety,\\Auditing \&\\Administration};
 
   \node[entity] (user) at (13.45,16.55) {WVS User};
-  \node[entity] (smtp) at (13.45,14.15) {SMTP Relay};
+  \node[entity] (smtp) at (13.45,15.45) {SMTP Relay};
   \node[entity] (dns) at (13.45,11.75) {Public DNS Resolvers};
-  \node[entity] (admin) at (13.45,9.35) {System Administrator};
+  \node[entity] (admin) at (13.45,4.65) {System Administrator};
   \node[entity] (osv) at (13.45,6.95) {OSV / EPSS Advisory APIs};
-  \node[entity] (target) at (13.45,4.05) {Target Website};
+  \node[entity] (target) at (13.45,2.05) {Target Website};
 
   % Sequential main pipeline.
   \draw[flow] (p01.west) -- node[flowlabel,above] {session} (p02.east);
@@ -103,22 +103,19 @@
     -- node[flowlabel,right,pos=0.45] {crawl candidate} (p08.north east);
   \draw[flow] (p05.south) -- node[flowlabel,right] {safe-test candidate} (p08.north);
   \draw[flow]
-    (admin.west) -- node[flowlabel,above] {admin controls} (10.65,9.35)
-    -- (9.15,5.45) -- (p08.north east);
+    (admin.west) -- node[flowlabel,above] {admin controls} (p08.east);
   \draw[flow] (p08.south east) -- node[flowlabel,below] {approved traffic} (target.west);
 
   % Third-party interactions.
   \draw[flow]
-    (p02.south east) -- (4.55,14.25) -- node[flowlabel,above]
-    {DNS TXT verification query} (10.95,14.25) -- (dns.north west);
+    (p02.south east) -- (4.55,14.55) -- node[flowlabel,above]
+    {DNS TXT verification query} (10.95,14.55) -- (dns.north west);
   \draw[flow]
-    (dns.west) -- (10.65,13.70) -- node[flowlabel,below]
-    {DNS TXT verification result} (4.80,13.70) -- (p02.south east);
+    (dns.west) -- (10.65,14.10) -- node[flowlabel,below]
+    {DNS TXT verification result} (4.80,14.10) -- (p02.south east);
 
-  \draw[flow] (p01.east) to[bend right=7]
-    node[flowlabel,above] {verification email} (smtp.north west);
-  \draw[flow] (smtp.west) to[bend right=7]
-    node[flowlabel,below] {delivery status} (p01.south east);
+  \draw[flow] (p01.east) -- node[flowlabel,above] {verification email} (smtp.west);
+  \draw[flow] (smtp.south west) -- node[flowlabel,below] {delivery status} (p01.south east);
 
   \draw[flow] (p05.east) to[bend left=7]
     node[flowlabel,above] {component advisory query} (osv.north west);
