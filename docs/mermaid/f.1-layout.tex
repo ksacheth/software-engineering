@@ -65,7 +65,7 @@
 
   % Email verification exchange.
   \draw[flow] (p12.south west) to[out=220,in=90]
-    node[flowlabel,left,pos=0.42] {verification message} (smtp.north);
+    node[flowlabel,right,pos=0.52] {verification message} (smtp.north);
   \draw[flow] (smtp.east) to[out=10,in=-105]
     node[flowlabel,below,pos=0.55] {delivery outcome} (p12.south);
 \end{tikzpicture}
