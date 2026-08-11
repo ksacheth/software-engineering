@@ -1,0 +1,111 @@
+<mxfile host="Electron">
+  <diagram id="WzycRm8P-NcSMbJGuVwQ" name="Page-1">
+    <mxGraphModel dx="2161" dy="857" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <UserObject label="" mermaidData="{&#xa;  &quot;data&quot;: &quot;flowchart TD\n    %% Level 2 DFD - F.3 Scan Configuration and Execution\n\n    User[\&quot;WVS User\&quot;]\n    P31((\&quot;0.3.1 Validate profile, limits and quota\&quot;))\n    P32((\&quot;0.3.2 Queue scan or recurring schedule\&quot;))\n    P33((\&quot;0.3.3 Execute lifecycle and checkpoint\&quot;))\n    D2@{ shape: datastore, label: \&quot;D2 Targets &amp; Scope\&quot; }\n    D3@{ shape: datastore, label: \&quot;D3 Jobs &amp; Checkpoints\&quot; }\n    D4@{ shape: datastore, label: \&quot;D4 Scan Records\&quot; }\n\n    User --&gt;|\&quot;scan request\&quot;| P31\n    P33 --&gt;|\&quot;scan status\&quot;| User\n    P31 --&gt;|\&quot;validated profile\&quot;| P32\n    D2 --&gt; P31\n    P32 --&gt; D3\n    D3 --&gt; P33\n    P33 --&gt; D4\n\n    %% Styling\n    classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;\n    classDef entity fill:#f3f4f6,stroke:#374151,stroke-width:2px,color:#111827;\n    classDef store fill:transparent,stroke:#111827,stroke-width:2px,color:#111827;\n    class P31,P32,P33 process;\n    class User entity;\n    class D2,D3,D4 store;\n&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="16">
+          <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;" vertex="1">
+            <mxGeometry as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="WVS User" mermaidId="n:User" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#f3f4f6;strokeColor=#374151;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="WVS User" id="2">
+          <mxCell parent="16" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#f3f4f6;strokeColor=#374151;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="127" x="-18" y="10" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="0.3.1 Validate profile, limits and quota" mermaidId="n:P31" mermaidBaseStyle="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="0.3.1 Validate profile, limits and quota" id="3">
+          <mxCell parent="16" style="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="310" width="310" x="-109" y="133" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="0.3.2 Queue scan or recurring schedule" mermaidId="n:P32" mermaidBaseStyle="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="0.3.2 Queue scan or recurring schedule" id="4">
+          <mxCell parent="16" style="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="311" width="311" x="-110" y="512" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="0.3.3 Execute lifecycle and checkpoint" mermaidId="n:P33" mermaidBaseStyle="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="0.3.3 Execute lifecycle and checkpoint" id="5">
+          <mxCell parent="16" style="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="309" width="309" x="-89" y="955" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="D2 Targets &amp; Scope" mermaidId="n:D2" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D2 Targets &amp; Scope" id="6">
+          <mxCell parent="16" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="32" width="153" x="-310" y="21" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="D3 Jobs &amp; Checkpoints" mermaidId="n:D3" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D3 Jobs &amp; Checkpoints" id="7">
+          <mxCell parent="16" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="32" width="178" x="-43" y="873" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="D4 Scan Records" mermaidId="n:D4" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D4 Scan Records" id="8">
+          <mxCell parent="16" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=none;strokeColor=#111827;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="32" width="132" y="1314" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="scan request" mermaidId="e:User-&gt;P31#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.17;exitY=1;entryX=0.25;entryY=0;" mermaidBaseValue="scan request" id="9">
+          <mxCell edge="1" parent="16" source="2" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.17;exitY=1;entryX=0.25;entryY=0;" target="3">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="-49" y="99" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="scan status" mermaidId="e:P33-&gt;User#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.07;entryX=1;entryY=0.81;" mermaidBaseValue="scan status" id="10">
+          <mxCell edge="1" parent="16" source="5" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.07;entryX=1;entryY=0.81;" target="2">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="276" y="930" />
+                <mxPoint x="276" y="889" />
+                <mxPoint x="276" y="848" />
+                <mxPoint x="276" y="668" />
+                <mxPoint x="276" y="478" />
+                <mxPoint x="276" y="288" />
+                <mxPoint x="276" y="99" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="validated profile" mermaidId="e:P31-&gt;P32#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="validated profile" id="11">
+          <mxCell edge="1" parent="16" source="3" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="4">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:D2-&gt;P31#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.32;exitY=1;entryX=0.77;entryY=0;" mermaidBaseValue="" id="12">
+          <mxCell edge="1" parent="16" source="6" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.32;exitY=1;entryX=0.118;entryY=0.18;entryDx=0;entryDy=0;entryPerimeter=0;" target="3">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:P32-&gt;D3#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="13">
+          <mxCell edge="1" parent="16" source="4" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="7">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:D3-&gt;P33#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.44;entryY=0;" mermaidBaseValue="" id="14">
+          <mxCell edge="1" parent="16" source="7" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.44;entryY=0;" target="5">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="46" y="930" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:P33-&gt;D4#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="15">
+          <mxCell edge="1" parent="16" source="5" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="8">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
