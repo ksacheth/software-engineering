@@ -16,17 +16,17 @@
         </UserObject>
         <UserObject label="0.3.1 Validate profile, limits and quota" mermaidId="n:P31" mermaidBaseStyle="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="0.3.1 Validate profile, limits and quota" id="3">
           <mxCell parent="16" style="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
-            <mxGeometry height="310" width="310" x="-109" y="133" as="geometry" />
+            <mxGeometry height="260" width="260" x="-84" y="158" as="geometry" />
           </mxCell>
         </UserObject>
         <UserObject label="0.3.2 Queue scan or recurring schedule" mermaidId="n:P32" mermaidBaseStyle="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="0.3.2 Queue scan or recurring schedule" id="4">
           <mxCell parent="16" style="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
-            <mxGeometry height="311" width="311" x="-110" y="512" as="geometry" />
+            <mxGeometry height="260" width="260" x="-84" y="538" as="geometry" />
           </mxCell>
         </UserObject>
         <UserObject label="0.3.3 Execute lifecycle and checkpoint" mermaidId="n:P33" mermaidBaseStyle="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="0.3.3 Execute lifecycle and checkpoint" id="5">
           <mxCell parent="16" style="ellipse;html=1;aspect=fixed;strokeWidth=2;whiteSpace=wrap;fillColor=#e0e7ff;strokeColor=#4338ca;fontColor=#1e1b4b;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
-            <mxGeometry height="309" width="309" x="-89" y="955" as="geometry" />
+            <mxGeometry height="260" width="260" x="-65" y="980" as="geometry" />
           </mxCell>
         </UserObject>
         <UserObject label="D2 Targets &amp; Scope" mermaidId="n:D2" mermaidBaseStyle="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;fontColor=#111827;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D2 Targets &amp; Scope" id="6">
