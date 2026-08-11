@@ -2,9 +2,9 @@ flowchart TD
     %% Level 2 DFD - F.2 Target Management & Authorisation
 
     User["WVS User"]
-    P21(("2.1 Register target & scope boundaries"))
-    P22(("2.2 Issue verification token"))
-    P23(("2.3 Validate DNS TXT / well-known proof"))
+    P21(("0.2.1 Register target & scope boundaries"))
+    P22(("0.2.2 Issue verification token"))
+    P23(("0.2.3 Validate DNS TXT / well-known proof"))
     D2@{ shape: datastore, label: "D2 Targets & Scope" }
     DNS["Public DNS"]
     Target["Target Website"]
@@ -16,8 +16,10 @@ flowchart TD
     P22 -->|"verification token context"| P23
     P21 --> D2
     P23 --> D2
-    P23 <-->|"DNS TXT query / TXT record"| DNS
-    P23 <-->|"well-known token query / response"| Target
+    P23 -->|"DNS TXT query"| DNS
+    DNS -->|"TXT record"| P23
+    P23 -->|"well-known token query"| Target
+    Target -->|"verification response"| P23
 
     %% Styling
     classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;

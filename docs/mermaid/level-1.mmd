@@ -39,9 +39,12 @@ flowchart TD
     P08 -->|"approved traffic"| Target
 
     %% Third-Party External Interactions
-    P02 <-->|"DNS TXT verification query / result"| DNS
-    P01 <-->|"verification email / delivery status"| SMTP
-    P05 <-->|"component advisory query / risk result"| OSV
+    P02 -->|"DNS TXT verification query"| DNS
+    DNS -->|"DNS TXT verification result"| P02
+    P01 -->|"verification email"| SMTP
+    SMTP -->|"delivery status"| P01
+    P05 -->|"component advisory query"| OSV
+    OSV -->|"component risk result"| P05
 
     %% Styling
     classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;

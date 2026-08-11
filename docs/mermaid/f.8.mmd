@@ -6,9 +6,9 @@ flowchart TD
     Target["Target Website"]
     DNS["Public DNS"]
 
-    P81(("8.1 Check verification, scope and blocklist"))
-    P82(("8.2 Re-resolve IP, rate-limit and apply ceiling"))
-    P83(("8.3 Dispatch approved request or suppress"))
+    P81(("0.8.1 Check verification, scope and blocklist"))
+    P82(("0.8.2 Re-resolve IP, rate-limit and apply ceiling"))
+    P83(("0.8.3 Dispatch approved request or suppress"))
 
     D2@{ shape: datastore, label: "D2 Targets & Scope" }
     D6@{ shape: datastore, label: "D6 Append-only Audit Log / URL Ledger" }
@@ -20,7 +20,8 @@ flowchart TD
 
     Admin -->|"quota, blocklist and kill-switch control"| P81
     D2 --> P81
-    P82 <-->|"fresh resolution query / IP"| DNS
+    P82 -->|"fresh resolution query"| DNS
+    DNS -->|"resolved IP"| P82
     P83 --> D6
 
     %% Styling

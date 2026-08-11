@@ -5,9 +5,9 @@ flowchart TD
     I_To["To 0.6 Findings Management"]
     I_ScopeGuard["To 0.8 Scope Guard"]
 
-    P51(("5.1 Run passive response checks"))
-    P52(("5.2 Prepare safe active checks"))
-    P53(("5.3 Enrich component versions"))
+    P51(("0.5.1 Run passive response checks"))
+    P52(("0.5.2 Prepare safe active checks"))
+    P53(("0.5.3 Enrich component versions"))
 
     D5@{ shape: datastore, label: "D5 Findings, Triage & Evidence" }
     Target["Target Website"]
@@ -19,9 +19,11 @@ flowchart TD
     P53 -->|"enriched findings"| I_To
 
     P52 -->|"safe-test candidate"| I_ScopeGuard
-    I_ScopeGuard <-->|"approved request / response"| Target
+    I_ScopeGuard -->|"approved request"| Target
+    Target -->|"approved response"| I_ScopeGuard
     I_ScopeGuard -->|"approved response / refusal"| P52
-    P53 <-->|"advisory query / result"| OSV
+    P53 -->|"advisory query"| OSV
+    OSV -->|"advisory result"| P53
     P53 --> D5
 
     %% Styling

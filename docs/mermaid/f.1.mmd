@@ -2,9 +2,9 @@ flowchart TD
     %% Level 2 DFD - F.1 User Authentication & Access Control
 
     User["WVS User"]
-    P11(("1.1 Validate credentials & MFA"))
-    P12(("1.2 Issue session token & verify email"))
-    P13(("1.3 Audit login & enforce lockout"))
+    P11(("0.1.1 Validate credentials & MFA"))
+    P12(("0.1.2 Issue session token & verify email"))
+    P13(("0.1.3 Audit login & enforce lockout"))
     D1@{ shape: datastore, label: "D1 Accounts, Organisations & Sessions" }
     SMTP["SMTP Relay"]
 
@@ -15,7 +15,8 @@ flowchart TD
     D1 --> P11
     P11 --> D1
     P13 --> D1
-    P12 <-->|"verification message / delivery outcome"| SMTP
+    P12 -->|"verification message"| SMTP
+    SMTP -->|"delivery outcome"| P12
 
     %% Styling
     classDef process fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b;
