@@ -38,6 +38,7 @@ CLAUDE.md
 AGENTS.md
 .agents
 .claude
+.zcode
 
 # LaTeX build artifacts
 *.aux

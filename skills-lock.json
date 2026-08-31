@@ -25,6 +25,12 @@
       "skillPath": "plugins/excalidraw/skills/excalidraw-skill/SKILL.md",
       "computedHash": "5789f1a049e1697a54cfb61d6b08461a4c8125523a4fc27ecd68d5f75d7596d6"
     },
+    "nestjs-best-practices": {
+      "source": "kadajett/agent-nestjs-skills",
+      "sourceType": "github",
+      "skillPath": "skills/nestjs-best-practices/SKILL.md",
+      "computedHash": "58f8a630637be3acce1f118c747d68160346ada8a43d76cb52a5b4c4edaa2d37"
+    },
     "tldraw-skill": {
       "source": "Agents365-ai/365-skills",
       "sourceType": "github",
