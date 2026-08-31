@@ -1,0 +1,6 @@
+[install]
+exact = false
+prefer = "offline"
+
+[run]
+bun = true
