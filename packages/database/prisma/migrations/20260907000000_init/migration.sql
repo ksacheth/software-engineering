@@ -381,7 +381,7 @@ CREATE TABLE "target_finding_triage" (
     "justification" TEXT,
     "updatedById" TEXT,
     "lastHistoryId" TEXT,
-    "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "target_finding_triage_pkey" PRIMARY KEY ("targetId","findingFingerprint")
 );
@@ -718,19 +718,7 @@ ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_target
 ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_lastHistoryId_fkey" FOREIGN KEY ("lastHistoryId") REFERENCES "finding_triage_history"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "finding_triage_history" ADD CONSTRAINT "finding_triage_history_targetId_fkey" FOREIGN KEY ("targetId") REFERENCES "target"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "finding_triage_history" ADD CONSTRAINT "finding_triage_history_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "detector_execution_error" ADD CONSTRAINT "detector_execution_error_scanJobId_fkey" FOREIGN KEY ("scanJobId") REFERENCES "scan_job"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "url_ledger" ADD CONSTRAINT "url_ledger_scanJobId_fkey" FOREIGN KEY ("scanJobId") REFERENCES "scan_job"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "scan_report" ADD CONSTRAINT "scan_report_scanJobId_fkey" FOREIGN KEY ("scanJobId") REFERENCES "scan_job"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -745,7 +733,7 @@ ALTER TABLE "scan_report" ADD CONSTRAINT "scan_report_createdById_fkey" FOREIGN 
 
 -- -----------------------------------------------------------------------------
 -- 1. DC-9: Append-only Enforcement for Audit Log, URL Ledger & Triage History
--- Prevents UPDATE, DELETE, and TRUNCATE at trigger & privilege levels.
+-- Prevents UPDATE, DELETE, and TRUNCATE at trigger level.
 -- Hardened with explicit pg_catalog search_path to prevent function shadowing.
 -- -----------------------------------------------------------------------------
 
@@ -758,65 +746,57 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Row-level triggers on audit_log
+-- Triggers on audit_log (Row-level + Statement-level TRUNCATE)
 DROP TRIGGER IF EXISTS trg_audit_log_append_only ON "audit_log";
 CREATE TRIGGER trg_audit_log_append_only
 BEFORE UPDATE OR DELETE ON "audit_log"
 FOR EACH ROW
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Statement-level TRUNCATE trigger on audit_log
 DROP TRIGGER IF EXISTS trg_audit_log_no_truncate ON "audit_log";
 CREATE TRIGGER trg_audit_log_no_truncate
 BEFORE TRUNCATE ON "audit_log"
 FOR EACH STATEMENT
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Row-level triggers on url_ledger
+-- Triggers on url_ledger (Row-level + Statement-level TRUNCATE)
 DROP TRIGGER IF EXISTS trg_url_ledger_append_only ON "url_ledger";
 CREATE TRIGGER trg_url_ledger_append_only
 BEFORE UPDATE OR DELETE ON "url_ledger"
 FOR EACH ROW
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Statement-level TRUNCATE trigger on url_ledger
 DROP TRIGGER IF EXISTS trg_url_ledger_no_truncate ON "url_ledger";
 CREATE TRIGGER trg_url_ledger_no_truncate
 BEFORE TRUNCATE ON "url_ledger"
 FOR EACH STATEMENT
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Row-level triggers on finding_triage_history (SRS DC-9)
+-- Triggers on finding_triage_history (Row-level + Statement-level TRUNCATE)
 DROP TRIGGER IF EXISTS trg_finding_triage_history_append_only ON "finding_triage_history";
 CREATE TRIGGER trg_finding_triage_history_append_only
 BEFORE UPDATE OR DELETE ON "finding_triage_history"
 FOR EACH ROW
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Statement-level TRUNCATE trigger on finding_triage_history (SRS DC-9)
 DROP TRIGGER IF EXISTS trg_finding_triage_history_no_truncate ON "finding_triage_history";
 CREATE TRIGGER trg_finding_triage_history_no_truncate
 BEFORE TRUNCATE ON "finding_triage_history"
 FOR EACH STATEMENT
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Privilege-level revocation (SRS DC-9: "at the database privilege level")
-DO $$
-BEGIN
-    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log", "url_ledger", "finding_triage_history" FROM PUBLIC';
-EXCEPTION
-    WHEN OTHERS THEN NULL;
-END $$;
-
 
 -- -----------------------------------------------------------------------------
 -- 2. NFR-PERF-1 & SRS F.6: Automatic Triage State Projection
 -- Keeps target_finding_triage in sync with finding_triage_history via AFTER INSERT.
--- Guarded against out-of-order replay via clock_timestamp() and tie-break on lastHistoryId.
+-- SECURITY DEFINER ensures the trigger writes target_finding_triage even though
+-- the runtime application role (wvs_app) has SELECT only.
+-- Guarded against out-of-order replay via clock_timestamp() at microsecond precision.
 -- -----------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION sync_target_finding_triage()
 RETURNS TRIGGER
+SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
@@ -857,3 +837,18 @@ CREATE TRIGGER trg_sync_target_finding_triage
 AFTER INSERT ON "finding_triage_history"
 FOR EACH ROW
 EXECUTE FUNCTION sync_target_finding_triage();
+
+
+-- -----------------------------------------------------------------------------
+-- 3. SRS DC-9: Privilege Revocation for Runtime Application Role
+-- Re-applies privilege isolation whenever migrations run.
+-- -----------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wvs_app') THEN
+        -- Strictly append-only on audit stores
+        EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log", "url_ledger", "finding_triage_history" FROM wvs_app';
+        -- Read-only on triage projection (writes only occur via SECURITY DEFINER trigger)
+        EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON "target_finding_triage" FROM wvs_app';
+    END IF;
+END $$;

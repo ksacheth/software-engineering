@@ -14,9 +14,12 @@
     "migrate:deploy": "prisma migrate deploy",
     "migrate:status": "prisma migrate status",
     "migrate:reset": "prisma migrate reset",
-    "db:reset": "prisma migrate reset --force",
+    "db:reset": "prisma migrate reset --force && bun run ./scripts/bootstrap.ts",
     "studio": "prisma studio",
     "typecheck": "tsc --noEmit"
+  },
+  "prisma": {
+    "seed": "bun run ./scripts/bootstrap.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3"
