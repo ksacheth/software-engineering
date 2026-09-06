@@ -39,6 +39,8 @@ AGENTS.md
 .agents
 .claude
 .zcode
+.pi
+.commandcode
 
 # LaTeX build artifacts
 *.aux

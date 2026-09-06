@@ -1,3 +1,7 @@
+DERIVED PRESENTATION COPY OF SRS v1.2 — 6 September 2026
+Canonical requirements source: docs/srs/SRS.md
+Do not make requirements decisions from this plain-text copy.
+
 1. Introduction
 
 1.1 Purpose
@@ -356,7 +360,7 @@ Description: Against the project's benchmark fixture suite (every vulnerability 
 
 DC-1 Implementation Language: TypeScript in strict mode shall be used for all first-party code, client and server. Introducing a second implementation language is out of scope for the current design (C.6).
 
-DC-2 Application Frameworks: The server shall be built on NestJS and the client on React with Vite. Substituting either framework is out of scope for the current design.
+DC-2 Application Frameworks: The server shall be built with Express on the Bun runtime and the client with React and Vite. The API shall remain stateless and expose REST and authenticated WebSocket interfaces.
 
 DC-3 Persistence: Data shall be persisted in PostgreSQL, accessed exclusively through the Prisma ORM. Direct SQL outside the ORM's parameterised interface is not permitted (NFR-SEC-2).
 

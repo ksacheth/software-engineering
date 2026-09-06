@@ -2,9 +2,14 @@
 
 ## Website Vulnerability Scanner
 
-**Version 1.0 - 3 August 2026**
+**Version 1.2 - 6 September 2026**
 
 Prepared in accordance with IEEE Std 830-1998
+
+> **Document authority.** This is the sole authoritative requirements
+> specification for WVS. The humanised and plain-text SRS files, diagrams, and
+> PDFs are derived presentation artifacts. Historical specifications under
+> `docs/archive/` do not override this document.
 
 ---
 
@@ -376,7 +381,7 @@ Each requirement is identified as `NFR-CAT-n` (§1.3) and stated so that it can 
 
 **DC-1 Implementation Language:** TypeScript in strict mode shall be used for all first-party code, client and server. Introducing a second implementation language is out of scope for the current design (C.6).
 
-**DC-2 Application Frameworks:** The server shall be built on NestJS and the client on React with Vite. Substituting either framework is out of scope for the current design.
+**DC-2 Application Frameworks:** The server shall be built with Express on the Bun runtime and the client with React and Vite. The API shall remain stateless and expose REST and authenticated WebSocket interfaces.
 
 **DC-3 Persistence:** Data shall be persisted in PostgreSQL, accessed exclusively through the Prisma ORM. Direct SQL outside the ORM's parameterised interface is not permitted (NFR-SEC-2).
 
@@ -484,3 +489,4 @@ All detectors in this list are restricted by F.5: idempotent methods, benign mar
 ## Version History
 
 - **1.0** (3 August 2026) – Initial SRS draft.
+- **1.2** (6 September 2026) – Established this file as the canonical requirements source; ratified Express on Bun for the API; aligned document-authority rules with the DFD and presentation artifacts.

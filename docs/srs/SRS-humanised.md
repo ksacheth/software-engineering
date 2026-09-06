@@ -2,9 +2,13 @@
 
 ## Website Vulnerability Scanner
 
-**Version 1.0 - 3 August 2026**
+**Derived presentation copy of SRS v1.2 - 6 September 2026**
 
 Prepared in accordance with IEEE Std 830-1998, *Recommended Practice for Software Requirements Specifications*.
+
+> **Derived document.** [SRS.md](SRS.md) is the sole authoritative
+> requirements specification. Do not make requirements decisions from this
+> presentation copy.
 
 ---
 
@@ -209,8 +213,6 @@ One requirement per function group (F.1–F.8, §2.2). Shall = mandatory, should
 
 **Input:** A scan request naming a verified target, a profile, configuration values, control commands, and any recurring schedule.
 
-**Input:** A scan request naming a verified target, a profile, configuration values, control commands, and any recurring schedule.
-
 **Output:** A scan identifier returned immediately, a live progress stream, a terminal lifecycle state, a reproducibility record, and quota refusals or completion notifications.
 
 ### F.4 Discovery (Crawling)
@@ -394,7 +396,7 @@ Each requirement is identified as NFR-CAT-n (§1.3) and stated so that it can be
 
 DC-1 Implementation Language: TypeScript in strict mode shall be used for all first-party code, client and server. Introducing a second implementation language is out of scope for the current design (C.6).
 
-DC-2 Application Frameworks: The server shall be built on NestJS and the client on React with Vite. Substituting either framework is out of scope for the current design.
+DC-2 Application Frameworks: The server shall be built with Express on the Bun runtime and the client with React and Vite. The API shall remain stateless and expose REST and authenticated WebSocket interfaces.
 
 DC-3 Persistence: Data shall be persisted in PostgreSQL, accessed exclusively through the Prisma ORM. Direct SQL outside the ORM's parameterised interface is not permitted (NFR-SEC-2).
 
@@ -507,3 +509,4 @@ A-14 Improper HTTPS redirection — plaintext origin verified to redirect to HTT
 ## Version History
 
 - **1.0** (3 August 2026) – Initial SRS draft.
+- **1.2** (6 September 2026) – Derived from the canonical SRS v1.2.

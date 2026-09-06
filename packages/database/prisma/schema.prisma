@@ -1,0 +1,589 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -----------------------------------------------------------------------------
+// D1: Accounts, Organisations & Sessions (SRS F.1, DFD Level 2 1.3.1)
+// Compatible with Better Auth + custom role & lockout controls
+// -----------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  ANALYST
+  DEVELOPER
+  VIEWER
+}
+
+model User {
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  image            String?
+  role             String    @default("ANALYST")
+  banned           Boolean?  @default(false)
+  banReason        String?
+  banExpires       DateTime?
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  twoFactorEnabled Boolean?  @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Better Auth relations
+  sessions        Session[]
+  accounts        Account[]
+  members         Member[]
+  invitationsSent Invitation[] @relation("SentInvitations")
+  twoFactors      TwoFactor[]
+
+  // Domain relations
+  createdTargets   Target[]               @relation("CreatedTargets")
+  triggeredScans   ScanJob[]              @relation("TriggeredScans")
+  triageHistories  FindingTriageHistory[] @relation("UserTriageHistories")
+  createdReports   ScanReport[]           @relation("CreatedReports")
+  createdBlocklist NetworkBlocklist[]     @relation("CreatedBlocklist")
+
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id @default(cuid())
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verification")
+}
+
+model TwoFactor {
+  id          String @id @default(cuid())
+  secret      String
+  backupCodes String
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("two_factor")
+}
+
+model Organization {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String?  @unique
+  logo               String?
+  metadata           String?
+  maxConcurrentScans Int      @default(2)
+  scanRateLimit      Int      @default(10)
+  createdAt          DateTime @default(now())
+
+  members     Member[]
+  invitations Invitation[]
+  targets     Target[]
+  scanJobs    ScanJob[]
+
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  inviterId      String
+  inviter        User         @relation("SentInvitations", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// -----------------------------------------------------------------------------
+// D2: Targets & Scope (SRS F.2, DFD Level 2 1.3.2)
+// -----------------------------------------------------------------------------
+
+enum VerificationMethod {
+  DNS_TXT
+  WELL_KNOWN
+}
+
+enum TargetVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
+}
+
+model Target {
+  id                    String                   @id @default(cuid())
+  organizationId        String
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  origin                String
+  label                 String
+  verified              Boolean                  @default(false)
+  verificationToken     String                   @unique @default(cuid())
+  verificationMethod    VerificationMethod       @default(DNS_TXT)
+  verificationStatus    TargetVerificationStatus @default(UNVERIFIED)
+  verifiedAt            DateTime?
+  verificationExpiresAt DateTime?
+  authorisationAck      Boolean                  @default(false)
+  authorisationAckAt    DateTime?
+  authorisationAckBy    String?
+  verifiedIpRanges      String[]                 @default([])
+  includedPaths         String[]                 @default([])
+  excludedPaths         String[]                 @default([])
+  maxDepth              Int                      @default(5)
+  maxPages              Int                      @default(200)
+  maxRequests           Int                      @default(2000)
+  rateLimit             Int                      @default(10)
+  isArchived            Boolean                  @default(false)
+  archivedAt            DateTime?
+  createdById           String?
+  createdBy             User?                    @relation("CreatedTargets", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  scanJobs        ScanJob[]
+  findings        Finding[]
+  triageHistories FindingTriageHistory[]
+
+  @@index([organizationId])
+  @@index([origin])
+  @@map("target")
+}
+
+model NetworkBlocklist {
+  id          String   @id @default(cuid())
+  pattern     String
+  reason      String
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation("CreatedBlocklist", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([pattern])
+  @@map("network_blocklist")
+}
+
+// -----------------------------------------------------------------------------
+// D3: Jobs & Checkpoints (SRS F.3, DFD Level 2 1.3.3)
+// -----------------------------------------------------------------------------
+
+enum ScanProfile {
+  PASSIVE
+  STANDARD
+  THOROUGH
+}
+
+enum ScanStatus {
+  QUEUED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+  ABORTED_SAFETY
+}
+
+enum ScanPhase {
+  DISCOVERY
+  DETECTION
+  REPORTING
+  COMPLETED
+}
+
+enum CrawlLimitType {
+  DEPTH_REACHED
+  PAGE_CEILING_REACHED
+  REQUEST_CEILING_REACHED
+  QUEUE_EXHAUSTED
+  CANCELLED
+  TIMEOUT
+  SAFETY_ABORT
+}
+
+model ScanJob {
+  id                 String          @id @default(cuid())
+  targetId           String
+  target             Target          @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  organizationId     String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profile            ScanProfile     @default(STANDARD)
+  status             ScanStatus      @default(QUEUED)
+  phase              ScanPhase       @default(DISCOVERY)
+  workerId           String?
+  cronSchedule       String?
+  isScheduled        Boolean         @default(false)
+  nextRunAt          DateTime?
+  lastRunAt          DateTime?
+  rateLimit          Int             @default(10)
+  concurrency        Int             @default(5)
+  maxDepth           Int             @default(5)
+  maxPages           Int             @default(200)
+  maxRequests        Int             @default(2000)
+  detectorVersions   Json?
+  pagesCrawled       Int             @default(0)
+  requestsMade       Int             @default(0)
+  findingsCount      Int             @default(0)
+  progressPercentage Float           @default(0.0)
+  queuedAt           DateTime        @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+  pausedAt           DateTime?
+  cancelledAt        DateTime?
+  failureReason      String?
+  bindingLimit       CrawlLimitType?
+  createdById        String?
+  createdBy          User?           @relation("TriggeredScans", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  checkpoint   ScanCheckpoint?
+  crawledPages CrawledPage[]
+  findings     Finding[]
+  reports      ScanReport[]
+  urlLedgers   UrlLedger[]
+
+  @@index([targetId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("scan_job")
+}
+
+model ScanCheckpoint {
+  id                 String    @id @default(cuid())
+  scanJobId          String    @unique
+  scanJob            ScanJob   @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  phase              ScanPhase
+  crawlFrontier      Json
+  crawledUrls        Json
+  completedDetectors Json
+  pendingDetectors   Json
+  checkpointedAt     DateTime  @default(now()) @updatedAt
+  metadata           Json?
+
+  @@map("scan_checkpoint")
+}
+
+// -----------------------------------------------------------------------------
+// D4: Scan Records (SRS F.4, DFD Level 2 1.3.4)
+// -----------------------------------------------------------------------------
+
+model CrawledPage {
+  id                String   @id @default(cuid())
+  scanJobId         String
+  scanJob           ScanJob  @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  url               String
+  normalizedUrl     String
+  method            String   @default("GET")
+  statusCode        Int
+  contentType       String?
+  depth             Int      @default(0)
+  responseTimeMs    Int?
+  requestHeaders    Json?
+  responseHeaders   Json?
+  forms             Json?
+  parameters        Json?
+  linksFound        Json?
+  isBlocked         Boolean  @default(false)
+  reducedConfidence Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  @@index([scanJobId, normalizedUrl])
+  @@map("crawled_page")
+}
+
+// -----------------------------------------------------------------------------
+// D5: Findings, Triage & Evidence (SRS F.5, F.6, DC-9, DFD Level 2 1.3.5, 1.3.6)
+// -----------------------------------------------------------------------------
+
+enum FindingSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FindingConfidence {
+  CONFIRMED
+  FIRM
+  TENTATIVE
+}
+
+enum ComparisonStatus {
+  NEW
+  PERSISTING
+  RESOLVED
+}
+
+enum TriageState {
+  OPEN
+  CONFIRMED
+  FALSE_POSITIVE
+  ACCEPTED_RISK
+  RESOLVED
+}
+
+model Finding {
+  id                String            @id @default(cuid())
+  fingerprint       String
+  scanJobId         String
+  scanJob           ScanJob           @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  targetId          String
+  target            Target            @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  detectorId        String
+  name              String
+  description       String
+  remediation       String
+  severity          FindingSeverity
+  confidence        FindingConfidence
+  cwe               String?
+  owaspCategory     String?
+  affectedUrl       String
+  affectedParameter String?
+  cvssScore         Float?
+  cvssVector        String?
+  cveId             String?
+  epssScore         Float?
+  epssPercentile    Float?
+  advisoryData      Json?
+  comparisonStatus  ComparisonStatus  @default(NEW)
+  occurrenceCount   Int               @default(1)
+  occurrences       Json?
+  createdAt         DateTime          @default(now())
+
+  evidence FindingEvidence?
+
+  @@index([scanJobId])
+  @@index([targetId])
+  @@index([fingerprint])
+  @@index([severity])
+  @@map("finding")
+}
+
+model FindingEvidence {
+  id               String    @id @default(cuid())
+  findingId        String    @unique
+  finding          Finding   @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  requestHeaders   Json?
+  requestBody      String?
+  responseHeaders  Json?
+  responseBody     String?
+  curlCommand      String?
+  extractedSnippet String?
+  isPurged         Boolean   @default(false)
+  purgedAt         DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+
+  @@index([expiresAt, isPurged])
+  @@map("finding_evidence")
+}
+
+model FindingTriageHistory {
+  id                 String      @id @default(cuid())
+  findingFingerprint String
+  targetId           String
+  target             Target      @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  state              TriageState @default(OPEN)
+  justification      String?
+  userId             String
+  user               User        @relation("UserTriageHistories", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime    @default(now())
+
+  @@index([findingFingerprint])
+  @@index([targetId])
+  @@map("finding_triage_history")
+}
+
+// -----------------------------------------------------------------------------
+// D6: Append-only Audit Log / URL Ledger (SRS F.8, DC-9, DFD Level 2 1.3.8)
+// -----------------------------------------------------------------------------
+
+enum AuditAction {
+  AUTH_REGISTER
+  AUTH_LOGIN
+  AUTH_LOGOUT
+  AUTH_FAILED
+  AUTH_LOCKOUT
+  AUTH_MFA_ENABLED
+  TARGET_CREATED
+  TARGET_VERIFIED
+  TARGET_ARCHIVED
+  TARGET_DELETED
+  SCAN_QUEUED
+  SCAN_STARTED
+  SCAN_PAUSED
+  SCAN_RESUMED
+  SCAN_CANCELLED
+  SCAN_ABORTED_SAFETY
+  FINDING_TRIAGED
+  EVIDENCE_PURGED
+  REPORT_EXPORTED
+  ADMIN_KILL_SWITCH_ENGAGED
+  ADMIN_KILL_SWITCH_DISENGAGED
+  ADMIN_BLOCKLIST_CREATED
+  ADMIN_BLOCKLIST_UPDATED
+  ADMIN_BLOCKLIST_DELETED
+  ADMIN_QUOTA_CHANGED
+}
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  timestamp      DateTime    @default(now())
+  action         AuditAction
+  organizationId String?
+  userId         String?
+  ipAddress      String?
+  userAgent      String?
+  resourceType   String?
+  resourceId     String?
+  metadata       Json?
+
+  @@index([organizationId, timestamp])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_log")
+}
+
+enum ScopeDecision {
+  ALLOWED
+  BLOCKED_VERIFICATION
+  BLOCKED_SCOPE
+  BLOCKED_BLOCKLIST
+  BLOCKED_RATE_LIMIT
+  BLOCKED_CEILING
+  BLOCKED_DNS_REBINDING
+  BLOCKED_KILL_SWITCH
+  ERROR
+}
+
+model UrlLedger {
+  id             String        @id @default(cuid())
+  scanJobId      String
+  scanJob        ScanJob       @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  timestamp      DateTime      @default(now())
+  url            String
+  resolvedIp     String
+  httpMethod     String        @default("GET")
+  statusCode     Int?
+  decision       ScopeDecision
+  decisionReason String?
+  responseTimeMs Int?
+  bytesSent      Int?
+  bytesReceived  Int?
+
+  @@index([scanJobId, timestamp])
+  @@map("url_ledger")
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_setting")
+}
+
+// -----------------------------------------------------------------------------
+// F.7: Reporting & Export (SRS F.7, DFD Level 2 1.3.7)
+// -----------------------------------------------------------------------------
+
+enum ReportTemplate {
+  EXECUTIVE_SUMMARY
+  TECHNICAL_REPORT
+}
+
+enum ReportFormat {
+  PDF
+  HTML
+  JSON
+  CSV
+  SARIF
+}
+
+model ScanReport {
+  id                  String           @id @default(cuid())
+  scanJobId           String
+  scanJob             ScanJob          @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  template            ReportTemplate
+  format              ReportFormat
+  filePath            String?
+  fileSize            Int?
+  shareToken          String?          @unique
+  shareExpiresAt      DateTime?
+  minSeverityFilter   FindingSeverity?
+  triageStatusFilter  TriageState?
+  coverageLimitations String
+  createdById         String?
+  createdBy           User?            @relation("CreatedReports", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime         @default(now())
+
+  @@index([scanJobId])
+  @@index([shareToken])
+  @@map("scan_report")
+}

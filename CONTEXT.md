@@ -1,9 +1,10 @@
 # WVS — Website Vulnerability Scanner — Project Context
 
-Academic project, Dept. of Information Technology, NIT Surathkal. SRS v1.0
-(3 Aug 2026) + DFD document are the source of truth — this file is a working
-summary for onboarding a person or an AI assistant into the codebase, not a
-replacement for them.
+Academic project, Dept. of Information Technology, NIT Surathkal. The
+[canonical requirements specification](docs/srs/SRS.md) is SRS v1.2 (6 Sep
+2026). The DFD is a design artifact derived from that specification. This file
+is a working summary for onboarding a person or an AI assistant into the
+codebase, not a replacement for either document.
 
 ## What it is
 
@@ -38,7 +39,7 @@ would be an anonymous internet-facing attack platform.
 ```
 software/
 ├── apps/
-│   ├── api/          # NestJS REST API + WebSocket gateway (stateless, NFR-SCAL-1)
+│   ├── api/          # Express (on Bun) REST API + WebSocket gateway (stateless, NFR-SCAL-1)
 │   ├── web/           # React + Vite dashboard SPA
 │   └── worker/         # Scan Engine — BullMQ job processors, horizontally scalable
 ├── packages/
@@ -57,7 +58,7 @@ software/
 **Why the API and worker are separate apps:** §2.1 of the SRS describes the
 Application API and Scan Engine Workers as independently-scalable processes
 decoupled by a job queue. Crawling/detection are long-running, resource-heavy
-jobs — they belong in `apps/worker` as BullMQ processors, not as NestJS HTTP
+jobs — they belong in `apps/worker` as BullMQ processors, not as HTTP
 controllers in `apps/api`. This is what makes NFR-SCAL-1 ("scan throughput
 scales by adding workers, no code changes") actually true.
 
@@ -77,7 +78,7 @@ division clear:
 | Layer | Choice | Constraint |
 |---|---|---|
 | Language | TypeScript, strict mode, client+server | DC-1 |
-| Server framework | NestJS | DC-2 |
+| Server framework | Express (on the Bun runtime) | DC-2 |
 | Client framework | React + Vite | DC-2 |
 | Persistence | PostgreSQL 16+, via Prisma ORM only (no raw SQL) | DC-3 |
 | Async/queue | BullMQ backed by Redis 7+ | DC-4 |

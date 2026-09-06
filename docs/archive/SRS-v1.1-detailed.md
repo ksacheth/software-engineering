@@ -1,5 +1,9 @@
 # Software Requirements Specification
 
+> **Historical archive — non-authoritative.** This 2 August 2026 detailed
+> draft is retained for reference only. The current requirements authority is
+> [SRS v1.2](../srs/SRS.md); this file must not override it.
+
 ## Website Vulnerability Scanner
 
 **Version 1.0**
@@ -14,7 +18,7 @@ Prepared in accordance with IEEE Std 830-1998, *Recommended Practice for Softwar
 |---|---|
 | Document title | Software Requirements Specification — Website Vulnerability Scanner |
 | Version | 1.1 |
-| Status | Baselined |
+| Status | Historical draft — superseded |
 | Date | 2 August 2026 |
 | Prepared by | Project Team |
 | Standard | IEEE Std 830-1998 |
