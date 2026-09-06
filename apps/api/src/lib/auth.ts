@@ -17,7 +17,7 @@ export const auth = betterAuth({
   plugins: [
     organization({
       allowUserToCreateOrganization: true,
-      creatorRole: 'owner',
+      creatorRole: 'ADMIN',
     }),
     twoFactor({
       issuer: 'Website Vulnerability Scanner',

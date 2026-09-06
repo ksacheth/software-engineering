@@ -10,6 +10,7 @@ generator client {
 // -----------------------------------------------------------------------------
 // D1: Accounts, Organisations & Sessions (SRS F.1, DFD Level 2 1.3.1)
 // Compatible with Better Auth + custom role & lockout controls
+// Enforces SRS F.1: 1 user belongs to exactly 1 organization via Member(userId UNIQUE)
 // -----------------------------------------------------------------------------
 
 enum Role {
@@ -25,15 +26,15 @@ model User {
   email            String    @unique
   emailVerified    Boolean   @default(false)
   image            String?
-  role             String    @default("ANALYST")
+  role             Role      @default(ANALYST)
   banned           Boolean?  @default(false)
   banReason        String?
-  banExpires       DateTime?
+  banExpires       DateTime? @db.Timestamptz(3)
   failedLoginCount Int       @default(0)
-  lockedUntil      DateTime?
+  lockedUntil      DateTime? @db.Timestamptz(3)
   twoFactorEnabled Boolean?  @default(false)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
 
   // Better Auth relations
   sessions        Session[]
@@ -43,21 +44,24 @@ model User {
   twoFactors      TwoFactor[]
 
   // Domain relations
-  createdTargets   Target[]               @relation("CreatedTargets")
-  triggeredScans   ScanJob[]              @relation("TriggeredScans")
-  triageHistories  FindingTriageHistory[] @relation("UserTriageHistories")
-  createdReports   ScanReport[]           @relation("CreatedReports")
-  createdBlocklist NetworkBlocklist[]     @relation("CreatedBlocklist")
+  createdTargets      Target[]               @relation("CreatedTargets")
+  authorisedTargets   Target[]               @relation("AuthorisedTargets")
+  createdSchedules    ScanSchedule[]         @relation("CreatedSchedules")
+  triggeredScans      ScanJob[]              @relation("TriggeredScans")
+  updatedTriages      TargetFindingTriage[]  @relation("UpdatedTriages")
+  triageHistories     FindingTriageHistory[] @relation("UserTriageHistories")
+  createdReports      ScanReport[]           @relation("CreatedReports")
+  createdBlocklist    NetworkBlocklist[]     @relation("CreatedBlocklist")
 
   @@map("user")
 }
 
 model Session {
   id                   String   @id @default(cuid())
-  expiresAt            DateTime
+  expiresAt            DateTime @db.Timestamptz(3)
   token                String   @unique
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
   ipAddress            String?
   userAgent            String?
   userId               String
@@ -77,12 +81,12 @@ model Account {
   accessToken           String?
   refreshToken          String?
   idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
   scope                 String?
   password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
 
   @@index([userId])
   @@map("account")
@@ -92,9 +96,9 @@ model Verification {
   id         String    @id @default(cuid())
   identifier String
   value      String
-  expiresAt  DateTime
-  createdAt  DateTime? @default(now())
-  updatedAt  DateTime? @updatedAt
+  expiresAt  DateTime  @db.Timestamptz(3)
+  createdAt  DateTime? @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime? @updatedAt @db.Timestamptz(3)
 
   @@map("verification")
 }
@@ -118,12 +122,13 @@ model Organization {
   metadata           String?
   maxConcurrentScans Int      @default(2)
   scanRateLimit      Int      @default(10)
-  createdAt          DateTime @default(now())
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
 
-  members     Member[]
-  invitations Invitation[]
-  targets     Target[]
-  scanJobs    ScanJob[]
+  members       Member[]
+  invitations   Invitation[]
+  targets       Target[]
+  scanSchedules ScanSchedule[]
+  scanJobs      ScanJob[]
 
   @@map("organization")
 }
@@ -132,10 +137,10 @@ model Member {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String
+  userId         String       @unique // SRS F.1: Strict 1:1 invariant - user belongs to exactly one organisation
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           String       @default("member")
-  createdAt      DateTime     @default(now())
+  role           Role         @default(ANALYST)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
   @@unique([organizationId, userId])
   @@index([userId])
@@ -147,11 +152,12 @@ model Invitation {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String
-  role           String?
+  role           Role?        @default(ANALYST)
   status         String       @default("pending")
-  expiresAt      DateTime
+  expiresAt      DateTime     @db.Timestamptz(3)
   inviterId      String
   inviter        User         @relation("SentInvitations", fields: [inviterId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([organizationId])
   @@index([email])
@@ -175,6 +181,13 @@ enum TargetVerificationStatus {
   FAILED
 }
 
+enum NetworkBlocklistType {
+  CIDR
+  HOST_SUFFIX
+  IP_RANGE
+  REGEX
+}
+
 model Target {
   id                    String                   @id @default(cuid())
   organizationId        String
@@ -182,14 +195,15 @@ model Target {
   origin                String
   label                 String
   verified              Boolean                  @default(false)
-  verificationToken     String                   @unique @default(cuid())
+  verificationToken     String                   @unique // CSPRNG token generated in app code (SRS C.2)
   verificationMethod    VerificationMethod       @default(DNS_TXT)
   verificationStatus    TargetVerificationStatus @default(UNVERIFIED)
-  verifiedAt            DateTime?
-  verificationExpiresAt DateTime?
+  verifiedAt            DateTime?                @db.Timestamptz(3)
+  verificationExpiresAt DateTime?                @db.Timestamptz(3)
   authorisationAck      Boolean                  @default(false)
-  authorisationAckAt    DateTime?
-  authorisationAckBy    String?
+  authorisationAckAt    DateTime?                @db.Timestamptz(3)
+  authorisationAckById  String?
+  authorisationAckUser  User?                    @relation("AuthorisedTargets", fields: [authorisationAckById], references: [id], onDelete: SetNull)
   verifiedIpRanges      String[]                 @default([])
   includedPaths         String[]                 @default([])
   excludedPaths         String[]                 @default([])
@@ -198,37 +212,43 @@ model Target {
   maxRequests           Int                      @default(2000)
   rateLimit             Int                      @default(10)
   isArchived            Boolean                  @default(false)
-  archivedAt            DateTime?
+  archivedAt            DateTime?                @db.Timestamptz(3)
   createdById           String?
   createdBy             User?                    @relation("CreatedTargets", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
 
+  scanSchedules   ScanSchedule[]
   scanJobs        ScanJob[]
   findings        Finding[]
+  triageState     TargetFindingTriage[]
   triageHistories FindingTriageHistory[]
 
+  @@unique([organizationId, origin]) // SRS F.2 / C.2: prevent duplicate targets with conflicting scope/verification
   @@index([organizationId])
   @@index([origin])
   @@map("target")
 }
 
 model NetworkBlocklist {
-  id          String   @id @default(cuid())
+  id          String               @id @default(cuid())
   pattern     String
+  patternType NetworkBlocklistType @default(HOST_SUFFIX)
   reason      String
-  isActive    Boolean  @default(true)
+  isActive    Boolean              @default(true)
   createdById String?
-  createdBy   User?    @relation("CreatedBlocklist", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy   User?                @relation("CreatedBlocklist", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime             @updatedAt @db.Timestamptz(3)
 
   @@index([pattern])
+  @@index([patternType])
   @@map("network_blocklist")
 }
 
 // -----------------------------------------------------------------------------
 // D3: Jobs & Checkpoints (SRS F.3, DFD Level 2 1.3.3)
+// Separates recurring ScanSchedule from immutable per-run ScanJob executions
 // -----------------------------------------------------------------------------
 
 enum ScanProfile {
@@ -264,8 +284,39 @@ enum CrawlLimitType {
   SAFETY_ABORT
 }
 
+model ScanSchedule {
+  id             String       @id @default(cuid())
+  targetId       String
+  target         Target       @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cronSchedule   String
+  profile        ScanProfile  @default(STANDARD)
+  isActive       Boolean      @default(true)
+  nextRunAt      DateTime?    @db.Timestamptz(3)
+  lastRunAt      DateTime?    @db.Timestamptz(3)
+  rateLimit      Int          @default(10)
+  concurrency    Int          @default(5)
+  maxDepth       Int          @default(5)
+  maxPages       Int          @default(200)
+  maxRequests    Int          @default(2000)
+  createdById    String?
+  createdBy      User?        @relation("CreatedSchedules", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+
+  scanJobs ScanJob[]
+
+  @@index([targetId])
+  @@index([organizationId])
+  @@index([isActive, nextRunAt])
+  @@map("scan_schedule")
+}
+
 model ScanJob {
   id                 String          @id @default(cuid())
+  scheduleId         String?
+  schedule           ScanSchedule?   @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
   targetId           String
   target             Target          @relation(fields: [targetId], references: [id], onDelete: Cascade)
   organizationId     String
@@ -274,10 +325,6 @@ model ScanJob {
   status             ScanStatus      @default(QUEUED)
   phase              ScanPhase       @default(DISCOVERY)
   workerId           String?
-  cronSchedule       String?
-  isScheduled        Boolean         @default(false)
-  nextRunAt          DateTime?
-  lastRunAt          DateTime?
   rateLimit          Int             @default(10)
   concurrency        Int             @default(5)
   maxDepth           Int             @default(5)
@@ -288,27 +335,38 @@ model ScanJob {
   requestsMade       Int             @default(0)
   findingsCount      Int             @default(0)
   progressPercentage Float           @default(0.0)
-  queuedAt           DateTime        @default(now())
-  startedAt          DateTime?
-  completedAt        DateTime?
-  pausedAt           DateTime?
-  cancelledAt        DateTime?
+
+  // Degradation & Blocking indicators (§3.2.3, F.4)
+  isDegraded         Boolean         @default(false)
+  degradations       Json            @default("[]")
+  blockingDetected   Boolean         @default(false)
+  blockingDetectedAt DateTime?       @db.Timestamptz(3)
+
+  queuedAt           DateTime        @default(now()) @db.Timestamptz(3)
+  startedAt          DateTime?       @db.Timestamptz(3)
+  completedAt        DateTime?       @db.Timestamptz(3)
+  pausedAt           DateTime?       @db.Timestamptz(3)
+  cancelledAt        DateTime?       @db.Timestamptz(3)
   failureReason      String?
   bindingLimit       CrawlLimitType?
   createdById        String?
   createdBy          User?           @relation("TriggeredScans", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
 
-  checkpoint   ScanCheckpoint?
-  crawledPages CrawledPage[]
-  findings     Finding[]
-  reports      ScanReport[]
-  urlLedgers   UrlLedger[]
+  checkpoint     ScanCheckpoint?
+  crawledPages   CrawledPage[]
+  findings       Finding[]
+  findingDiffs   ScanFindingDiff[]
+  detectorErrors DetectorExecutionError[]
+  reports        ScanReport[]
+  urlLedgers     UrlLedger[]
 
   @@index([targetId])
   @@index([organizationId])
+  @@index([organizationId, status]) // Concurrency quota checking (SRS F.3)
   @@index([status])
+  @@index([scheduleId])
   @@map("scan_job")
 }
 
@@ -321,7 +379,7 @@ model ScanCheckpoint {
   crawledUrls        Json
   completedDetectors Json
   pendingDetectors   Json
-  checkpointedAt     DateTime  @default(now()) @updatedAt
+  checkpointedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
   metadata           Json?
 
   @@map("scan_checkpoint")
@@ -349,8 +407,10 @@ model CrawledPage {
   linksFound        Json?
   isBlocked         Boolean  @default(false)
   reducedConfidence Boolean  @default(false)
-  createdAt         DateTime @default(now())
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
 
+  @@unique([scanJobId, normalizedUrl, method]) // SRS F.4 deduplication guarantee
+  @@index([scanJobId])
   @@index([scanJobId, normalizedUrl])
   @@map("crawled_page")
 }
@@ -387,6 +447,14 @@ enum TriageState {
   RESOLVED
 }
 
+enum DetectorErrorType {
+  TIMEOUT
+  UNEXPECTED_RESPONSE
+  PARSE_FAILURE
+  TEMPLATE_ERROR
+  INTERNAL
+}
+
 model Finding {
   id                String            @id @default(cuid())
   fingerprint       String
@@ -410,18 +478,33 @@ model Finding {
   epssScore         Float?
   epssPercentile    Float?
   advisoryData      Json?
-  comparisonStatus  ComparisonStatus  @default(NEW)
   occurrenceCount   Int               @default(1)
   occurrences       Json?
-  createdAt         DateTime          @default(now())
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
 
   evidence FindingEvidence?
 
+  @@unique([scanJobId, fingerprint]) // SRS F.6: Finding dedup within a scan, race-condition safety
   @@index([scanJobId])
   @@index([targetId])
   @@index([fingerprint])
   @@index([severity])
   @@map("finding")
+}
+
+// Per-scan finding classification diff (SRS F.6, DC-9 compliant)
+// Allows representing RESOLVED findings without fabricating Finding rows or mutating past scans
+model ScanFindingDiff {
+  id          String           @id @default(cuid())
+  scanJobId   String
+  scanJob     ScanJob          @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  fingerprint String
+  status      ComparisonStatus // NEW, PERSISTING, RESOLVED
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([scanJobId, fingerprint])
+  @@index([scanJobId, status])
+  @@map("scan_finding_diff")
 }
 
 model FindingEvidence {
@@ -434,15 +517,35 @@ model FindingEvidence {
   responseBody     String?
   curlCommand      String?
   extractedSnippet String?
+  isRedacted       Boolean   @default(true) // F.6/C.7 compliance flag for credential/PII sanitisation
+  redactionVersion Int       @default(1)
   isPurged         Boolean   @default(false)
-  purgedAt         DateTime?
-  expiresAt        DateTime
-  createdAt        DateTime  @default(now())
+  purgedAt         DateTime? @db.Timestamptz(3)
+  expiresAt        DateTime  @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
 
   @@index([expiresAt, isPurged])
   @@map("finding_evidence")
 }
 
+// Current triage projection: 1 row per (targetId, findingFingerprint) for O(1) query & filtering (NFR-PERF-1)
+model TargetFindingTriage {
+  targetId           String
+  target             Target      @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  findingFingerprint String
+  state              TriageState @default(OPEN)
+  justification      String?
+  updatedById        String?
+  updatedBy          User?       @relation("UpdatedTriages", fields: [updatedById], references: [id], onDelete: SetNull)
+  lastHistoryId      String?     // Pointer to the triggering history event
+  updatedAt          DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@id([targetId, findingFingerprint])
+  @@index([targetId, state])
+  @@map("target_finding_triage")
+}
+
+// Append-only triage audit trail (SRS DC-9)
 model FindingTriageHistory {
   id                 String      @id @default(cuid())
   findingFingerprint String
@@ -450,13 +553,32 @@ model FindingTriageHistory {
   target             Target      @relation(fields: [targetId], references: [id], onDelete: Cascade)
   state              TriageState @default(OPEN)
   justification      String?
-  userId             String
-  user               User        @relation("UserTriageHistories", fields: [userId], references: [id], onDelete: Cascade)
-  createdAt          DateTime    @default(now())
+  userId             String?
+  user               User?       @relation("UserTriageHistories", fields: [userId], references: [id], onDelete: SetNull)
+  createdAt          DateTime    @default(now()) @db.Timestamptz(3)
 
+  @@index([targetId, findingFingerprint, createdAt(sort: Desc)])
   @@index([findingFingerprint])
   @@index([targetId])
   @@map("finding_triage_history")
+}
+
+// Unbounded detector runtime failure records (SRS F.5, NFR-QUAL-1)
+model DetectorExecutionError {
+  id              String            @id @default(cuid())
+  scanJobId       String
+  scanJob         ScanJob           @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  detectorId      String
+  url             String?
+  parameter       String?
+  errorType       DetectorErrorType
+  message         String
+  occurrenceCount Int               @default(1)
+  occurredAt      DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([scanJobId])
+  @@index([detectorId, errorType])
+  @@map("detector_execution_error")
 }
 
 // -----------------------------------------------------------------------------
@@ -493,7 +615,7 @@ enum AuditAction {
 
 model AuditLog {
   id             String      @id @default(cuid())
-  timestamp      DateTime    @default(now())
+  timestamp      DateTime    @default(now()) @db.Timestamptz(3)
   action         AuditAction
   organizationId String?
   userId         String?
@@ -525,7 +647,7 @@ model UrlLedger {
   id             String        @id @default(cuid())
   scanJobId      String
   scanJob        ScanJob       @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
-  timestamp      DateTime      @default(now())
+  timestamp      DateTime      @default(now()) @db.Timestamptz(3)
   url            String
   resolvedIp     String
   httpMethod     String        @default("GET")
@@ -544,7 +666,7 @@ model SystemSetting {
   key         String   @id
   value       String
   description String?
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("system_setting")
 }
@@ -574,14 +696,14 @@ model ScanReport {
   format              ReportFormat
   filePath            String?
   fileSize            Int?
-  shareToken          String?          @unique
-  shareExpiresAt      DateTime?
+  shareToken          String?          @unique // CSPRNG token generated in app code
+  shareExpiresAt      DateTime?        @db.Timestamptz(3)
   minSeverityFilter   FindingSeverity?
   triageStatusFilter  TriageState?
   coverageLimitations String
   createdById         String?
   createdBy           User?            @relation("CreatedReports", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt           DateTime         @default(now())
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
 
   @@index([scanJobId])
   @@index([shareToken])
