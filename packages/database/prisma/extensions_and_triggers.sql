@@ -5,35 +5,51 @@
 
 -- -----------------------------------------------------------------------------
 -- 1. DC-9: Append-only Enforcement for Audit Log & URL Ledger
--- Prevents all UPDATE and DELETE operations at both trigger and privilege levels.
+-- Prevents UPDATE, DELETE, and TRUNCATE at trigger & privilege levels.
+-- Hardened with explicit pg_catalog search_path to prevent function shadowing.
 -- -----------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION prevent_update_or_delete()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = pg_catalog, public
+AS $$
 BEGIN
-    RAISE EXCEPTION 'Table % is append-only under SRS DC-9; updates and deletions are prohibited.', TG_TABLE_NAME;
+    RAISE EXCEPTION 'Table % is append-only under SRS DC-9; mutations and truncations are prohibited.', TG_TABLE_NAME;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger on audit_log
+-- Row-level triggers on audit_log
 DROP TRIGGER IF EXISTS trg_audit_log_append_only ON "audit_log";
 CREATE TRIGGER trg_audit_log_append_only
 BEFORE UPDATE OR DELETE ON "audit_log"
 FOR EACH ROW
 EXECUTE FUNCTION prevent_update_or_delete();
 
--- Trigger on url_ledger
+-- Statement-level TRUNCATE trigger on audit_log
+DROP TRIGGER IF EXISTS trg_audit_log_no_truncate ON "audit_log";
+CREATE TRIGGER trg_audit_log_no_truncate
+BEFORE TRUNCATE ON "audit_log"
+FOR EACH STATEMENT
+EXECUTE FUNCTION prevent_update_or_delete();
+
+-- Row-level triggers on url_ledger
 DROP TRIGGER IF EXISTS trg_url_ledger_append_only ON "url_ledger";
 CREATE TRIGGER trg_url_ledger_append_only
 BEFORE UPDATE OR DELETE ON "url_ledger"
 FOR EACH ROW
 EXECUTE FUNCTION prevent_update_or_delete();
 
+-- Statement-level TRUNCATE trigger on url_ledger
+DROP TRIGGER IF EXISTS trg_url_ledger_no_truncate ON "url_ledger";
+CREATE TRIGGER trg_url_ledger_no_truncate
+BEFORE TRUNCATE ON "url_ledger"
+FOR EACH STATEMENT
+EXECUTE FUNCTION prevent_update_or_delete();
+
 -- Privilege-level revocation (SRS DC-9: "at the database privilege level")
--- Run against the database user configured in DATABASE_URL
 DO $$
 BEGIN
-    EXECUTE 'REVOKE UPDATE, DELETE ON "audit_log", "url_ledger" FROM PUBLIC';
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log", "url_ledger" FROM PUBLIC';
 EXCEPTION
     WHEN OTHERS THEN NULL;
 END $$;
@@ -42,11 +58,13 @@ END $$;
 -- -----------------------------------------------------------------------------
 -- 2. NFR-PERF-1 & SRS F.6: Automatic Triage State Projection
 -- Keeps target_finding_triage in sync with finding_triage_history via AFTER INSERT.
--- Guarantees zero write-skew and O(1) reads for 10,000 findings.
+-- Guarded against out-of-order replay via (updatedAt <= EXCLUDED.updatedAt).
 -- -----------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION sync_target_finding_triage()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = pg_catalog, public
+AS $$
 BEGIN
     INSERT INTO "target_finding_triage" (
         "targetId",
@@ -72,7 +90,8 @@ BEGIN
         "justification" = EXCLUDED."justification",
         "updatedById" = EXCLUDED."updatedById",
         "lastHistoryId" = EXCLUDED."lastHistoryId",
-        "updatedAt" = EXCLUDED."updatedAt";
+        "updatedAt" = EXCLUDED."updatedAt"
+    WHERE "target_finding_triage"."updatedAt" <= EXCLUDED."updatedAt";
 
     RETURN NEW;
 END;

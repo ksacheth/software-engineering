@@ -9,8 +9,8 @@ generator client {
 
 // -----------------------------------------------------------------------------
 // D1: Accounts, Organisations & Sessions (SRS F.1, DFD Level 2 1.3.1)
-// Compatible with Better Auth + custom role & lockout controls
 // Enforces SRS F.1: 1 user belongs to exactly 1 organization via Member(userId UNIQUE)
+// User.role is the canonical authorization authority for NFR-SEC-2 object checks.
 // -----------------------------------------------------------------------------
 
 enum Role {
@@ -27,9 +27,6 @@ model User {
   emailVerified    Boolean   @default(false)
   image            String?
   role             Role      @default(ANALYST)
-  banned           Boolean?  @default(false)
-  banReason        String?
-  banExpires       DateTime? @db.Timestamptz(3)
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime? @db.Timestamptz(3)
   twoFactorEnabled Boolean?  @default(false)
@@ -66,6 +63,7 @@ model Session {
   userAgent            String?
   userId               String
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Required for Better Auth organization plugin compatibility; mirrors Member.organizationId under 1:1
   activeOrganizationId String?
 
   @@index([userId])
@@ -139,11 +137,9 @@ model Member {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String       @unique // SRS F.1: Strict 1:1 invariant - user belongs to exactly one organisation
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           Role         @default(ANALYST)
+  role           String       @default("member") // Better Auth plugin wire format (User.role is canonical system authority)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
-  @@unique([organizationId, userId])
-  @@index([userId])
   @@map("member")
 }
 
@@ -152,7 +148,7 @@ model Invitation {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String
-  role           Role?        @default(ANALYST)
+  role           String?      @default("member") // Better Auth plugin wire format
   status         String       @default("pending")
   expiresAt      DateTime     @db.Timestamptz(3)
   inviterId      String
@@ -221,11 +217,11 @@ model Target {
   scanSchedules   ScanSchedule[]
   scanJobs        ScanJob[]
   findings        Finding[]
+  findingDiffs    ScanFindingDiff[]
   triageState     TargetFindingTriage[]
   triageHistories FindingTriageHistory[]
 
-  @@unique([organizationId, origin]) // SRS F.2 / C.2: prevent duplicate targets with conflicting scope/verification
-  @@index([organizationId])
+  @@unique([organizationId, origin]) // SRS F.2 / C.2: prevent duplicate targets with conflicting scope
   @@index([origin])
   @@map("target")
 }
@@ -248,7 +244,6 @@ model NetworkBlocklist {
 
 // -----------------------------------------------------------------------------
 // D3: Jobs & Checkpoints (SRS F.3, DFD Level 2 1.3.3)
-// Separates recurring ScanSchedule from immutable per-run ScanJob executions
 // -----------------------------------------------------------------------------
 
 enum ScanProfile {
@@ -409,9 +404,7 @@ model CrawledPage {
   reducedConfidence Boolean  @default(false)
   createdAt         DateTime @default(now()) @db.Timestamptz(3)
 
-  @@unique([scanJobId, normalizedUrl, method]) // SRS F.4 deduplication guarantee
-  @@index([scanJobId])
-  @@index([scanJobId, normalizedUrl])
+  @@unique([scanJobId, normalizedUrl, method]) // SRS F.4 dedup & left-prefix index
   @@map("crawled_page")
 }
 
@@ -484,25 +477,28 @@ model Finding {
 
   evidence FindingEvidence?
 
-  @@unique([scanJobId, fingerprint]) // SRS F.6: Finding dedup within a scan, race-condition safety
-  @@index([scanJobId])
+  @@unique([scanJobId, fingerprint]) // SRS F.6: finding dedup within a scan & left-prefix index
+  @@index([targetId, fingerprint, createdAt(sort: Desc)]) // Fast historical/RESOLVED finding posture lookups
   @@index([targetId])
   @@index([fingerprint])
   @@index([severity])
   @@map("finding")
 }
 
-// Per-scan finding classification diff (SRS F.6, DC-9 compliant)
-// Allows representing RESOLVED findings without fabricating Finding rows or mutating past scans
+// Diff table representing scan comparison without mutating past findings (SRS DC-9, F.6)
 model ScanFindingDiff {
   id          String           @id @default(cuid())
   scanJobId   String
   scanJob     ScanJob          @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
+  targetId    String
+  target      Target           @relation(fields: [targetId], references: [id], onDelete: Cascade)
   fingerprint String
   status      ComparisonStatus // NEW, PERSISTING, RESOLVED
   createdAt   DateTime         @default(now()) @db.Timestamptz(3)
 
   @@unique([scanJobId, fingerprint])
+  @@index([targetId, status])
+  @@index([targetId, fingerprint])
   @@index([scanJobId, status])
   @@map("scan_finding_diff")
 }
@@ -517,7 +513,7 @@ model FindingEvidence {
   responseBody     String?
   curlCommand      String?
   extractedSnippet String?
-  isRedacted       Boolean   @default(true) // F.6/C.7 compliance flag for credential/PII sanitisation
+  isRedacted       Boolean   @default(false) // F.6/C.7 compliance flag: asserted explicitly on sanitisation complete
   redactionVersion Int       @default(1)
   isPurged         Boolean   @default(false)
   purgedAt         DateTime? @db.Timestamptz(3)
@@ -528,17 +524,18 @@ model FindingEvidence {
   @@map("finding_evidence")
 }
 
-// Current triage projection: 1 row per (targetId, findingFingerprint) for O(1) query & filtering (NFR-PERF-1)
+// Current triage projection: 1 row per (targetId, findingFingerprint) for O(1) reads (NFR-PERF-1)
 model TargetFindingTriage {
   targetId           String
-  target             Target      @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  target             Target                @relation(fields: [targetId], references: [id], onDelete: Cascade)
   findingFingerprint String
-  state              TriageState @default(OPEN)
+  state              TriageState           @default(OPEN)
   justification      String?
   updatedById        String?
-  updatedBy          User?       @relation("UpdatedTriages", fields: [updatedById], references: [id], onDelete: SetNull)
-  lastHistoryId      String?     // Pointer to the triggering history event
-  updatedAt          DateTime    @updatedAt @db.Timestamptz(3)
+  updatedBy          User?                 @relation("UpdatedTriages", fields: [updatedById], references: [id], onDelete: SetNull)
+  lastHistoryId      String?
+  lastHistory        FindingTriageHistory? @relation("ProjectedTriageHistory", fields: [lastHistoryId], references: [id], onDelete: SetNull)
+  updatedAt          DateTime              @updatedAt @db.Timestamptz(3)
 
   @@id([targetId, findingFingerprint])
   @@index([targetId, state])
@@ -556,6 +553,8 @@ model FindingTriageHistory {
   userId             String?
   user               User?       @relation("UserTriageHistories", fields: [userId], references: [id], onDelete: SetNull)
   createdAt          DateTime    @default(now()) @db.Timestamptz(3)
+
+  projectedTriages TargetFindingTriage[] @relation("ProjectedTriageHistory")
 
   @@index([targetId, findingFingerprint, createdAt(sort: Desc)])
   @@index([findingFingerprint])
@@ -576,6 +575,7 @@ model DetectorExecutionError {
   occurrenceCount Int               @default(1)
   occurredAt      DateTime          @default(now()) @db.Timestamptz(3)
 
+  @@unique([scanJobId, detectorId, errorType]) // Upsert target for recurring failure modes
   @@index([scanJobId])
   @@index([detectorId, errorType])
   @@map("detector_execution_error")
@@ -696,7 +696,7 @@ model ScanReport {
   format              ReportFormat
   filePath            String?
   fileSize            Int?
-  shareToken          String?          @unique // CSPRNG token generated in app code
+  shareToken          String?          @unique
   shareExpiresAt      DateTime?        @db.Timestamptz(3)
   minSeverityFilter   FindingSeverity?
   triageStatusFilter  TriageState?
