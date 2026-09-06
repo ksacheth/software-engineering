@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("MIGRATION_DATABASE_URL")
 }
 
 generator client {
@@ -140,6 +141,7 @@ model Member {
   role           String       @default("member") // Better Auth plugin wire format (User.role is canonical system authority)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
+  @@index([organizationId]) // Child side FK index for CASCADE deletes and org member listing
   @@map("member")
 }
 
@@ -156,6 +158,7 @@ model Invitation {
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([organizationId])
+  @@index([inviterId])
   @@index([email])
   @@map("invitation")
 }
@@ -223,6 +226,8 @@ model Target {
 
   @@unique([organizationId, origin]) // SRS F.2 / C.2: prevent duplicate targets with conflicting scope
   @@index([origin])
+  @@index([createdById])
+  @@index([authorisationAckById])
   @@map("target")
 }
 
@@ -238,7 +243,7 @@ model NetworkBlocklist {
   updatedAt   DateTime             @updatedAt @db.Timestamptz(3)
 
   @@index([pattern])
-  @@index([patternType])
+  @@index([createdById])
   @@map("network_blocklist")
 }
 
@@ -305,6 +310,7 @@ model ScanSchedule {
   @@index([targetId])
   @@index([organizationId])
   @@index([isActive, nextRunAt])
+  @@index([createdById])
   @@map("scan_schedule")
 }
 
@@ -358,10 +364,10 @@ model ScanJob {
   urlLedgers     UrlLedger[]
 
   @@index([targetId])
-  @@index([organizationId])
-  @@index([organizationId, status]) // Concurrency quota checking (SRS F.3)
+  @@index([organizationId, status]) // Concurrency quota checking (SRS F.3), covers organizationId prefix
   @@index([status])
   @@index([scheduleId])
+  @@index([createdById])
   @@map("scan_job")
 }
 
@@ -478,8 +484,7 @@ model Finding {
   evidence FindingEvidence?
 
   @@unique([scanJobId, fingerprint]) // SRS F.6: finding dedup within a scan & left-prefix index
-  @@index([targetId, fingerprint, createdAt(sort: Desc)]) // Fast historical/RESOLVED finding posture lookups
-  @@index([targetId])
+  @@index([targetId, fingerprint, createdAt(sort: Desc)]) // Fast posture & RESOLVED lookups (covers targetId prefix)
   @@index([fingerprint])
   @@index([severity])
   @@map("finding")
@@ -525,6 +530,7 @@ model FindingEvidence {
 }
 
 // Current triage projection: 1 row per (targetId, findingFingerprint) for O(1) reads (NFR-PERF-1)
+// Managed entirely by sync_target_finding_triage database trigger
 model TargetFindingTriage {
   targetId           String
   target             Target                @relation(fields: [targetId], references: [id], onDelete: Cascade)
@@ -534,11 +540,12 @@ model TargetFindingTriage {
   updatedById        String?
   updatedBy          User?                 @relation("UpdatedTriages", fields: [updatedById], references: [id], onDelete: SetNull)
   lastHistoryId      String?
-  lastHistory        FindingTriageHistory? @relation("ProjectedTriageHistory", fields: [lastHistoryId], references: [id], onDelete: SetNull)
-  updatedAt          DateTime              @updatedAt @db.Timestamptz(3)
+  lastHistory        FindingTriageHistory? @relation("ProjectedTriageHistory", fields: [lastHistoryId], references: [id], onDelete: Restrict)
+  updatedAt          DateTime              @default(now()) @db.Timestamptz(3) // Trigger-managed server time
 
   @@id([targetId, findingFingerprint])
   @@index([targetId, state])
+  @@index([updatedById])
   @@map("target_finding_triage")
 }
 
@@ -556,9 +563,9 @@ model FindingTriageHistory {
 
   projectedTriages TargetFindingTriage[] @relation("ProjectedTriageHistory")
 
-  @@index([targetId, findingFingerprint, createdAt(sort: Desc)])
+  @@index([targetId, findingFingerprint, createdAt(sort: Desc)]) // Covers targetId prefix
   @@index([findingFingerprint])
-  @@index([targetId])
+  @@index([userId])
   @@map("finding_triage_history")
 }
 
@@ -575,8 +582,7 @@ model DetectorExecutionError {
   occurrenceCount Int               @default(1)
   occurredAt      DateTime          @default(now()) @db.Timestamptz(3)
 
-  @@unique([scanJobId, detectorId, errorType]) // Upsert target for recurring failure modes
-  @@index([scanJobId])
+  @@unique([scanJobId, detectorId, errorType]) // Upsert target (covers scanJobId prefix)
   @@index([detectorId, errorType])
   @@map("detector_execution_error")
 }
@@ -706,6 +712,6 @@ model ScanReport {
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
 
   @@index([scanJobId])
-  @@index([shareToken])
+  @@index([createdById])
   @@map("scan_report")
 }

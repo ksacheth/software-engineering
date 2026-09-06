@@ -381,7 +381,7 @@ CREATE TABLE "target_finding_triage" (
     "justification" TEXT,
     "updatedById" TEXT,
     "lastHistoryId" TEXT,
-    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "target_finding_triage_pkey" PRIMARY KEY ("targetId","findingFingerprint")
 );
@@ -499,7 +499,13 @@ CREATE UNIQUE INDEX "organization_slug_key" ON "organization"("slug");
 CREATE UNIQUE INDEX "member_userId_key" ON "member"("userId");
 
 -- CreateIndex
+CREATE INDEX "member_organizationId_idx" ON "member"("organizationId");
+
+-- CreateIndex
 CREATE INDEX "invitation_organizationId_idx" ON "invitation"("organizationId");
+
+-- CreateIndex
+CREATE INDEX "invitation_inviterId_idx" ON "invitation"("inviterId");
 
 -- CreateIndex
 CREATE INDEX "invitation_email_idx" ON "invitation"("email");
@@ -511,13 +517,19 @@ CREATE UNIQUE INDEX "target_verificationToken_key" ON "target"("verificationToke
 CREATE INDEX "target_origin_idx" ON "target"("origin");
 
 -- CreateIndex
+CREATE INDEX "target_createdById_idx" ON "target"("createdById");
+
+-- CreateIndex
+CREATE INDEX "target_authorisationAckById_idx" ON "target"("authorisationAckById");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "target_organizationId_origin_key" ON "target"("organizationId", "origin");
 
 -- CreateIndex
 CREATE INDEX "network_blocklist_pattern_idx" ON "network_blocklist"("pattern");
 
 -- CreateIndex
-CREATE INDEX "network_blocklist_patternType_idx" ON "network_blocklist"("patternType");
+CREATE INDEX "network_blocklist_createdById_idx" ON "network_blocklist"("createdById");
 
 -- CreateIndex
 CREATE INDEX "scan_schedule_targetId_idx" ON "scan_schedule"("targetId");
@@ -529,10 +541,10 @@ CREATE INDEX "scan_schedule_organizationId_idx" ON "scan_schedule"("organization
 CREATE INDEX "scan_schedule_isActive_nextRunAt_idx" ON "scan_schedule"("isActive", "nextRunAt");
 
 -- CreateIndex
-CREATE INDEX "scan_job_targetId_idx" ON "scan_job"("targetId");
+CREATE INDEX "scan_schedule_createdById_idx" ON "scan_schedule"("createdById");
 
 -- CreateIndex
-CREATE INDEX "scan_job_organizationId_idx" ON "scan_job"("organizationId");
+CREATE INDEX "scan_job_targetId_idx" ON "scan_job"("targetId");
 
 -- CreateIndex
 CREATE INDEX "scan_job_organizationId_status_idx" ON "scan_job"("organizationId", "status");
@@ -544,6 +556,9 @@ CREATE INDEX "scan_job_status_idx" ON "scan_job"("status");
 CREATE INDEX "scan_job_scheduleId_idx" ON "scan_job"("scheduleId");
 
 -- CreateIndex
+CREATE INDEX "scan_job_createdById_idx" ON "scan_job"("createdById");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "scan_checkpoint_scanJobId_key" ON "scan_checkpoint"("scanJobId");
 
 -- CreateIndex
@@ -551,9 +566,6 @@ CREATE UNIQUE INDEX "crawled_page_scanJobId_normalizedUrl_method_key" ON "crawle
 
 -- CreateIndex
 CREATE INDEX "finding_targetId_fingerprint_createdAt_idx" ON "finding"("targetId", "fingerprint", "createdAt" DESC);
-
--- CreateIndex
-CREATE INDEX "finding_targetId_idx" ON "finding"("targetId");
 
 -- CreateIndex
 CREATE INDEX "finding_fingerprint_idx" ON "finding"("fingerprint");
@@ -586,16 +598,16 @@ CREATE INDEX "finding_evidence_expiresAt_isPurged_idx" ON "finding_evidence"("ex
 CREATE INDEX "target_finding_triage_targetId_state_idx" ON "target_finding_triage"("targetId", "state");
 
 -- CreateIndex
+CREATE INDEX "target_finding_triage_updatedById_idx" ON "target_finding_triage"("updatedById");
+
+-- CreateIndex
 CREATE INDEX "finding_triage_history_targetId_findingFingerprint_createdA_idx" ON "finding_triage_history"("targetId", "findingFingerprint", "createdAt" DESC);
 
 -- CreateIndex
 CREATE INDEX "finding_triage_history_findingFingerprint_idx" ON "finding_triage_history"("findingFingerprint");
 
 -- CreateIndex
-CREATE INDEX "finding_triage_history_targetId_idx" ON "finding_triage_history"("targetId");
-
--- CreateIndex
-CREATE INDEX "detector_execution_error_scanJobId_idx" ON "detector_execution_error"("scanJobId");
+CREATE INDEX "finding_triage_history_userId_idx" ON "finding_triage_history"("userId");
 
 -- CreateIndex
 CREATE INDEX "detector_execution_error_detectorId_errorType_idx" ON "detector_execution_error"("detectorId", "errorType");
@@ -622,7 +634,7 @@ CREATE UNIQUE INDEX "scan_report_shareToken_key" ON "scan_report"("shareToken");
 CREATE INDEX "scan_report_scanJobId_idx" ON "scan_report"("scanJobId");
 
 -- CreateIndex
-CREATE INDEX "scan_report_shareToken_idx" ON "scan_report"("shareToken");
+CREATE INDEX "scan_report_createdById_idx" ON "scan_report"("createdById");
 
 -- AddForeignKey
 ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -706,7 +718,7 @@ ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_target
 ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_lastHistoryId_fkey" FOREIGN KEY ("lastHistoryId") REFERENCES "finding_triage_history"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "target_finding_triage" ADD CONSTRAINT "target_finding_triage_lastHistoryId_fkey" FOREIGN KEY ("lastHistoryId") REFERENCES "finding_triage_history"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "finding_triage_history" ADD CONSTRAINT "finding_triage_history_targetId_fkey" FOREIGN KEY ("targetId") REFERENCES "target"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -732,7 +744,7 @@ ALTER TABLE "scan_report" ADD CONSTRAINT "scan_report_createdById_fkey" FOREIGN 
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- 1. DC-9: Append-only Enforcement for Audit Log & URL Ledger
+-- 1. DC-9: Append-only Enforcement for Audit Log, URL Ledger & Triage History
 -- Prevents UPDATE, DELETE, and TRUNCATE at trigger & privilege levels.
 -- Hardened with explicit pg_catalog search_path to prevent function shadowing.
 -- -----------------------------------------------------------------------------
@@ -774,10 +786,24 @@ BEFORE TRUNCATE ON "url_ledger"
 FOR EACH STATEMENT
 EXECUTE FUNCTION prevent_update_or_delete();
 
+-- Row-level triggers on finding_triage_history (SRS DC-9)
+DROP TRIGGER IF EXISTS trg_finding_triage_history_append_only ON "finding_triage_history";
+CREATE TRIGGER trg_finding_triage_history_append_only
+BEFORE UPDATE OR DELETE ON "finding_triage_history"
+FOR EACH ROW
+EXECUTE FUNCTION prevent_update_or_delete();
+
+-- Statement-level TRUNCATE trigger on finding_triage_history (SRS DC-9)
+DROP TRIGGER IF EXISTS trg_finding_triage_history_no_truncate ON "finding_triage_history";
+CREATE TRIGGER trg_finding_triage_history_no_truncate
+BEFORE TRUNCATE ON "finding_triage_history"
+FOR EACH STATEMENT
+EXECUTE FUNCTION prevent_update_or_delete();
+
 -- Privilege-level revocation (SRS DC-9: "at the database privilege level")
 DO $$
 BEGIN
-    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log", "url_ledger" FROM PUBLIC';
+    EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log", "url_ledger", "finding_triage_history" FROM PUBLIC';
 EXCEPTION
     WHEN OTHERS THEN NULL;
 END $$;
@@ -786,7 +812,7 @@ END $$;
 -- -----------------------------------------------------------------------------
 -- 2. NFR-PERF-1 & SRS F.6: Automatic Triage State Projection
 -- Keeps target_finding_triage in sync with finding_triage_history via AFTER INSERT.
--- Guarded against out-of-order replay via (updatedAt <= EXCLUDED.updatedAt).
+-- Guarded against out-of-order replay via clock_timestamp() and tie-break on lastHistoryId.
 -- -----------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION sync_target_finding_triage()
@@ -810,7 +836,7 @@ BEGIN
         NEW."justification",
         NEW."userId",
         NEW."id",
-        NEW."createdAt"
+        clock_timestamp()
     )
     ON CONFLICT ("targetId", "findingFingerprint")
     DO UPDATE SET
@@ -819,7 +845,8 @@ BEGIN
         "updatedById" = EXCLUDED."updatedById",
         "lastHistoryId" = EXCLUDED."lastHistoryId",
         "updatedAt" = EXCLUDED."updatedAt"
-    WHERE "target_finding_triage"."updatedAt" <= EXCLUDED."updatedAt";
+    WHERE "target_finding_triage"."updatedAt" < EXCLUDED."updatedAt"
+       OR ("target_finding_triage"."updatedAt" = EXCLUDED."updatedAt" AND "target_finding_triage"."lastHistoryId" <= EXCLUDED."lastHistoryId");
 
     RETURN NEW;
 END;
