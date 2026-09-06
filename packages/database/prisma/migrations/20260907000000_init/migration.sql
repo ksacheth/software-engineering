@@ -840,9 +840,20 @@ EXECUTE FUNCTION sync_target_finding_triage();
 
 
 -- -----------------------------------------------------------------------------
--- 3. SRS DC-9: Privilege Revocation for Runtime Application Role
--- Re-applies privilege isolation whenever migrations run.
+-- 3. SRS DC-9: Privilege Revocation & Dedicated Projection Role
 -- -----------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wvs_projection') THEN
+        CREATE ROLE wvs_projection NOLOGIN;
+    END IF;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO wvs_projection;
+GRANT SELECT, INSERT, UPDATE ON "target_finding_triage" TO wvs_projection;
+ALTER FUNCTION sync_target_finding_triage() OWNER TO wvs_projection;
+REVOKE EXECUTE ON FUNCTION sync_target_finding_triage() FROM PUBLIC;
+
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'wvs_app') THEN
@@ -850,5 +861,7 @@ BEGIN
         EXECUTE 'REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log", "url_ledger", "finding_triage_history" FROM wvs_app';
         -- Read-only on triage projection (writes only occur via SECURITY DEFINER trigger)
         EXECUTE 'REVOKE INSERT, UPDATE, DELETE ON "target_finding_triage" FROM wvs_app';
+        -- Allow wvs_app to execute the projection trigger
+        EXECUTE 'GRANT EXECUTE ON FUNCTION sync_target_finding_triage() TO wvs_app';
     END IF;
 END $$;

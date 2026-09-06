@@ -11,15 +11,13 @@
     "generate": "prisma generate",
     "db:push": "prisma db push",
     "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy",
+    "migrate:deploy": "prisma migrate deploy && bun run ./scripts/bootstrap.ts",
     "migrate:status": "prisma migrate status",
     "migrate:reset": "prisma migrate reset",
     "db:reset": "prisma migrate reset --force && bun run ./scripts/bootstrap.ts",
+    "purge:retention": "bun run ./scripts/purge-retention.ts",
     "studio": "prisma studio",
     "typecheck": "tsc --noEmit"
-  },
-  "prisma": {
-    "seed": "bun run ./scripts/bootstrap.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3"
