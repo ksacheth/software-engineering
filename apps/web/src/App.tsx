@@ -12,6 +12,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthPage } from '@/pages/auth/auth-page';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { TargetsPage } from '@/pages/targets/targets-page';
+import { TargetDetailPage } from '@/pages/targets/target-detail-page';
+import { TargetVerifyPage } from '@/pages/targets/target-verify-page';
 import { DashboardPage } from '@/pages/dashboard/dashboard-page';
 import { ScansPage } from '@/pages/scans/scans-page';
 import { FindingsPage } from '@/pages/findings/findings-page';
@@ -69,6 +71,8 @@ export function App() {
                 >
                   <Route index element={<Navigate to="/targets" replace />} />
                   <Route path="/targets" element={<TargetsPage />} />
+                  <Route path="/targets/:id" element={<TargetDetailPage />} />
+                  <Route path="/targets/:id/verify" element={<TargetVerifyPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/scans" element={<ScansPage />} />
                   <Route path="/findings" element={<FindingsPage />} />
