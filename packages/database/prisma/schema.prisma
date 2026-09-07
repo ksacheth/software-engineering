@@ -103,11 +103,14 @@ model Verification {
 }
 
 model TwoFactor {
-  id          String @id @default(cuid())
-  secret      String
-  backupCodes String
-  userId      String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean   @default(false)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime? @db.Timestamptz(3)
 
   @@index([userId])
   @@map("two_factor")
