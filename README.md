@@ -119,7 +119,7 @@ bun run dev
 Or run targeted services:
 
 ```bash
-# API Server (http://localhost:4000)
+# API Server (http://localhost:4100)
 cd apps/api && bun run dev
 
 # Prisma Studio database GUI (http://localhost:5555)

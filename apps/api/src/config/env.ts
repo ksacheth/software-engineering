@@ -44,7 +44,7 @@ loadRootEnv();
 
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
-  port: num(process.env.PORT, 4000),
+  port: num(process.env.PORT, 4100),
   corsOrigins: process.env.WEB_ORIGIN?.split(',') ?? ['http://localhost:3000'],
   jwt: {
     // TODO(F.1): fail fast at boot when missing instead of defaulting.
