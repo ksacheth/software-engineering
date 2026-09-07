@@ -3,87 +3,10 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { organization, twoFactor } from 'better-auth/plugins';
 import { prisma } from '@wvs/database';
 
-function wrapPrismaForAuth(client: any): any {
-  return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop === 'account') {
-        const origAccount = target.account;
-        return new Proxy(origAccount, {
-          get(accTarget, accProp, accReceiver) {
-            if (accProp === 'create') {
-              return async (args: any) => {
-                const { issuer, ...cleanData } = args?.data || {};
-                const res = await origAccount.create({ ...args, data: cleanData });
-                return res ? { ...res, issuer: issuer ?? 'local:credential' } : res;
-              };
-            }
-            if (accProp === 'findFirst' || accProp === 'findUnique') {
-              return async (args: any) => {
-                let cleanArgs = args;
-                if (args?.where && 'issuer' in args.where) {
-                  const { issuer, ...cleanWhere } = args.where;
-                  cleanArgs = { ...args, where: cleanWhere };
-                }
-                const res = await origAccount[accProp](cleanArgs);
-                return res ? { ...res, issuer: res.issuer ?? 'local:credential' } : res;
-              };
-            }
-            if (accProp === 'findMany') {
-              return async (args: any) => {
-                let cleanArgs = args;
-                if (args?.where && 'issuer' in args.where) {
-                  const { issuer, ...cleanWhere } = args.where;
-                  cleanArgs = { ...args, where: cleanWhere };
-                }
-                const res = await origAccount.findMany(cleanArgs);
-                return Array.isArray(res)
-                  ? res.map((r: any) => ({ ...r, issuer: r.issuer ?? 'local:credential' }))
-                  : res;
-              };
-            }
-            return Reflect.get(accTarget, accProp, accReceiver);
-          },
-        });
-      }
-      if (prop === 'user') {
-        const origUser = target.user;
-        return new Proxy(origUser, {
-          get(userTarget, userProp, userReceiver) {
-            if (userProp === 'findFirst' || userProp === 'findUnique') {
-              return async (args: any) => {
-                const res = await origUser[userProp](args);
-                if (res?.accounts && Array.isArray(res.accounts)) {
-                  res.accounts = res.accounts.map((acc: any) => ({
-                    ...acc,
-                    issuer: acc.issuer ?? 'local:credential',
-                  }));
-                }
-                return res;
-              };
-            }
-            return Reflect.get(userTarget, userProp, userReceiver);
-          },
-        });
-      }
-      if (prop === '$transaction') {
-        return async (arg: any, options?: any) => {
-          if (typeof arg === 'function') {
-            return target.$transaction(async (tx: any) => {
-              return arg(wrapPrismaForAuth(tx));
-            }, options);
-          }
-          return target.$transaction(arg, options);
-        };
-      }
-      return Reflect.get(target, prop, receiver);
-    },
-  });
-}
-
 export const auth = betterAuth({
   appName: 'Website Vulnerability Scanner',
   secret: process.env.BETTER_AUTH_SECRET,
-  database: prismaAdapter(wrapPrismaForAuth(prisma), {
+  database: prismaAdapter(prisma, {
     provider: 'postgresql',
   }),
   emailAndPassword: {
