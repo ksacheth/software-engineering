@@ -46,6 +46,11 @@ export const config = {
   env: process.env.NODE_ENV ?? 'development',
   port: num(process.env.PORT, 4100),
   corsOrigins: process.env.WEB_ORIGIN?.split(',') ?? ['http://localhost:3000'],
+  redis: {
+    host: process.env.REDIS_HOST ?? 'localhost',
+    port: num(process.env.REDIS_PORT, 6379),
+    password: process.env.REDIS_PASSWORD ?? '',
+  },
   jwt: {
     // TODO(F.1): fail fast at boot when missing instead of defaulting.
     secret: process.env.JWT_SECRET ?? '',

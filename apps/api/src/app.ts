@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { config } from './config/env';
 import { healthRouter } from './common/health.router';
 import { createAuthRouter } from './modules/auth/auth.routes';
+import { createTargetsRouter } from './modules/targets/targets.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -17,6 +18,7 @@ export function createApp(): Express {
 
   app.use('/api/health', healthRouter);
   app.use('/api/auth', createAuthRouter());
+  app.use('/api/targets', createTargetsRouter());
 
   // 404
   app.use((_req, res) => {

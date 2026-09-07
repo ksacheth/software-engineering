@@ -14,3 +14,12 @@ export {
   type VerifiedSetVerdict,
   type VerifiedSetRefusalReason,
 } from './verified-set.js';
+
+export {
+  isScannable,
+  verificationExpiryFrom,
+  VERIFICATION_VALIDITY_DAYS,
+  type ScannableTarget,
+  type ScannableVerdict,
+  type NotScannableReason,
+} from './scannable.js';
