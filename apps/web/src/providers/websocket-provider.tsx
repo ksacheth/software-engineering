@@ -135,7 +135,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         socket.close();
       }
     };
-  }, [settledSession?.user.id]);
+  }, [settledSession?.user?.id]);
 
   const sendMessage = useCallback((data: unknown) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
