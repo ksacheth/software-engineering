@@ -332,6 +332,8 @@ model ScanJob {
   rateLimit          Int             @default(10)
   concurrency        Int             @default(5)
   maxDepth           Int             @default(5)
+  includedPaths      String[]        @default([]) // Scope snapshot at launch (F.2/F.3 reproducibility)
+  excludedPaths      String[]        @default([])
   maxPages           Int             @default(200)
   maxRequests        Int             @default(2000)
   detectorVersions   Json?
@@ -599,6 +601,9 @@ enum AuditAction {
   AUTH_MFA_ENABLED
   TARGET_CREATED
   TARGET_VERIFIED
+  TARGET_VERIFICATION_FAILED
+  TARGET_REFUSED
+  TARGET_SCOPE_CHANGED
   TARGET_ARCHIVED
   TARGET_DELETED
   SCAN_QUEUED
