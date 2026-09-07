@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
-    "types": ["node"],
+    "types": ["node", "bun-types"],
     "noEmit": true,
     "declaration": false,
     "declarationMap": false

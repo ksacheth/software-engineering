@@ -339,8 +339,10 @@ export function createTargetsRouter(): Router {
 }
 
 async function findOwned(req: Request) {
+  const id = req.params.id;
+  if (typeof id !== 'string') return null;
   return prisma.target.findFirst({
-    where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    where: { id, organizationId: req.auth!.organizationId },
   });
 }
 
