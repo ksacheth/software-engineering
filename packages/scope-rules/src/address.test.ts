@@ -71,6 +71,20 @@ describe('allows public addresses', () => {
   }
 });
 
+describe('IPv6 output is RFC 5952 canonical', () => {
+  const forms: [string, string][] = [
+    ['2606:4700:4700:0:0:0:0:1111', '2606:4700:4700::1111'],
+    ['2606:4700:0000:0000:0000:0000:0000:1111', '2606:4700::1111'],
+    ['2001:0:0:1:0:0:0:1', '2001:0:0:1::1'],
+    ['2606:4700:4700::1111', '2606:4700:4700::1111'],
+  ];
+  for (const [input, expected] of forms) {
+    test(`${input} -> ${expected}`, () => {
+      expect(classifyAddress(input).normalised).toBe(expected);
+    });
+  }
+});
+
 describe('zone index is stripped', () => {
   test('fe80::1%eth0 is LINK_LOCAL', () => {
     expect(classifyAddress('fe80::1%eth0').reason).toBe('LINK_LOCAL');

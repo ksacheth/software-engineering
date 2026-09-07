@@ -127,8 +127,41 @@ function parseIpv6(value: string): { groups: number[]; mappedIpv4?: number[] } |
   return { groups: [...head, ...Array<number>(fill).fill(0), ...back], mappedIpv4 };
 }
 
+/**
+ * Renders eight groups as RFC 5952 canonical text: lowercase, no leading
+ * zeros, and the longest run of two or more zero groups replaced by `::`
+ * (leftmost run wins a tie).
+ *
+ * The canonical form matters because these strings are stored in
+ * Target.verifiedIpRanges and shown in refusal messages, and because an
+ * administrator pasting an address into the blocklist will write it this way.
+ */
 function groupsToText(groups: number[]): string {
-  return groups.map((g) => g.toString(16)).join(':');
+  let bestStart = -1;
+  let bestLength = 0;
+  let runStart = -1;
+  let runLength = 0;
+
+  for (let i = 0; i <= groups.length; i++) {
+    if (i < groups.length && groups[i] === 0) {
+      if (runStart === -1) runStart = i;
+      runLength++;
+    } else {
+      if (runLength > bestLength) {
+        bestStart = runStart;
+        bestLength = runLength;
+      }
+      runStart = -1;
+      runLength = 0;
+    }
+  }
+
+  const hex = groups.map((g) => g.toString(16));
+  if (bestLength < 2) return hex.join(':');
+
+  const head = hex.slice(0, bestStart).join(':');
+  const tail = hex.slice(bestStart + bestLength).join(':');
+  return `${head}::${tail}`;
 }
 
 function classifyIpv6(groups: number[], mappedIpv4?: number[]): AddressVerdict {
