@@ -14,6 +14,26 @@ export const auth = betterAuth({
     minPasswordLength: 12, // SRS F.1: passwords of at least 12 characters
     maxPasswordLength: 256,
   },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          const orgName = `${user.name || user.email.split('@')[0]}'s Organization`;
+          const baseSlug = (user.name || user.email.split('@')[0])
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-');
+          const slug = `${baseSlug}-${user.id.slice(-6)}`;
+          await auth.api.createOrganization({
+            body: {
+              name: orgName,
+              slug,
+              userId: user.id,
+            },
+          });
+        },
+      },
+    },
+  },
   plugins: [
     organization({
       allowUserToCreateOrganization: true,

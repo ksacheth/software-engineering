@@ -19,6 +19,12 @@
       "skillPath": "security/SKILL.md",
       "computedHash": "7a230edf3a24ce18162cb4379f59b6a19b8d24ca04db530609d0f15cede556dc"
     },
+    "better-auth-ui-react": {
+      "source": "better-auth-ui/better-auth-ui",
+      "sourceType": "github",
+      "skillPath": "packages/react/skills/better-auth-ui-react/SKILL.md",
+      "computedHash": "9823e1b1cf4d30b06e67ab4886fb55d4833411dc4c0bf6fefb855a8a26a2e5a7"
+    },
     "create-auth": {
       "source": "better-auth/skills",
       "sourceType": "github",
@@ -78,6 +84,12 @@
       "sourceType": "github",
       "skillPath": "prisma-database-setup/SKILL.md",
       "computedHash": "6a991a2530a6da7131e3fc71c353e8278702d0146b8b6e1d2fdfc2d3d0a21bd2"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
     },
     "thermo-nuclear-code-quality-review": {
       "source": "cursor/plugins",
