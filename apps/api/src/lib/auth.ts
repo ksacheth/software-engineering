@@ -18,24 +18,30 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
-          const orgIdentity = user.name || user.email.split('@')[0];
-          const orgName = `${orgIdentity}'s Organization`;
-          const baseSlug = orgIdentity
+          const identity = user.name || user.email.split('@')[0];
+          const baseSlug = identity
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '');
-          const slug = `${baseSlug || 'organization'}-${user.id}`;
 
           try {
-            await auth.api.createOrganization({
-              body: {
-                name: orgName,
-                slug,
-                userId: user.id,
-              },
+            await prisma.$transaction(async (tx) => {
+              const organization = await tx.organization.create({
+                data: {
+                  name: `${identity}'s Organization`,
+                  slug: `${baseSlug || 'organization'}-${user.id}`,
+                },
+              });
+              await tx.member.create({
+                data: {
+                  organizationId: organization.id,
+                  userId: user.id,
+                  role: 'owner',
+                },
+              });
             });
           } catch (error) {
-            await prisma.user.delete({ where: { id: user.id } });
+            await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
             throw error;
           }
         },

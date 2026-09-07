@@ -28,12 +28,19 @@ function getReconnectDelay(attempt: number) {
 }
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession(authClient);
+  const { data: session, isPending } = useSession(authClient);
+  const [settledSession, setSettledSession] = useState<typeof session>();
   const [status, setStatus] = useState<WebSocketStatus>('disconnected');
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const subscribersRef = useRef(new Set<WebSocketMessageHandler>());
+
+  useEffect(() => {
+    if (!isPending) {
+      setSettledSession(session);
+    }
+  }, [isPending, session]);
 
   useEffect(() => {
     let isActive = true;
@@ -82,9 +89,14 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           }
 
           const scanMessage = message as { scanJobId?: string; type?: string };
-          queryClient.setQueryData(['scan', scanMessage.scanJobId], message);
-          if (scanMessage.type === 'scan.completed') {
-            void queryClient.invalidateQueries({ queryKey: ['findings', scanMessage.scanJobId] });
+          if (scanMessage.scanJobId && typeof message === 'object' && message !== null) {
+            queryClient.setQueryData<Record<string, unknown>>(['scan', scanMessage.scanJobId], (old) => ({
+              ...(old ?? {}),
+              ...message,
+            }));
+            if (scanMessage.type === 'scan.completed') {
+              void queryClient.invalidateQueries({ queryKey: ['findings', scanMessage.scanJobId] });
+            }
           }
           subscribersRef.current.forEach((handler) => handler(message));
         };
@@ -106,7 +118,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (session) {
+    if (settledSession) {
       connect();
     } else {
       clearReconnectTimeout();
@@ -123,7 +135,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         socket.close();
       }
     };
-  }, [session?.user.id]);
+  }, [settledSession?.user.id]);
 
   const sendMessage = useCallback((data: unknown) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
