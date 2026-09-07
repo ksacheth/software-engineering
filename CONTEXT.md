@@ -23,16 +23,38 @@ would be an anonymous internet-facing attack platform.
 
 ## Team & module ownership
 
-| Module | Requirement | Owner |
+| Component | Requirement | Owner |
 |---|---|---|
-| 0.1 User Authentication & Access Control | F.1 | Deepthi K |
-| 0.2 Target Management & Authorisation | F.2 | Deepthi K |
-| 0.3 Scan Configuration & Execution | F.3 | Deepthi K |
-| 0.4 Discovery (Crawling) | F.4 | Jasmine |
-| 0.5 Vulnerability Detection | F.5 | Jasmine |
-| 0.6 Findings Management | F.6 | Jasmine |
-| 0.7 Reporting & Export | F.7 | **Sacheth Koushal** |
-| 0.8 Safety, Auditing & Administration | F.8 | **Sacheth Koushal** |
+| Scope Guard (DNS, IP checks, rate limit) | F.8 | Deepthi |
+| Crawler (Playwright, link/form extraction) | F.4 | Deepthi |
+| Passive detectors P-01..P-31 | F.5 | Deepthi |
+| Active detectors A-01..A-14 | F.5 | Deepthi |
+| URL ledger (every outbound request) | F.8 | Deepthi |
+| Authentication + 2FA | F.1 | **Sacheth Koushal** |
+| Target management + DNS TXT verification | F.2 | **Sacheth Koushal** |
+| Scan trigger REST endpoint + WebSocket gateway | F.3 | **Sacheth Koushal** |
+| Findings UI (list, filter, evidence, triage actions) | F.6 | **Sacheth Koushal** |
+| Reporting + export (PDF/SARIF/CSV/JSON) | F.7 | **Sacheth Koushal** |
+| Admin UI (kill switch, quotas) + DevOps | F.8 | **Sacheth Koushal** |
+| Orchestrator (BullMQ worker, status machine) | F.3 | Jasmine |
+| Finding deduplication | F.6 | Jasmine |
+| Triage carry-forward across scans | F.6 | Jasmine |
+| OSV / EPSS enrichment | F.5 | Jasmine |
+| Test fixture (OWASP Juice Shop) + integration scripts | Testing | Jasmine |
+
+Ownership is by **component**, not by requirement: F.3, F.5, F.6 and F.8 are each
+split across two people. The seams that need an agreed contract before either
+side can finish:
+
+- **F.3**: Sacheth's REST endpoint enqueues to BullMQ; Jasmine's worker consumes.
+  The job payload and the status-event shape are a shared type.
+- **F.6**: Jasmine writes triage state; Sacheth's UI reads and triggers it.
+  `target_finding_triage` is trigger-managed and read-only to `wvs_app` — writes
+  must go through `finding_triage_history`.
+- **F.8**: Deepthi enforces the Scope Guard; Sacheth's admin UI configures it
+  (kill switch, blocklist, quotas) via `SystemSetting` and `NetworkBlocklist`.
+- **F.4/F.5 → F.8**: every outbound request Deepthi's crawler and detectors make
+  passes the Scope Guard and writes a `url_ledger` row.
 
 ## Repo layout (Turborepo + bun workspaces)
 
