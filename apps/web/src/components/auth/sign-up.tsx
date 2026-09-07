@@ -1,7 +1,5 @@
 import {
   authMutationKeys,
-  getAdditionalFieldDefaultValues,
-  getAdditionalFieldSubmitValues,
   getAuthLinkURL,
   isPasswordCompromisedError,
   validateEmailAddress,
@@ -16,15 +14,14 @@ import {
 } from "@better-auth-ui/react"
 import { useIsMutating } from "@tanstack/react-query"
 import { Eye, EyeOff } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
-  FieldLabel,
-  FieldSeparator
+  FieldLabel
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -34,28 +31,21 @@ import {
   InputGroupInput
 } from "@/components/ui/input-group"
 import { cn } from "@/lib/utils"
-import {
-  getAuthAdditionalFieldValidators,
-  isAuthFormFieldInvalid,
-  useAuthForm
-} from "./auth-form"
+import { isAuthFormFieldInvalid, useAuthForm } from "./auth-form"
 import { PasswordStrengthMeter } from "./password-strength-meter"
-import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 
 export type SignUpProps = {
   className?: string
-  socialLayout?: SocialLayout
-  socialPosition?: "top" | "bottom"
   /**
    * Runs instead of the post-sign-up redirect, but only when the sign-up
    * created an immediately usable session. Email verification still takes
-   * priority, and social sign-ups are unaffected.
+   * priority.
    */
   onSignUpSuccess?: () => void
 }
 
 /**
- * Renders a sign-up form with name, email, and password fields, optional social provider buttons, and submission handling.
+ * Renders a sign-up form with name, email, and password fields and submission handling.
  *
  * Submits credentials to the configured auth client and handles the response:
  * - If email verification is required, shows a notification and navigates to sign-in
@@ -64,26 +54,20 @@ export type SignUpProps = {
  * - Manages a pending state while the request is in-flight
  *
  * @param className - Additional CSS classes applied to the outer container
- * @param socialLayout - Social layout to apply to the component
- * @param socialPosition - Social position to apply to the component
  * @param onSignUpSuccess - Replaces the post-sign-up redirect when the new account is immediately usable
  * @returns The sign-up form React element.
  */
 export function SignUp({
   className,
-  socialLayout,
-  socialPosition = "bottom",
   onSignUpSuccess
 }: SignUpProps) {
   const {
-    additionalFields,
     authClient,
     basePaths,
     emailAndPassword,
     localization,
     plugins,
     redirectTo,
-    socialProviders,
     viewPaths,
     navigate,
     Link
@@ -137,13 +121,8 @@ export function SignUp({
     useState(false)
 
   const [isCompromised, setIsCompromised] = useState(false)
-  const signUpFields = useMemo(
-    () => additionalFields?.filter((field) => field.signUp) ?? [],
-    [additionalFields]
-  )
   const form = useAuthForm({
     defaultValues: {
-      additionalFields: getAdditionalFieldDefaultValues(signUpFields),
       confirmPassword: "",
       email: "",
       name: "",
@@ -155,10 +134,6 @@ export function SignUp({
           name: emailAndPassword?.name === false ? "" : value.name,
           email: value.email.trim(),
           password: value.password,
-          ...getAdditionalFieldSubmitValues(
-            signUpFields,
-            value.additionalFields
-          ),
           fetchOptions
         })
       } catch {
@@ -166,9 +141,6 @@ export function SignUp({
       }
     }
   })
-
-  const showSeparator =
-    emailAndPassword?.enabled && socialProviders && socialProviders.length > 0
 
   return (
     <Card className={cn("w-full max-w-sm", className)}>
@@ -181,20 +153,6 @@ export function SignUp({
 
       <CardContent>
         <div className="flex flex-col gap-6">
-          {socialPosition === "top" && (
-            <>
-              {socialProviders && socialProviders.length > 0 && (
-                <ProviderButtons socialLayout={socialLayout} view="signUp" />
-              )}
-
-              {showSeparator && (
-                <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card text-xs flex items-center">
-                  {localization.auth.or}
-                </FieldSeparator>
-              )}
-            </>
-          )}
-
           {emailAndPassword?.enabled && (
             <form.AppForm>
               <form.AuthFormRoot>
@@ -284,28 +242,6 @@ export function SignUp({
                       )
                     }}
                   </form.AppField>
-
-                  {signUpFields.map(
-                    (configuredField) =>
-                      configuredField.signUp === "above" && (
-                        <form.AppField
-                          key={configuredField.name}
-                          name={`additionalFields.${configuredField.name}`}
-                          validators={getAuthAdditionalFieldValidators(
-                            configuredField,
-                            localization.auth.fieldRequired
-                          )}
-                        >
-                          {(field) => (
-                            <field.AuthFormAdditionalField
-                              field={configuredField}
-                              isPending={isPending}
-                              optionalLabel={localization.auth.optional}
-                            />
-                          )}
-                        </form.AppField>
-                      )
-                  )}
 
                   <form.AppField
                     name="password"
@@ -491,28 +427,6 @@ export function SignUp({
                     </form.AppField>
                   )}
 
-                  {signUpFields.map(
-                    (configuredField) =>
-                      configuredField.signUp !== "above" && (
-                        <form.AppField
-                          key={configuredField.name}
-                          name={`additionalFields.${configuredField.name}`}
-                          validators={getAuthAdditionalFieldValidators(
-                            configuredField,
-                            localization.auth.fieldRequired
-                          )}
-                        >
-                          {(field) => (
-                            <field.AuthFormAdditionalField
-                              field={configuredField}
-                              isPending={isPending}
-                              optionalLabel={localization.auth.optional}
-                            />
-                          )}
-                        </form.AppField>
-                      )
-                  )}
-
                   {Captcha && (
                     <div className="flex justify-center">{Captcha}</div>
                   )}
@@ -536,19 +450,6 @@ export function SignUp({
             </form.AppForm>
           )}
 
-          {socialPosition === "bottom" && (
-            <>
-              {showSeparator && (
-                <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card text-xs flex items-center">
-                  {localization.auth.or}
-                </FieldSeparator>
-              )}
-
-              {socialProviders && socialProviders.length > 0 && (
-                <ProviderButtons socialLayout={socialLayout} view="signUp" />
-              )}
-            </>
-          )}
         </div>
 
         {emailAndPassword?.enabled && (

@@ -1,12 +1,6 @@
-import {
-  fieldsWithModelValues,
-  getAdditionalFieldDefaultValues,
-  getAdditionalFieldSubmitValues,
-  validateStringLength
-} from "@better-auth-ui/core"
-import type { UsernameAuthClient } from "@better-auth-ui/core/plugins/username"
+import { validateStringLength } from "@better-auth-ui/core"
 import { useAuth, useSession, useUpdateUser } from "@better-auth-ui/react"
-import { useEffect, useMemo } from "react"
+import { useEffect } from "react"
 import { toast } from "sonner"
 
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -14,11 +8,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import {
-  getAuthAdditionalFieldValidators,
-  isAuthFormFieldInvalid,
-  useAuthForm
-} from "../../auth-form"
+import { isAuthFormFieldInvalid, useAuthForm } from "../../auth-form"
 import { ChangeAvatar } from "./change-avatar"
 
 export type UserProfileProps = {
@@ -32,43 +22,24 @@ export type UserProfileProps = {
  * @returns A JSX element containing the profile card with avatar upload and editable name/username fields
  */
 export function UserProfile({ className }: UserProfileProps) {
-  const { additionalFields, authClient, localization } =
-    useAuth<UsernameAuthClient>()
+  const { authClient, localization } = useAuth()
   const { data: session } = useSession(authClient)
 
   const { mutateAsync: updateUser, isPending } = useUpdateUser(authClient, {
     onSuccess: () => toast.success(localization.settings.profileUpdatedSuccess)
   })
 
-  const profileFields = useMemo(
-    () => additionalFields?.filter((field) => field.profile !== false) ?? [],
-    [additionalFields]
-  )
   const form = useAuthForm({
-    defaultValues: {
-      additionalFields: getAdditionalFieldDefaultValues(profileFields),
-      name: ""
-    },
+    defaultValues: { name: "" },
     onSubmit: async ({ value }) => {
-      await updateUser({
-        name: value.name,
-        ...getAdditionalFieldSubmitValues(profileFields, value.additionalFields)
-      })
+      await updateUser({ name: value.name })
     }
   })
 
   useEffect(() => {
     if (!session) return
-    form.reset({
-      additionalFields: getAdditionalFieldDefaultValues(
-        fieldsWithModelValues(
-          profileFields,
-          session.user as Record<string, unknown>
-        )
-      ),
-      name: session.user.name
-    })
-  }, [form, profileFields, session])
+    form.reset({ name: session.user.name })
+  }, [form, session])
 
   return (
     <div>
@@ -127,37 +98,6 @@ export function UserProfile({ className }: UserProfileProps) {
                 }}
               </form.AppField>
 
-              {profileFields.map((configuredField) => {
-                if (!session) {
-                  if (configuredField.inputType === "hidden") {
-                    return null
-                  }
-
-                  return (
-                    <Skeleton key={configuredField.name}>
-                      <Input className="invisible" />
-                    </Skeleton>
-                  )
-                }
-
-                return (
-                  <form.AppField
-                    key={configuredField.name}
-                    name={`additionalFields.${configuredField.name}`}
-                    validators={getAuthAdditionalFieldValidators(
-                      configuredField,
-                      localization.auth.fieldRequired
-                    )}
-                  >
-                    {(field) => (
-                      <field.AuthFormAdditionalField
-                        field={configuredField}
-                        isPending={isPending}
-                      />
-                    )}
-                  </form.AppField>
-                )
-              })}
             </CardContent>
 
             <CardFooter>

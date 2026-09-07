@@ -1,14 +1,6 @@
 "use client"
 
-import {
-  type AdditionalField as AdditionalFieldConfig,
-  type AdditionalFieldFormValue,
-  DEFAULT_ADDITIONAL_FIELD_VALIDATION_DEBOUNCE_MS,
-  getFormFieldErrors,
-  normalizeAuthFormServerError,
-  validateAdditionalFieldRequired,
-  validateAdditionalFieldValue
-} from "@better-auth-ui/core"
+import { getFormFieldErrors, normalizeAuthFormServerError } from "@better-auth-ui/core"
 import {
   type AnyFormApi,
   createFormHook,
@@ -30,7 +22,6 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { AdditionalField, type AdditionalFieldProps } from "./additional-field"
 
 const { fieldContext, formContext, useFieldContext, useFormContext } =
   createFormHookContexts()
@@ -270,41 +261,12 @@ function AuthFormSubmitButton({
   )
 }
 
-type AuthFormAdditionalFieldProps = Omit<
-  AdditionalFieldProps,
-  "errors" | "isInvalid" | "name" | "onBlur" | "onChange" | "value"
->
-
-function AuthFormAdditionalField(props: AuthFormAdditionalFieldProps) {
-  const field = useFieldContext<AdditionalFieldFormValue>()
-  const form = useFormContext()
-  const isInvalid = isAuthFormFieldInvalid(field.state.meta)
-
-  return (
-    <AdditionalField
-      {...props}
-      errors={
-        isInvalid ? getFormFieldErrors(field.state.meta.errors) : undefined
-      }
-      isInvalid={isInvalid}
-      name={field.name}
-      onBlur={field.handleBlur}
-      onChange={(value) => {
-        clearAuthFormFieldServerError(form, field.name)
-        field.handleChange(value)
-      }}
-      value={field.state.value}
-    />
-  )
-}
-
 export const {
   useAppForm: useAuthForm,
   withFieldGroup: withAuthFieldGroup,
   withForm: withAuthForm
 } = createFormHook({
   fieldComponents: {
-    AuthFormAdditionalField,
     AuthFormFieldError,
     AuthFormTextField
   },
@@ -325,22 +287,4 @@ export function isAuthFormFieldInvalid({
   isValid: boolean
 }) {
   return isTouched && !isValid
-}
-
-export function getAuthAdditionalFieldValidators(
-  field: AdditionalFieldConfig,
-  requiredMessage: string
-) {
-  return {
-    onChange: ({ value }: { value: AdditionalFieldFormValue }) =>
-      validateAdditionalFieldRequired(field, value, requiredMessage),
-    onChangeAsync: field.validate
-      ? ({ value }: { value: AdditionalFieldFormValue }) =>
-          validateAdditionalFieldValue(field, value)
-      : undefined,
-    onChangeAsyncDebounceMs: field.validate
-      ? (field.validateDebounceMs ??
-        DEFAULT_ADDITIONAL_FIELD_VALIDATION_DEBOUNCE_MS)
-      : undefined
-  }
 }

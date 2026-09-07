@@ -1,5 +1,5 @@
 import { useCallback, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/query-client';
 import { authClient } from '@/lib/auth-client';
@@ -21,12 +21,18 @@ import { SettingsPage } from '@/pages/settings/settings-page';
 
 function AuthProviderWrapper({ children }: { children: ReactNode }) {
   const routerNavigate = useNavigate();
+  const location = useLocation();
   const navigate = useCallback(
     ({ to, replace }: { to: string; replace?: boolean }) => {
       routerNavigate(to, { replace });
     },
     [routerNavigate],
   );
+  const requestedRedirect = new URLSearchParams(location.search).get('redirectTo');
+  const redirectTo =
+    requestedRedirect?.startsWith('/') && !requestedRedirect.startsWith('//')
+      ? requestedRedirect
+      : '/targets';
 
   return (
     <AuthProvider
@@ -35,7 +41,7 @@ function AuthProviderWrapper({ children }: { children: ReactNode }) {
       Link={({ href, ...props }) => <Link to={href} {...props} />}
       plugins={[twoFactorPlugin()]}
       queryClient={queryClient}
-      redirectTo="/targets"
+      redirectTo={redirectTo}
     >
       {children}
     </AuthProvider>
@@ -45,9 +51,9 @@ function AuthProviderWrapper({ children }: { children: ReactNode }) {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <WebSocketProvider>
-        <BrowserRouter>
-          <AuthProviderWrapper>
+      <BrowserRouter>
+        <AuthProviderWrapper>
+          <WebSocketProvider>
             <TooltipProvider>
               <Routes>
                 {/* Auth routes */}
@@ -76,9 +82,9 @@ export function App() {
               </Routes>
               <Toaster />
             </TooltipProvider>
-          </AuthProviderWrapper>
-        </BrowserRouter>
-      </WebSocketProvider>
+          </WebSocketProvider>
+        </AuthProviderWrapper>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }
