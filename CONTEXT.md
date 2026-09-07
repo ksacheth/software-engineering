@@ -56,6 +56,40 @@ side can finish:
 - **F.4/F.5 → F.8**: every outbound request Deepthi's crawler and detectors make
   passes the Scope Guard and writes a `url_ledger` row.
 
+## Language
+
+**Ownership verification**:
+The process by which a user proves administrative control of a target, by
+publishing a system-issued token as a DNS TXT record or at a well-known URL.
+Distinct from authorisation acknowledgement.
+_Avoid_: validation, target approval
+
+**Authorisation acknowledgement**:
+The user's recorded attestation that they are permitted to scan the target. A
+legal position, captured once at registration and never edited.
+_Avoid_: consent, permission flag
+
+**Verified IP set**:
+The literal addresses a target resolved to at verification time, stored as CIDR
+strings. Empty means the target is not scannable.
+_Avoid_: IP allowlist, IP range
+
+**Triage state**:
+A human judgement about a finding (OPEN, CONFIRMED, FALSE_POSITIVE,
+ACCEPTED_RISK) that persists across scans. Orthogonal to diff status.
+_Avoid_: finding status
+
+**Diff status**:
+A machine comparison of a finding against the previous scan (NEW, PERSISTING,
+RESOLVED). Says nothing about human judgement.
+_Avoid_: triage status, comparison state
+
+**URL ledger**:
+The append-only record of every outbound HTTP request a scan makes, with the
+scope decision that permitted or blocked it. Distinct from the audit log, which
+records user and administrator actions.
+_Avoid_: request log, audit log
+
 ## Repo layout (Turborepo + bun workspaces)
 
 ```

@@ -196,7 +196,6 @@ model Target {
   organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   origin                String
   label                 String
-  verified              Boolean                  @default(false)
   verificationToken     String                   @unique // CSPRNG token generated in app code (SRS C.2)
   verificationMethod    VerificationMethod       @default(DNS_TXT)
   verificationStatus    TargetVerificationStatus @default(UNVERIFIED)
@@ -206,6 +205,8 @@ model Target {
   authorisationAckAt    DateTime?                @db.Timestamptz(3)
   authorisationAckById  String?
   authorisationAckUser  User?                    @relation("AuthorisedTargets", fields: [authorisationAckById], references: [id], onDelete: SetNull)
+  // Literal addresses observed at verification, as /32 and /128 CIDR strings.
+  // Empty means NOT scannable (fail closed) - see docs/adr/0004.
   verifiedIpRanges      String[]                 @default([])
   includedPaths         String[]                 @default([])
   excludedPaths         String[]                 @default([])
