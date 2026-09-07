@@ -83,6 +83,7 @@ model Account {
   refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
   scope                 String?
   password              String?
+  issuer                String? // Better Auth 1.7+ account issuer
   createdAt             DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
 
@@ -102,11 +103,14 @@ model Verification {
 }
 
 model TwoFactor {
-  id          String @id @default(cuid())
-  secret      String
-  backupCodes String
-  userId      String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean   @default(false)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime? @db.Timestamptz(3)
 
   @@index([userId])
   @@map("two_factor")

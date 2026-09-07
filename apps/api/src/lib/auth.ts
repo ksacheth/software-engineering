@@ -14,9 +14,54 @@ export const auth = betterAuth({
     minPasswordLength: 12, // SRS F.1: passwords of at least 12 characters
     maxPasswordLength: 256,
   },
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => {
+          const member = await prisma.member.findUnique({
+            where: { userId: session.userId },
+            select: { organizationId: true },
+          });
+          return { data: { ...session, activeOrganizationId: member?.organizationId ?? null } };
+        },
+      },
+    },
+    user: {
+      create: {
+        after: async (user) => {
+          const identity = user.name || user.email.split('@')[0];
+          const baseSlug = identity
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+          try {
+            await prisma.$transaction(async (tx) => {
+              const organization = await tx.organization.create({
+                data: {
+                  name: `${identity}'s Organization`,
+                  slug: `${baseSlug || 'organization'}-${user.id}`,
+                },
+              });
+              await tx.member.create({
+                data: {
+                  organizationId: organization.id,
+                  userId: user.id,
+                  role: 'owner',
+                },
+              });
+            });
+          } catch (error) {
+            await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+            throw error;
+          }
+        },
+      },
+    },
+  },
   plugins: [
     organization({
-      allowUserToCreateOrganization: true,
+      allowUserToCreateOrganization: false,
       creatorRole: 'owner',
     }),
     twoFactor({
