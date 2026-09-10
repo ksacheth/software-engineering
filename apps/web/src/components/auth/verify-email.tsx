@@ -1,23 +1,24 @@
-"use client"
+"use client";
 
-import { useAuth, useSendVerificationEmail } from "@better-auth-ui/react"
-import { useEffect, useState } from "react"
-import { toast } from "sonner"
+import { useAuth, useSendVerificationEmail } from "@better-auth-ui/react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FieldDescription } from "@/components/ui/field"
-import { Spinner } from "@/components/ui/spinner"
-import { cn } from "@/lib/utils"
-import { OpenEmailButton } from "./open-email-button"
-import { useIsHydrated } from "./use-is-hydrated"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FieldDescription } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
+import { absoluteAppUrl } from "@/lib/auth/app-url";
+import { cn } from "@/lib/utils";
+import { OpenEmailButton } from "./open-email-button";
+import { useIsHydrated } from "./use-is-hydrated";
 
 export type VerifyEmailProps = {
-  className?: string
-}
+  className?: string;
+};
 
 /** Seconds the resend button stays disabled to prevent spamming the endpoint. */
-const RESEND_COOLDOWN_SECONDS = 60
+const RESEND_COOLDOWN_SECONDS = 60;
 
 /**
  * Render a card prompting the user to verify their email, with a resend button
@@ -32,47 +33,40 @@ const RESEND_COOLDOWN_SECONDS = 60
  * @returns The verify-email card React element
  */
 export function VerifyEmail({ className }: VerifyEmailProps) {
-  const {
-    authClient,
-    basePaths,
-    baseURL,
-    localization,
-    redirectTo,
-    viewPaths,
-    Link
-  } = useAuth()
+  const { authClient, basePaths, localization, redirectTo, viewPaths, Link } =
+    useAuth();
 
-  const isHydrated = useIsHydrated()
+  const isHydrated = useIsHydrated();
   const [email, setEmail] = useState(
-    (isHydrated && sessionStorage.getItem("better-auth-ui.verify-email")) || ""
-  )
-  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS)
+    (isHydrated && sessionStorage.getItem("better-auth-ui.verify-email")) || "",
+  );
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
   useEffect(() => {
-    setEmail(sessionStorage.getItem("better-auth-ui.verify-email") ?? "")
-  }, [])
+    setEmail(sessionStorage.getItem("better-auth-ui.verify-email") ?? "");
+  }, []);
 
   useEffect(() => {
-    if (cooldown <= 0 || !email) return
+    if (cooldown <= 0 || !email) return;
 
     const interval = setInterval(() => {
-      setCooldown((current) => (current > 0 ? current - 1 : 0))
-    }, 1000)
+      setCooldown((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
 
-    return () => clearInterval(interval)
-  }, [cooldown, email])
+    return () => clearInterval(interval);
+  }, [cooldown, email]);
 
   const { mutate: sendVerificationEmail, isPending } = useSendVerificationEmail(
     authClient,
     {
       onSuccess: () => {
-        toast.success(localization.auth.verificationEmailSent)
-        setCooldown(RESEND_COOLDOWN_SECONDS)
-      }
-    }
-  )
+        toast.success(localization.auth.verificationEmailSent);
+        setCooldown(RESEND_COOLDOWN_SECONDS);
+      },
+    },
+  );
 
-  const isCoolingDown = cooldown > 0
+  const isCoolingDown = cooldown > 0;
 
   return (
     <Card className={cn("w-full max-w-sm", className)}>
@@ -99,7 +93,7 @@ export function VerifyEmail({ className }: VerifyEmailProps) {
                 onClick={() =>
                   sendVerificationEmail({
                     email,
-                    callbackURL: `${baseURL}${redirectTo}`
+                    callbackURL: absoluteAppUrl(redirectTo),
                   })
                 }
               >
@@ -108,7 +102,7 @@ export function VerifyEmail({ className }: VerifyEmailProps) {
                 {isCoolingDown
                   ? localization.auth.resendIn.replace(
                       "{{seconds}}",
-                      String(cooldown)
+                      String(cooldown),
                     )
                   : localization.auth.resend}
               </Button>
@@ -129,5 +123,5 @@ export function VerifyEmail({ className }: VerifyEmailProps) {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

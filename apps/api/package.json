@@ -2,7 +2,7 @@
   "name": "@wvs/api",
   "version": "1.0.0",
   "private": true,
-  "description": "WVS REST API \u2014 Express on Bun (stateless, NFR-SCAL-1)",
+  "description": "WVS REST API — Express on Bun (stateless, NFR-SCAL-1)",
   "scripts": {
     "dev": "bun --hot src/main.ts",
     "start": "bun src/main.ts",
@@ -19,7 +19,8 @@
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^10.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.8",

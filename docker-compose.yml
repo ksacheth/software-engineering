@@ -31,6 +31,16 @@ services:
       timeout: 5s
       retries: 5
 
+  # F.1 — local SMTP sink. Verification, password-reset, and account-deletion
+  # mail is delivered here instead of the internet; read it at :8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: wvs-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP (SMTP_HOST/SMTP_PORT in .env)
+      - "8025:8025" # web UI
+
 volumes:
   postgres_data:
   redis_data:

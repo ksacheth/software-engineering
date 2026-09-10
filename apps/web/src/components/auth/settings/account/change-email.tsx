@@ -1,18 +1,19 @@
-import { getViewURL, validateEmailAddress } from "@better-auth-ui/core"
-import { useAuth, useChangeEmail, useSession } from "@better-auth-ui/react"
-import { useEffect } from "react"
-import { toast } from "sonner"
+import { validateEmailAddress } from "@better-auth-ui/core";
+import { useAuth, useChangeEmail, useSession } from "@better-auth-ui/react";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { cn } from "@/lib/utils"
-import { isAuthFormFieldInvalid, useAuthForm } from "../../auth-form"
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { absoluteViewUrl } from "@/lib/auth/app-url";
+import { cn } from "@/lib/utils";
+import { isAuthFormFieldInvalid, useAuthForm } from "../../auth-form";
 
 export type ChangeEmailProps = {
-  className?: string
-}
+  className?: string;
+};
 
 /**
  * Render a card containing a form to view and update the authenticated user's email.
@@ -24,29 +25,28 @@ export type ChangeEmailProps = {
  * @returns A JSX element rendering the change-email card and form
  */
 export function ChangeEmail({ className }: ChangeEmailProps) {
-  const { authClient, basePaths, baseURL, localization, viewPaths } = useAuth()
-  const { data: session } = useSession(authClient)
+  const { authClient, basePaths, localization, viewPaths } = useAuth();
+  const { data: session } = useSession(authClient);
 
   const { mutateAsync: changeEmail, isPending } = useChangeEmail(authClient, {
-    onSuccess: () => toast.success(localization.settings.changeEmailSuccess)
-  })
+    onSuccess: () => toast.success(localization.settings.changeEmailSuccess),
+  });
 
   const form = useAuthForm({
     defaultValues: { email: "" },
     onSubmit: async ({ value }) =>
       await changeEmail({
-        callbackURL: getViewURL(
-          baseURL,
+        callbackURL: absoluteViewUrl(
           basePaths.settings,
-          viewPaths.settings.account
+          viewPaths.settings.account,
         ),
-        newEmail: value.email
-      })
-  })
+        newEmail: value.email,
+      }),
+  });
 
   useEffect(() => {
-    if (session) form.reset({ email: session.user.email })
-  }, [form, session])
+    if (session) form.reset({ email: session.user.email });
+  }, [form, session]);
 
   return (
     <div>
@@ -64,12 +64,12 @@ export function ChangeEmail({ className }: ChangeEmailProps) {
                   onChange: ({ value }) =>
                     validateEmailAddress(value, {
                       invalidMessage: localization.auth.invalidEmail,
-                      requiredMessage: localization.auth.fieldRequired
-                    })
+                      requiredMessage: localization.auth.fieldRequired,
+                    }),
                 }}
               >
                 {(field) => {
-                  const isInvalid = isAuthFormFieldInvalid(field.state.meta)
+                  const isInvalid = isAuthFormFieldInvalid(field.state.meta);
                   return (
                     <Field data-invalid={isInvalid}>
                       <FieldLabel htmlFor="email">
@@ -98,7 +98,7 @@ export function ChangeEmail({ className }: ChangeEmailProps) {
                       )}
                       <field.AuthFormFieldError />
                     </Field>
-                  )
+                  );
                 }}
               </form.AppField>
             </CardContent>
@@ -116,5 +116,5 @@ export function ChangeEmail({ className }: ChangeEmailProps) {
         </form.AuthFormRoot>
       </form.AppForm>
     </div>
-  )
+  );
 }
