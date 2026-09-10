@@ -24,6 +24,7 @@ import { TargetDetailPage } from "@/pages/targets/target-detail-page";
 import { TargetVerifyPage } from "@/pages/targets/target-verify-page";
 import { DashboardPage } from "@/pages/dashboard/dashboard-page";
 import { ScansPage } from "@/pages/scans/scans-page";
+import { ScanDetailPage } from "@/pages/scans/scan-detail-page";
 import { FindingsPage } from "@/pages/findings/findings-page";
 import { ReportsPage } from "@/pages/reports/reports-page";
 import { AdminPage } from "@/pages/admin/admin-page";
@@ -99,6 +100,7 @@ export function App() {
                   />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/scans" element={<ScansPage />} />
+                  <Route path="/scans/:id" element={<ScanDetailPage />} />
                   <Route path="/findings" element={<FindingsPage />} />
                   <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/admin" element={<AdminPage />} />

@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { config } from '../../config/env';
+import { redisConnectionOptions } from '../../config/env';
 
 /**
  * Rate limits on verification attempts (F.2).
@@ -20,12 +20,7 @@ export const MAX_CONCURRENT_PER_ORG = 3;
 let client: Redis | null = null;
 
 function redis(): Redis {
-  client ??= new Redis({
-    host: config.redis.host,
-    port: config.redis.port,
-    password: config.redis.password || undefined,
-    maxRetriesPerRequest: 2,
-  });
+  client ??= new Redis({ ...redisConnectionOptions(), maxRetriesPerRequest: 2 });
   return client;
 }
 

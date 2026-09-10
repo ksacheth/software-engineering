@@ -104,6 +104,9 @@ export const config = {
     host: process.env.REDIS_HOST ?? "localhost",
     port: num(process.env.REDIS_PORT, 6379),
     password: process.env.REDIS_PASSWORD ?? "",
+    // Redis database index. The test suite points this at a scratch database so
+    // its queue obliteration cannot delete jobs a developer is watching.
+    db: num(process.env.REDIS_DB, 0),
   },
   smtp: {
     host: process.env.SMTP_HOST ?? "localhost",
@@ -118,3 +121,16 @@ export const config = {
   // same queue and send duplicates.
   emailRetryIntervalMs: num(process.env.EMAIL_RETRY_INTERVAL_MS, 0),
 } as const;
+
+/**
+ * Connection options for ioredis and BullMQ. One definition, so the queue, the
+ * event subscriber and the rate limiters cannot drift onto different databases.
+ */
+export function redisConnectionOptions() {
+  return {
+    host: config.redis.host,
+    port: config.redis.port,
+    password: config.redis.password || undefined,
+    db: config.redis.db,
+  };
+}
