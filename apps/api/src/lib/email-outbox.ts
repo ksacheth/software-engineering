@@ -42,7 +42,9 @@ export function backoffMs(attempts: number): number {
 function sanitise(input: string, max = 2000): string {
   // eslint-disable-next-line no-control-regex
   const withoutNul = input.replace(/\u0000/g, "");
-  return withoutNul.length > max ? `${withoutNul.slice(0, max)}...` : withoutNul;
+  return withoutNul.length > max
+    ? `${withoutNul.slice(0, max)}...`
+    : withoutNul;
 }
 
 function describe(error: unknown): string {

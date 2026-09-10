@@ -6,13 +6,13 @@ This document defines data retention, privileged purge operations, and audit tra
 
 ## 1. Retention Windows
 
-| Table | Retention Window | Purge Mechanism | Compliance Clause |
-| :--- | :--- | :--- | :--- |
-| `url_ledger` | **90 Days** (default) | Privileged batch purge script (`scripts/purge-retention.ts`) | SRS C.4, C.7 |
-| `finding_evidence` | **90 Days** (default) | Soft-purge / payload nullification (`isPurged = true`) | SRS F.6 |
-| `email_outbox` | **30 Days** (terminal rows) | Privileged `DELETE` (no append-only trigger) | SRS C.7 |
-| `audit_log` | **Indefinite** | Never purged via routine maintenance | SRS DC-9 |
-| `finding_triage_history` | **Indefinite** | Never purged; retained as immutable compliance record | SRS DC-9 |
+| Table                    | Retention Window            | Purge Mechanism                                              | Compliance Clause |
+| :----------------------- | :-------------------------- | :----------------------------------------------------------- | :---------------- |
+| `url_ledger`             | **90 Days** (default)       | Privileged batch purge script (`scripts/purge-retention.ts`) | SRS C.4, C.7      |
+| `finding_evidence`       | **90 Days** (default)       | Soft-purge / payload nullification (`isPurged = true`)       | SRS F.6           |
+| `email_outbox`           | **30 Days** (terminal rows) | Privileged `DELETE` (no append-only trigger)                 | SRS C.7           |
+| `audit_log`              | **Indefinite**              | Never purged via routine maintenance                         | SRS DC-9          |
+| `finding_triage_history` | **Indefinite**              | Never purged; retained as immutable compliance record        | SRS DC-9          |
 
 ### `email_outbox` retention and sensitivity
 
@@ -39,11 +39,13 @@ an audit record.
 Because `url_ledger` is protected by `trg_url_ledger_append_only`, standard `DELETE` statements are prohibited by design.
 
 Routine automated pruning is executed through the privileged maintenance script:
+
 ```bash
 bun run --cwd packages/database purge:retention -- --retention-days 90
 ```
 
 ### Safety & Audit Invariants:
+
 1. **Cluster Administrator Required:** The script connects via `MIGRATION_DATABASE_URL` as `postgres` / `wvs_owner`. The runtime `wvs_app` role cannot perform this operation.
 2. **Transaction Isolation:** The operation runs within a single serial transaction:
    - Records an immutable `EVIDENCE_PURGED` entry in `audit_log` with the cutoff timestamp and job metadata.

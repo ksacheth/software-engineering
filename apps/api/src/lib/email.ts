@@ -1,11 +1,11 @@
-import nodemailer, { type Transporter } from 'nodemailer';
-import { config } from '../config/env';
+import nodemailer, { type Transporter } from "nodemailer";
+import { config } from "../config/env";
 import {
   dueEmails,
   markRetryFailed,
   markSent,
   recordFailedEmail,
-} from './email-outbox';
+} from "./email-outbox";
 
 /**
  * F.1: transactional email delivery (verification, password reset, deletion).
@@ -26,7 +26,7 @@ import {
  */
 
 /** Which flow produced a message. Recorded on the outbox row for triage. */
-export type EmailKind = 'verification' | 'password-reset' | 'account-deletion';
+export type EmailKind = "verification" | "password-reset" | "account-deletion";
 
 export interface EmailMessage {
   to: string;
@@ -53,19 +53,23 @@ function getTransport(): Transporter {
 /** Escape interpolated values before they reach the HTML body. */
 export function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-export function renderHtml(title: string, body: string, action?: { label: string; url: string }): string {
+export function renderHtml(
+  title: string,
+  body: string,
+  action?: { label: string; url: string },
+): string {
   const button = action
     ? `<p style="margin:24px 0"><a href="${escapeHtml(action.url)}" ` +
       `style="background:#111;color:#fff;padding:10px 18px;border-radius:6px;` +
       `text-decoration:none;display:inline-block">${escapeHtml(action.label)}</a></p>`
-    : '';
+    : "";
 
   return [
     '<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5">',
@@ -73,8 +77,8 @@ export function renderHtml(title: string, body: string, action?: { label: string
     body,
     button,
     '<p style="color:#666;font-size:12px">If you did not request this, you can ignore this message.</p>',
-    '</body></html>',
-  ].join('');
+    "</body></html>",
+  ].join("");
 }
 
 /**
@@ -90,9 +94,9 @@ export async function sendEmail(message: EmailMessage): Promise<boolean> {
     return true;
   } catch (error) {
     console.error(
-      '[email] delivery failed, message queued for retry (SRS §3.2.3)',
+      "[email] delivery failed, message queued for retry (SRS §3.2.3)",
       { to: message.to, subject: message.subject, kind: message.kind },
-      error
+      error,
     );
     await recordFailedEmail(message, error);
     return false;
@@ -126,7 +130,7 @@ export interface RetrySummary {
  * implementation should claim rows with `SELECT ... FOR UPDATE SKIP LOCKED`.
  */
 export async function retryPendingEmails(
-  batchSize = 20
+  batchSize = 20,
 ): Promise<RetrySummary> {
   const summary: RetrySummary = {
     attempted: 0,
@@ -145,7 +149,7 @@ export async function retryPendingEmails(
         subject: row.subject,
         text: row.text,
         html: row.html ?? undefined,
-        kind: row.kind as EmailMessage['kind'],
+        kind: row.kind as EmailMessage["kind"],
       });
       await markSent(row.id);
       summary.sent += 1;
@@ -156,7 +160,7 @@ export async function retryPendingEmails(
       } else {
         summary.failed += 1;
       }
-      console.error('[email] retry attempt failed', {
+      console.error("[email] retry attempt failed", {
         to: row.recipient,
         attempt: row.attempts + 1,
       });
@@ -175,7 +179,7 @@ export async function retryPendingEmails(
 export function startEmailRetryLoop(intervalMs: number): NodeJS.Timeout {
   const timer = setInterval(() => {
     retryPendingEmails().catch((error) => {
-      console.error('[email] retry drain failed', error);
+      console.error("[email] retry drain failed", error);
     });
   }, intervalMs);
 
