@@ -718,3 +718,48 @@ model ScanReport {
   @@index([createdById])
   @@map("scan_report")
 }
+
+// -----------------------------------------------------------------------------
+// F.1: Transactional email outbox (SRS F.1 §3.2.3 degradation handling)
+//
+// A delivery failure is recorded here instead of being lost, so the message can
+// be retried. Mutable by design (status transitions), unlike the DC-9
+// append-only stores, so it carries no append-only trigger and no privilege
+// restriction on UPDATE.
+//
+// Rows embed the rendered message body, which includes the verification or
+// reset URL. That URL is a live credential, so rows are purged on the same
+// schedule as other short-lived operational data. See
+// docs/retention-and-maintenance.md.
+// -----------------------------------------------------------------------------
+
+enum EmailStatus {
+  FAILED // delivery failed, awaiting retry
+  SENT // delivered on a retry attempt
+  DEAD_LETTER // retries exhausted; needs operator attention
+}
+
+model EmailOutbox {
+  id            String      @id @default(cuid())
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  recipient     String
+  subject       String
+  text          String
+  html          String?
+  // One of: verification, password-reset, account-deletion.
+  kind          String
+  status        EmailStatus @default(FAILED)
+  attempts      Int         @default(1)
+  lastError     String?
+  lastAttemptAt DateTime    @db.Timestamptz(3)
+  nextAttemptAt DateTime    @db.Timestamptz(3)
+  sentAt        DateTime?   @db.Timestamptz(3)
+  // Scalar identifier with no foreign key, per ADR-0002: F.1 account deletion
+  // must succeed even when a queued message outlives the user it was meant for.
+  userId        String?
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt])
+  @@map("email_outbox")
+}

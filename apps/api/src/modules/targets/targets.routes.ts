@@ -1,9 +1,17 @@
-import { Router, type Request, type Response } from 'express';
-import { prisma } from '@wvs/database';
-import { isScannable, toVerifiedIpRanges, verificationExpiryFrom } from '@wvs/scope-rules';
-import { requireAuth } from '../../common/session';
-import { writeAudit } from '../../common/audit';
-import { classifyOrigin, describeRefusal, parseOrigin } from './origin';
+import { Router, type Request, type Response } from "express";
+import { prisma } from "@wvs/database";
+import {
+  isScannable,
+  toVerifiedIpRanges,
+  verificationExpiryFrom,
+} from "@wvs/scope-rules";
+import {
+  requireAuth,
+  requireRole,
+  type AuthContext,
+} from "../../common/session";
+import { writeAudit } from "../../common/audit";
+import { classifyOrigin, describeRefusal, parseOrigin } from "./origin";
 import {
   checkDnsTxt,
   checkWellKnown,
@@ -11,11 +19,11 @@ import {
   generateVerificationToken,
   TXT_RECORD_PREFIX,
   WELL_KNOWN_PATH,
-} from './challenge';
+} from "./challenge";
 import {
   acquireVerificationSlot,
   describeLimitRefusal,
-} from './verification-limits';
+} from "./verification-limits";
 
 /**
  * F.2 — Target Management and Authorisation (module 0.2).
@@ -25,9 +33,22 @@ import {
  * gate; see docs/verification-protocol.md.
  */
 
-const VERIFICATION_METHODS = new Set(['DNS_TXT', 'WELL_KNOWN']);
+const VERIFICATION_METHODS = new Set(["DNS_TXT", "WELL_KNOWN"]);
 
-function badRequest(res: Response, message: string, extra?: Record<string, unknown>) {
+/**
+ * F.1: role-based authorisation for target state changes.
+ *
+ * Reading a target is available to every role; changing one is not. VIEWER is
+ * read-only by definition (SRS §2.1 personas), so the other three roles hold
+ * the write path. Every write is audited regardless of who performs it.
+ */
+const TARGET_WRITERS = ["ADMIN", "ANALYST", "DEVELOPER"] as const;
+
+function badRequest(
+  res: Response,
+  message: string,
+  extra?: Record<string, unknown>,
+) {
   res.status(400).json({ error: message, ...extra });
 }
 
@@ -37,9 +58,9 @@ function normalisePaths(input: unknown): string[] | null {
   if (!Array.isArray(input)) return null;
   const out: string[] = [];
   for (const entry of input) {
-    if (typeof entry !== 'string') return null;
+    if (typeof entry !== "string") return null;
     const trimmed = entry.trim();
-    if (!trimmed.startsWith('/') || trimmed.length > 512) return null;
+    if (!trimmed.startsWith("/") || trimmed.length > 512) return null;
     out.push(trimmed);
   }
   return out;
@@ -49,15 +70,30 @@ export function createTargetsRouter(): Router {
   const router = Router();
   router.use(requireAuth);
 
+  // F.1: reads are available to every role, but any state change needs a write
+  // role. Applying the check once, by method, means a mutation route added
+  // later cannot silently forget it.
+  const requireTargetWriter = requireRole(...TARGET_WRITERS);
+  router.use((req: Request, res: Response, next) => {
+    if (req.method === "GET" || req.method === "HEAD") {
+      next();
+      return;
+    }
+    requireTargetWriter(req, res, next);
+  });
+
   // ---------------------------------------------------------------- list ---
-  router.get('/', async (req: Request, res: Response, next) => {
+  router.get("/", async (req: Request, res: Response, next) => {
     try {
       const { organizationId } = req.auth!;
-      const includeArchived = req.query.includeArchived === 'true';
+      const includeArchived = req.query.includeArchived === "true";
 
       const targets = await prisma.target.findMany({
-        where: { organizationId, ...(includeArchived ? {} : { isArchived: false }) },
-        orderBy: { createdAt: 'desc' },
+        where: {
+          organizationId,
+          ...(includeArchived ? {} : { isArchived: false }),
+        },
+        orderBy: { createdAt: "desc" },
       });
 
       res.json({
@@ -73,13 +109,18 @@ export function createTargetsRouter(): Router {
   });
 
   // ------------------------------------------------------------ register ---
-  router.post('/', async (req: Request, res: Response, next) => {
+  router.post("/", async (req: Request, res: Response, next) => {
     try {
       const ctx = req.auth!;
-      const { origin, label, authorisationAck, verificationMethod } = req.body ?? {};
+      const { origin, label, authorisationAck, verificationMethod } =
+        req.body ?? {};
 
-      if (typeof origin !== 'string' || typeof label !== 'string' || !label.trim()) {
-        return badRequest(res, 'origin and label are required');
+      if (
+        typeof origin !== "string" ||
+        typeof label !== "string" ||
+        !label.trim()
+      ) {
+        return badRequest(res, "origin and label are required");
       }
 
       // F.2: the acknowledgement is a precondition of registration, not a
@@ -87,26 +128,32 @@ export function createTargetsRouter(): Router {
       if (authorisationAck !== true) {
         return badRequest(
           res,
-          'You must acknowledge that you are authorised to scan this target before registering it.',
+          "You must acknowledge that you are authorised to scan this target before registering it.",
         );
       }
 
-      const method = verificationMethod ?? 'DNS_TXT';
+      const method = verificationMethod ?? "DNS_TXT";
       if (!VERIFICATION_METHODS.has(method)) {
-        return badRequest(res, 'verificationMethod must be DNS_TXT or WELL_KNOWN');
+        return badRequest(
+          res,
+          "verificationMethod must be DNS_TXT or WELL_KNOWN",
+        );
       }
 
       const includedPaths = normalisePaths(req.body?.includedPaths);
       const excludedPaths = normalisePaths(req.body?.excludedPaths);
       if (!includedPaths || !excludedPaths) {
-        return badRequest(res, 'includedPaths and excludedPaths must be arrays of absolute paths');
+        return badRequest(
+          res,
+          "includedPaths and excludedPaths must be arrays of absolute paths",
+        );
       }
 
       const classified = await classifyOrigin(origin);
       if (!classified.ok) {
         await writeAudit(ctx, {
-          action: 'TARGET_REFUSED',
-          resourceType: 'target',
+          action: "TARGET_REFUSED",
+          resourceType: "target",
           metadata: { origin, refusal: classified.refusal },
         });
         return res.status(422).json({
@@ -118,11 +165,16 @@ export function createTargetsRouter(): Router {
       const canonicalOrigin = classified.parsed.origin;
 
       const existing = await prisma.target.findUnique({
-        where: { organizationId_origin: { organizationId: ctx.organizationId, origin: canonicalOrigin } },
+        where: {
+          organizationId_origin: {
+            organizationId: ctx.organizationId,
+            origin: canonicalOrigin,
+          },
+        },
       });
       if (existing) {
         return res.status(409).json({
-          error: 'This origin is already registered in your organisation.',
+          error: "This origin is already registered in your organisation.",
           targetId: existing.id,
         });
       }
@@ -134,7 +186,7 @@ export function createTargetsRouter(): Router {
           label: label.trim(),
           verificationToken: generateVerificationToken(),
           verificationMethod: method,
-          verificationStatus: 'PENDING',
+          verificationStatus: "PENDING",
           authorisationAck: true,
           authorisationAckAt: new Date(),
           authorisationAckById: ctx.userId,
@@ -145,8 +197,8 @@ export function createTargetsRouter(): Router {
       });
 
       await writeAudit(ctx, {
-        action: 'TARGET_CREATED',
-        resourceType: 'target',
+        action: "TARGET_CREATED",
+        resourceType: "target",
         resourceId: target.id,
         metadata: { origin: canonicalOrigin, verificationMethod: method },
       });
@@ -158,10 +210,10 @@ export function createTargetsRouter(): Router {
   });
 
   // ---------------------------------------------------------------- read ---
-  router.get('/:id', async (req: Request, res: Response, next) => {
+  router.get("/:id", async (req: Request, res: Response, next) => {
     try {
       const target = await findOwned(req);
-      if (!target) return res.status(404).json({ error: 'Target not found' });
+      if (!target) return res.status(404).json({ error: "Target not found" });
 
       res.json({
         target,
@@ -174,16 +226,22 @@ export function createTargetsRouter(): Router {
   });
 
   // -------------------------------------------------------------- verify ---
-  router.post('/:id/verify', async (req: Request, res: Response, next) => {
+  router.post("/:id/verify", async (req: Request, res: Response, next) => {
     try {
       const ctx = req.auth!;
       const target = await findOwned(req);
-      if (!target) return res.status(404).json({ error: 'Target not found' });
-      if (target.isArchived) return badRequest(res, 'Cannot verify an archived target');
+      if (!target) return res.status(404).json({ error: "Target not found" });
+      if (target.isArchived)
+        return badRequest(res, "Cannot verify an archived target");
 
       const slot = await acquireVerificationSlot(target.id, ctx.organizationId);
       if (!slot.allowed) {
-        return res.status(429).json({ error: describeLimitRefusal(slot.refusal), rule: slot.refusal });
+        return res
+          .status(429)
+          .json({
+            error: describeLimitRefusal(slot.refusal),
+            rule: slot.refusal,
+          });
       }
 
       try {
@@ -199,8 +257,11 @@ export function createTargetsRouter(): Router {
         }
 
         const result =
-          target.verificationMethod === 'DNS_TXT'
-            ? await checkDnsTxt(classified.parsed.hostname, target.verificationToken)
+          target.verificationMethod === "DNS_TXT"
+            ? await checkDnsTxt(
+                classified.parsed.hostname,
+                target.verificationToken,
+              )
             : await checkWellKnown(
                 classified.parsed.origin,
                 target.verificationToken,
@@ -208,7 +269,10 @@ export function createTargetsRouter(): Router {
               );
 
         if (!result.ok) {
-          await recordFailure(ctx, target.id, { failure: result.failure, detail: result.detail });
+          await recordFailure(ctx, target.id, {
+            failure: result.failure,
+            detail: result.detail,
+          });
           return res.status(422).json({
             error: describeChallengeFailure(
               result.failure,
@@ -223,7 +287,7 @@ export function createTargetsRouter(): Router {
         const updated = await prisma.target.update({
           where: { id: target.id },
           data: {
-            verificationStatus: 'VERIFIED',
+            verificationStatus: "VERIFIED",
             verifiedAt,
             verificationExpiresAt: verificationExpiryFrom(verifiedAt),
             verifiedIpRanges: toVerifiedIpRanges(classified.addresses),
@@ -231,8 +295,8 @@ export function createTargetsRouter(): Router {
         });
 
         await writeAudit(ctx, {
-          action: 'TARGET_VERIFIED',
-          resourceType: 'target',
+          action: "TARGET_VERIFIED",
+          resourceType: "target",
           resourceId: target.id,
           metadata: {
             method: target.verificationMethod,
@@ -251,16 +315,19 @@ export function createTargetsRouter(): Router {
   });
 
   // --------------------------------------------------------------- scope ---
-  router.patch('/:id/scope', async (req: Request, res: Response, next) => {
+  router.patch("/:id/scope", async (req: Request, res: Response, next) => {
     try {
       const ctx = req.auth!;
       const target = await findOwned(req);
-      if (!target) return res.status(404).json({ error: 'Target not found' });
+      if (!target) return res.status(404).json({ error: "Target not found" });
 
       const includedPaths = normalisePaths(req.body?.includedPaths);
       const excludedPaths = normalisePaths(req.body?.excludedPaths);
       if (!includedPaths || !excludedPaths) {
-        return badRequest(res, 'includedPaths and excludedPaths must be arrays of absolute paths');
+        return badRequest(
+          res,
+          "includedPaths and excludedPaths must be arrays of absolute paths",
+        );
       }
 
       // Editing scope does not change who controls the origin, so it does not
@@ -272,11 +339,14 @@ export function createTargetsRouter(): Router {
       });
 
       await writeAudit(ctx, {
-        action: 'TARGET_SCOPE_CHANGED',
-        resourceType: 'target',
+        action: "TARGET_SCOPE_CHANGED",
+        resourceType: "target",
         resourceId: target.id,
         metadata: {
-          before: { includedPaths: target.includedPaths, excludedPaths: target.excludedPaths },
+          before: {
+            includedPaths: target.includedPaths,
+            excludedPaths: target.excludedPaths,
+          },
           after: { includedPaths, excludedPaths },
         },
       });
@@ -288,11 +358,11 @@ export function createTargetsRouter(): Router {
   });
 
   // ------------------------------------------------------------- archive ---
-  router.post('/:id/archive', async (req: Request, res: Response, next) => {
+  router.post("/:id/archive", async (req: Request, res: Response, next) => {
     try {
       const ctx = req.auth!;
       const target = await findOwned(req);
-      if (!target) return res.status(404).json({ error: 'Target not found' });
+      if (!target) return res.status(404).json({ error: "Target not found" });
 
       const updated = await prisma.target.update({
         where: { id: target.id },
@@ -300,8 +370,8 @@ export function createTargetsRouter(): Router {
       });
 
       await writeAudit(ctx, {
-        action: 'TARGET_ARCHIVED',
-        resourceType: 'target',
+        action: "TARGET_ARCHIVED",
+        resourceType: "target",
         resourceId: target.id,
       });
 
@@ -312,19 +382,19 @@ export function createTargetsRouter(): Router {
   });
 
   // -------------------------------------------------------------- delete ---
-  router.delete('/:id', async (req: Request, res: Response, next) => {
+  router.delete("/:id", async (req: Request, res: Response, next) => {
     try {
       const ctx = req.auth!;
       const target = await findOwned(req);
-      if (!target) return res.status(404).json({ error: 'Target not found' });
+      if (!target) return res.status(404).json({ error: "Target not found" });
 
       // Scans and findings cascade. url_ledger and audit_log do not: they carry
       // no foreign key precisely so this delete can succeed (docs/adr/0002).
       await prisma.target.delete({ where: { id: target.id } });
 
       await writeAudit(ctx, {
-        action: 'TARGET_DELETED',
-        resourceType: 'target',
+        action: "TARGET_DELETED",
+        resourceType: "target",
         resourceId: target.id,
         metadata: { origin: target.origin },
       });
@@ -340,24 +410,24 @@ export function createTargetsRouter(): Router {
 
 async function findOwned(req: Request) {
   const id = req.params.id;
-  if (typeof id !== 'string') return null;
+  if (typeof id !== "string") return null;
   return prisma.target.findFirst({
     where: { id, organizationId: req.auth!.organizationId },
   });
 }
 
 async function recordFailure(
-  ctx: { userId: string; organizationId: string; ipAddress?: string; userAgent?: string; role: string },
+  ctx: AuthContext,
   targetId: string,
   metadata: Record<string, unknown>,
 ) {
   await prisma.target.update({
     where: { id: targetId },
-    data: { verificationStatus: 'FAILED' },
+    data: { verificationStatus: "FAILED" },
   });
   await writeAudit(ctx, {
-    action: 'TARGET_VERIFICATION_FAILED',
-    resourceType: 'target',
+    action: "TARGET_VERIFICATION_FAILED",
+    resourceType: "target",
     resourceId: targetId,
     metadata,
   });
@@ -372,15 +442,15 @@ function buildInstructions(target: {
     ? new URL(target.origin).hostname
     : target.origin;
 
-  return target.verificationMethod === 'DNS_TXT'
+  return target.verificationMethod === "DNS_TXT"
     ? {
-        method: 'DNS_TXT' as const,
+        method: "DNS_TXT" as const,
         recordName: `${TXT_RECORD_PREFIX}.${hostname}`,
-        recordType: 'TXT',
+        recordType: "TXT",
         recordValue: target.verificationToken,
       }
     : {
-        method: 'WELL_KNOWN' as const,
+        method: "WELL_KNOWN" as const,
         url: `${target.origin}${WELL_KNOWN_PATH}`,
         content: target.verificationToken,
       };

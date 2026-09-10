@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { PrismaClient } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 // Must connect as cluster administrator (wvs_owner / postgres)
 const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
@@ -33,7 +33,9 @@ export async function purgeRetention({
   dryRun = false,
 }: RetentionOptions = {}) {
   const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-  console.log(`[Retention Purge] Threshold date: ${cutoffDate.toISOString()} (${retentionDays} days)`);
+  console.log(
+    `[Retention Purge] Threshold date: ${cutoffDate.toISOString()} (${retentionDays} days)`,
+  );
 
   if (dryRun) {
     const ledgerCount = await prisma.urlLedger.count({
@@ -41,16 +43,20 @@ export async function purgeRetention({
     });
     const evidenceCount = await prisma.findingEvidence.count({
       where: {
-        OR: [
-          { expiresAt: { lt: cutoffDate } },
-          { isPurged: true },
-        ],
+        OR: [{ expiresAt: { lt: cutoffDate } }, { isPurged: true }],
+      },
+    });
+    const outboxCount = await prisma.emailOutbox.count({
+      where: {
+        status: { in: ["SENT", "DEAD_LETTER"] },
+        updatedAt: { lt: cutoffDate },
       },
     });
     console.log(`[Dry Run] Candidates for purge:`);
     console.log(`  - url_ledger records: ${ledgerCount}`);
     console.log(`  - finding_evidence records: ${evidenceCount}`);
-    return { ledgerCount, evidenceCount };
+    console.log(`  - email_outbox terminal records: ${outboxCount}`);
+    return { ledgerCount, evidenceCount, outboxCount };
   }
 
   const auditLogId = randomUUID();
@@ -64,21 +70,25 @@ export async function purgeRetention({
       JSON.stringify({
         retentionDays,
         cutoffDate: cutoffDate.toISOString(),
-        initiatedBy: 'automated_retention_job',
-      })
+        initiatedBy: "automated_retention_job",
+      }),
     );
 
     // 2. Temporarily disable the row-level append-only trigger within transaction
-    await tx.$executeRawUnsafe(`ALTER TABLE "url_ledger" DISABLE TRIGGER trg_url_ledger_append_only;`);
+    await tx.$executeRawUnsafe(
+      `ALTER TABLE "url_ledger" DISABLE TRIGGER trg_url_ledger_append_only;`,
+    );
 
     // 3. Purge url_ledger records older than retention threshold
     const deletedLedgerCount = await tx.$executeRawUnsafe(
       `DELETE FROM "url_ledger" WHERE "timestamp" < $1;`,
-      cutoffDate
+      cutoffDate,
     );
 
     // 4. Re-enable append-only trigger immediately
-    await tx.$executeRawUnsafe(`ALTER TABLE "url_ledger" ENABLE TRIGGER trg_url_ledger_append_only;`);
+    await tx.$executeRawUnsafe(
+      `ALTER TABLE "url_ledger" ENABLE TRIGGER trg_url_ledger_append_only;`,
+    );
 
     // 5. Purge expired finding evidence (soft-delete / nullify raw payloads per SRS F.6)
     const purgedEvidenceCount = await tx.$executeRawUnsafe(
@@ -90,25 +100,48 @@ export async function purgeRetention({
            "isPurged" = true,
            "purgedAt" = CURRENT_TIMESTAMP
        WHERE "expiresAt" < $1 AND "isPurged" = false;`,
-      cutoffDate
+      cutoffDate,
+    );
+
+    // 6. Purge terminal email_outbox rows (SRS C.7).
+    //
+    // Only terminal rows are deleted: FAILED rows are still awaiting retry, and
+    // removing one would silently drop a message the outbox exists to protect.
+    // Rows embed a live verification or reset URL, so this cannot wait forever.
+    // The table is mutable by design and carries no append-only trigger, so an
+    // ordinary DELETE is permitted here (contrast ADR-0002, which covers
+    // audit_log, url_ledger and finding_triage_history).
+    const purgedOutboxCount = await tx.$executeRawUnsafe(
+      `DELETE FROM "email_outbox"
+       WHERE "status" IN ('SENT', 'DEAD_LETTER')
+         AND "updatedAt" < $1;`,
+      cutoffDate,
     );
 
     console.log(`[Retention Purge Complete]`);
     console.log(`  - Purged url_ledger rows: ${deletedLedgerCount}`);
-    console.log(`  - Redacted finding_evidence payloads: ${purgedEvidenceCount}`);
+    console.log(
+      `  - Redacted finding_evidence payloads: ${purgedEvidenceCount}`,
+    );
+    console.log(`  - Purged terminal email_outbox rows: ${purgedOutboxCount}`);
     console.log(`  - Logged audit event: ${auditLogId}`);
 
-    return { deletedLedgerCount, purgedEvidenceCount, auditLogId };
+    return {
+      deletedLedgerCount,
+      purgedEvidenceCount,
+      purgedOutboxCount,
+      auditLogId,
+    };
   });
 }
 
 if (require.main === module) {
-  const retentionDays = parseInt(process.env.RETENTION_DAYS || '90', 10);
-  const dryRun = process.argv.includes('--dry-run');
+  const retentionDays = parseInt(process.env.RETENTION_DAYS || "90", 10);
+  const dryRun = process.argv.includes("--dry-run");
 
   purgeRetention({ retentionDays, dryRun })
     .catch((e) => {
-      console.error('[Retention Purge Failed]:', e);
+      console.error("[Retention Purge Failed]:", e);
       process.exit(1);
     })
     .finally(async () => {

@@ -6,12 +6,31 @@ This document defines data retention, privileged purge operations, and audit tra
 
 ## 1. Retention Windows
 
-| Table | Retention Window | Purge Mechanism | Compliance Clause |
-| :--- | :--- | :--- | :--- |
-| `url_ledger` | **90 Days** (default) | Privileged batch purge script (`scripts/purge-retention.ts`) | SRS C.4, C.7 |
-| `finding_evidence` | **90 Days** (default) | Soft-purge / payload nullification (`isPurged = true`) | SRS F.6 |
-| `audit_log` | **Indefinite** | Never purged via routine maintenance | SRS DC-9 |
-| `finding_triage_history` | **Indefinite** | Never purged; retained as immutable compliance record | SRS DC-9 |
+| Table                    | Retention Window            | Purge Mechanism                                              | Compliance Clause |
+| :----------------------- | :-------------------------- | :----------------------------------------------------------- | :---------------- |
+| `url_ledger`             | **90 Days** (default)       | Privileged batch purge script (`scripts/purge-retention.ts`) | SRS C.4, C.7      |
+| `finding_evidence`       | **90 Days** (default)       | Soft-purge / payload nullification (`isPurged = true`)       | SRS F.6           |
+| `email_outbox`           | **30 Days** (terminal rows) | Privileged `DELETE` (no append-only trigger)                 | SRS C.7           |
+| `audit_log`              | **Indefinite**              | Never purged via routine maintenance                         | SRS DC-9          |
+| `finding_triage_history` | **Indefinite**              | Never purged; retained as immutable compliance record        | SRS DC-9          |
+
+### `email_outbox` retention and sensitivity
+
+`email_outbox` holds transactional mail that failed delivery, so it can be
+retried. Rows embed the rendered body, which contains the verification, reset,
+or account-deletion URL. Each of those URLs is a live single-use credential,
+which is why the table is treated as short-lived operational data rather than
+an audit record.
+
+- Only failures are stored. A message delivered on its first attempt leaves no
+  row, so the table is empty in normal operation.
+- Rows in `SENT` or `DEAD_LETTER` are terminal. Purge them after 30 days,
+  comfortably past the one-hour verification and 30-minute reset link lifetimes.
+- `wvs_app` holds ordinary `SELECT`/`INSERT`/`UPDATE`/`DELETE` here. The table is
+  mutable by design, because a retry moves a row through
+  `FAILED` -> `SENT` or `FAILED` -> `DEAD_LETTER`, so it deliberately carries no
+  append-only trigger (contrast ADR-0002, which applies to `audit_log`,
+  `url_ledger`, and `finding_triage_history`).
 
 ---
 
@@ -20,11 +39,13 @@ This document defines data retention, privileged purge operations, and audit tra
 Because `url_ledger` is protected by `trg_url_ledger_append_only`, standard `DELETE` statements are prohibited by design.
 
 Routine automated pruning is executed through the privileged maintenance script:
+
 ```bash
 bun run --cwd packages/database purge:retention -- --retention-days 90
 ```
 
 ### Safety & Audit Invariants:
+
 1. **Cluster Administrator Required:** The script connects via `MIGRATION_DATABASE_URL` as `postgres` / `wvs_owner`. The runtime `wvs_app` role cannot perform this operation.
 2. **Transaction Isolation:** The operation runs within a single serial transaction:
    - Records an immutable `EVIDENCE_PURGED` entry in `audit_log` with the cutoff timestamp and job metadata.

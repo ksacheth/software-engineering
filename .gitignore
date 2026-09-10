@@ -42,6 +42,9 @@ AGENTS.md
 .pi
 .commandcode
 
+# Agent skills lockfile, regenerated locally by the skills tooling
+skills-lock.json
+
 # LaTeX build artifacts
 *.aux
 *.log
