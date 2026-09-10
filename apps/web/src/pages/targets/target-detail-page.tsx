@@ -26,6 +26,8 @@ import { VerificationStatusBadge } from './components/verification-status-badge'
 import { VerificationInstructionsCard } from './components/verification-instructions-card';
 import { ScopeEditor } from './components/scope-editor';
 import { VerifiedIpSetCard } from './components/verified-ip-set-card';
+import { StartScanDialog } from '../scans/start-scan-dialog';
+import { useCanWrite } from '@/lib/use-role';
 import {
   ArrowLeft,
   ExternalLink,
@@ -41,6 +43,7 @@ export function TargetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const canWrite = useCanWrite();
   const [showReverify, setShowReverify] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -193,6 +196,7 @@ export function TargetDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {canWrite && <StartScanDialog target={target} scannable={scannable} />}
             <Button variant="secondary" size="sm" asChild>
               <Link to={`/targets/${target.id}/verify`}>
                 <KeyRound data-icon="inline-start" />

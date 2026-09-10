@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "bun --filter \"@wvs/*\" dev",
     "typecheck": "bun --filter \"@wvs/*\" typecheck",
+    "test": "bun test --coverage",
     "db:generate": "bun --filter @wvs/database generate",
     "db:push": "bun --filter @wvs/database db:push",
     "db:migrate:dev": "bun --filter @wvs/database migrate:dev",

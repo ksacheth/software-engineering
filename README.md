@@ -34,7 +34,50 @@ software/
 
 ---
 
-## Data Model (D1-D6)
+## Scan Execution (F.3)
+
+F.3 is split between this API and the orchestrator in `apps/worker`. They never
+call each other; the interface is a contract held in `packages/shared`
+(`@wvs/shared`), and the decision is recorded in
+[ADR-0006](docs/adr/0006-scan-execution-contract.md).
+
+**Triggers and control** (`/api/scans`, unversioned to match the rest of the API):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/scans` | Start a scan; returns the scan id immediately (202) |
+| `GET /api/scans` | Cursor-paginated list, filterable by `targetId` and `status` |
+| `GET /api/scans/:id` | One scan, with its derived warnings and concurrency state |
+| `GET /api/scans/:id/findings` | Read-only finding projection for the live view |
+| `POST /api/scans/:id/pause` \| `/resume` \| `/cancel` | Control, along the legal transitions only |
+
+Errors are RFC 9457 problem details (`application/problem+json`); the older
+endpoints keep their custom shape. Reads are open to every role, state changes
+need `ADMIN`, `ANALYST` or `DEVELOPER`, and organisation scoping always comes
+from the session.
+
+Recorded gaps against SRS §3.2.4 on this surface: scan endpoints are unversioned
+to match the rest of the API (`/api/auth` is pinned by the authentication
+library's base path, so versioning only scans would leave two conventions), and
+they do not yet accept idempotency keys. A repeated start is instead refused
+because a second active scan of the same target is rejected, and the queue job
+id is the scan id.
+
+**Queue.** The API writes the `ScanJob` row (profile, all five limits, and the
+scope snapshot), then enqueues `{ scanJobId, organizationId, attempt }` on the
+BullMQ queue `wvs-scans` with the job id set to the scan id, so a double submit
+cannot create two jobs. The row, not the message, is the source of truth.
+
+**Events.** The orchestrator publishes `scan.status`, `scan.progress`,
+`scan.finding` and `scan.warning` to the Redis channel `wvs:scan-events`; every
+API instance subscribes and fans them out to its own WebSocket clients on `/ws`
+and `/ws/scans/{id}`. Nothing on that channel may have a side effect, because
+pub/sub delivers to every instance: a completion email published there would
+send once per instance. Side effects belong at the single point of state
+transition, in the orchestrator.
+
+---
+
 
 The persistence layer in [`packages/database`](packages/database) models all 6 core data stores via Prisma ORM:
 
@@ -172,6 +215,7 @@ From the repository root:
 | --------------------------- | ------------------------------------------------------ |
 | `bun run dev`               | Start the API and web app together in development mode |
 | `bun run typecheck`         | Run TypeScript compiler checks across all workspaces   |
+| `bun run test`              | Run every workspace's tests with a coverage report      |
 | `bun run db:generate`       | Generate Prisma client in `@wvs/database`              |
 | `bun run db:push`           | Push Prisma schema directly to PostgreSQL              |
 | `bun run db:migrate:dev`    | Create and apply database migrations                   |
