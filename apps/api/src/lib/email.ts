@@ -1,5 +1,11 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { config } from '../config/env';
+import {
+  dueEmails,
+  markRetryFailed,
+  markSent,
+  recordFailedEmail,
+} from './email-outbox';
 
 /**
  * F.1: transactional email delivery (verification, password reset, deletion).
@@ -7,21 +13,27 @@ import { config } from '../config/env';
  * SRS §3.2.3 treats the SMTP relay as a degradable dependency: a delivery
  * failure must never block sign-up or password reset, and the message should
  * be queued for retry. Delivery is therefore best-effort here: `sendEmail`
- * reports success but never throws.
+ * reports success but never throws, and a failure is written to `email_outbox`
+ * for `retryPendingEmails` to pick up.
  *
  * Callers must NOT await it (Better Auth documentation: awaiting email during
  * sign-up leaks account existence through response timing). Use `void`.
  *
- * TODO(F.1): persist failed messages to a durable outbox and retry them once
- * the worker exists. Until then a failure is logged loudly and the flow
- * continues, which is the "degrade, don't block" half of the requirement.
+ * The retry loop belongs in apps/worker once that scan engine exists, which is
+ * why it is off by default and opt-in via EMAIL_RETRY_INTERVAL_MS. Running it
+ * in the API conflicts with NFR-SCAL-1: every extra API instance would drain
+ * the same queue and send duplicates.
  */
+
+/** Which flow produced a message. Recorded on the outbox row for triage. */
+export type EmailKind = 'verification' | 'password-reset' | 'account-deletion';
 
 export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
   html?: string;
+  kind: EmailKind;
 }
 
 let transport: Transporter | null = null;
@@ -69,25 +81,104 @@ export function renderHtml(title: string, body: string, action?: { label: string
  * Deliver a message over SMTP.
  *
  * Returns `false` instead of throwing when the relay is unavailable, so an
- * auth flow can proceed. The failure is logged with enough context to find the
- * message that was lost.
+ * auth flow can proceed. A failure is recorded in `email_outbox` so it can be
+ * retried; see `retryPendingEmails`.
  */
 export async function sendEmail(message: EmailMessage): Promise<boolean> {
   try {
-    await getTransport().sendMail({
-      from: config.smtp.from,
-      to: message.to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    });
+    await deliver(message);
     return true;
   } catch (error) {
     console.error(
-      '[email] delivery failed (SRS §3.2.3: queued for retry, request not blocked)',
-      { to: message.to, subject: message.subject },
-      error,
+      '[email] delivery failed, message queued for retry (SRS §3.2.3)',
+      { to: message.to, subject: message.subject, kind: message.kind },
+      error
     );
+    await recordFailedEmail(message, error);
     return false;
   }
+}
+
+/** Attempt to send, letting the caller decide what a failure means. */
+async function deliver(message: EmailMessage): Promise<void> {
+  await getTransport().sendMail({
+    from: config.smtp.from,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+}
+
+export interface RetrySummary {
+  attempted: number;
+  sent: number;
+  failed: number;
+  deadLettered: number;
+}
+
+/**
+ * Drain messages whose backoff has elapsed.
+ *
+ * Safe to call concurrently only on a single instance: two drains can select
+ * the same row. That is acceptable here because this runs as a manual command
+ * or an opt-in single-instance loop, but it is the reason a worker-based
+ * implementation should claim rows with `SELECT ... FOR UPDATE SKIP LOCKED`.
+ */
+export async function retryPendingEmails(
+  batchSize = 20
+): Promise<RetrySummary> {
+  const summary: RetrySummary = {
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    deadLettered: 0,
+  };
+
+  const rows = await dueEmails(batchSize);
+
+  for (const row of rows) {
+    summary.attempted += 1;
+    try {
+      await deliver({
+        to: row.recipient,
+        subject: row.subject,
+        text: row.text,
+        html: row.html ?? undefined,
+        kind: row.kind as EmailMessage['kind'],
+      });
+      await markSent(row.id);
+      summary.sent += 1;
+    } catch (error) {
+      const parked = await markRetryFailed(row, error);
+      if (parked) {
+        summary.deadLettered += 1;
+      } else {
+        summary.failed += 1;
+      }
+      console.error('[email] retry attempt failed', {
+        to: row.recipient,
+        attempt: row.attempts + 1,
+      });
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * Run the retry drain on an interval.
+ *
+ * Opt-in because it breaks the statelessness NFR-SCAL-1 relies on. The timer is
+ * unref'd so it never holds the process open during shutdown.
+ */
+export function startEmailRetryLoop(intervalMs: number): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    retryPendingEmails().catch((error) => {
+      console.error('[email] retry drain failed', error);
+    });
+  }, intervalMs);
+
+  timer.unref();
+  return timer;
 }

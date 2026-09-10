@@ -1,11 +1,16 @@
 import { readFileSync } from "node:fs";
 
 /**
- * Bun auto-loads .env from the CWD, but under Turborepo the CWD is apps/api
- * while the repo-root .env lives one level up — load it manually if present.
+ * Bun auto-loads .env from the directory it considers the project root, which
+ * depends on where the process was started. Running `bun run dev` at the repo
+ * root works, but `cd apps/api && bun run dev` (the per-app path) does not,
+ * because the only .env is at the repo root. Load it explicitly so the API
+ * behaves the same regardless of CWD.
+ *
+ * From apps/api/src/config/ the repo root is four levels up.
  * Never overrides variables that are already set.
  */
-const ROOT_ENV = new URL("../../../.env", import.meta.url);
+const ROOT_ENV = new URL("../../../../.env", import.meta.url);
 
 function loadRootEnv(): void {
   let content: string;
@@ -108,4 +113,8 @@ export const config = {
     from: process.env.SMTP_FROM ?? "noreply@wvs.local",
     secure: bool(process.env.SMTP_SECURE, false),
   },
+  // 0 disables the in-process retry drain. It belongs in apps/worker; running
+  // it here contradicts NFR-SCAL-1, because every API instance would drain the
+  // same queue and send duplicates.
+  emailRetryIntervalMs: num(process.env.EMAIL_RETRY_INTERVAL_MS, 0),
 } as const;

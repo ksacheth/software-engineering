@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun --hot src/main.ts",
     "start": "bun src/main.ts",
+    "email:retry": "bun src/scripts/retry-emails.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

@@ -34,6 +34,7 @@ export function verificationEmail({
       label: "Confirm email",
       url,
     }),
+    kind: "verification",
   };
 }
 
@@ -62,6 +63,7 @@ export function resetPasswordEmail({
       label: "Choose a new password",
       url,
     }),
+    kind: "password-reset",
   };
 }
 
@@ -90,5 +92,6 @@ export function deleteAccountEmail({
       label: "Delete my account",
       url,
     }),
+    kind: "account-deletion",
   };
 }

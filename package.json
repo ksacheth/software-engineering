@@ -8,11 +8,13 @@
   ],
   "packageManager": "bun@1.3.14",
   "scripts": {
+    "dev": "bun --filter \"@wvs/*\" dev",
     "typecheck": "bun --filter \"@wvs/*\" typecheck",
     "db:generate": "bun --filter @wvs/database generate",
     "db:push": "bun --filter @wvs/database db:push",
     "db:migrate:dev": "bun --filter @wvs/database migrate:dev",
     "db:migrate:deploy": "bun --filter @wvs/database migrate:deploy",
-    "db:studio": "bun --filter @wvs/database studio"
+    "db:studio": "bun --filter @wvs/database studio",
+    "email:retry": "bun --filter @wvs/api email:retry"
   }
 }

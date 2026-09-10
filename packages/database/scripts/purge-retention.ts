@@ -47,10 +47,17 @@ export async function purgeRetention({
         ],
       },
     });
+    const outboxCount = await prisma.emailOutbox.count({
+      where: {
+        status: { in: ['SENT', 'DEAD_LETTER'] },
+        updatedAt: { lt: cutoffDate },
+      },
+    });
     console.log(`[Dry Run] Candidates for purge:`);
     console.log(`  - url_ledger records: ${ledgerCount}`);
     console.log(`  - finding_evidence records: ${evidenceCount}`);
-    return { ledgerCount, evidenceCount };
+    console.log(`  - email_outbox terminal records: ${outboxCount}`);
+    return { ledgerCount, evidenceCount, outboxCount };
   }
 
   const auditLogId = randomUUID();
@@ -93,12 +100,28 @@ export async function purgeRetention({
       cutoffDate
     );
 
+    // 6. Purge terminal email_outbox rows (SRS C.7).
+    //
+    // Only terminal rows are deleted: FAILED rows are still awaiting retry, and
+    // removing one would silently drop a message the outbox exists to protect.
+    // Rows embed a live verification or reset URL, so this cannot wait forever.
+    // The table is mutable by design and carries no append-only trigger, so an
+    // ordinary DELETE is permitted here (contrast ADR-0002, which covers
+    // audit_log, url_ledger and finding_triage_history).
+    const purgedOutboxCount = await tx.$executeRawUnsafe(
+      `DELETE FROM "email_outbox"
+       WHERE "status" IN ('SENT', 'DEAD_LETTER')
+         AND "updatedAt" < $1;`,
+      cutoffDate
+    );
+
     console.log(`[Retention Purge Complete]`);
     console.log(`  - Purged url_ledger rows: ${deletedLedgerCount}`);
     console.log(`  - Redacted finding_evidence payloads: ${purgedEvidenceCount}`);
+    console.log(`  - Purged terminal email_outbox rows: ${purgedOutboxCount}`);
     console.log(`  - Logged audit event: ${auditLogId}`);
 
-    return { deletedLedgerCount, purgedEvidenceCount, auditLogId };
+    return { deletedLedgerCount, purgedEvidenceCount, purgedOutboxCount, auditLogId };
   });
 }
 
