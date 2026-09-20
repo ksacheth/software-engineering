@@ -21,24 +21,38 @@ GlobalRegistrator.register({ url: "http://localhost:3000/" });
  * passes. There is nothing to await, because the update is not the component's
  * response to anything a test did.
  *
- * So warnings naming a primitive from that library are dropped and everything
- * else is left alone. An update escaping `act` in our own components is a real
- * signal: it usually means a test asserts on a render that has not happened yet,
- * and it stays visible.
+ * Only the exact names that have been seen to fire are dropped, rather than a
+ * prefix: `components/ui` wraps every one of these primitives under a name of
+ * its own, so matching on `Select` or `Dialog` would silence a wrapper we do
+ * own the moment one of them grows state. Those wrappers are plain functions,
+ * while the primitives below are forwarded refs, which is why two of these
+ * names carry the wrapper React prints and would not match ours.
+ *
+ * An update escaping `act` anywhere else is a real signal, usually a test
+ * asserting on a render that has not happened yet, and it stays visible. A new
+ * name from the library shows up too, and gets added here deliberately or not
+ * at all.
  */
-/** Radix primitives, as React names them in the warning's arguments. */
-const THIRD_PARTY_COMPONENT =
-  /^(Popper|Presence|Tooltip|Select|Dismissable|Popover|Dialog|Collection|Portal|Focus|Slot)/;
+const SETTLED_OUTSIDE_ACT = new Set([
+  "Popper",
+  "Presence",
+  // Ours is a props pass-through with no state of its own, so an update
+  // attributed to this name came from the primitive underneath it.
+  "Tooltip",
+  "SelectProvider",
+  "ForwardRef(SelectItem)",
+  "ForwardRef(SelectItemText)",
+]);
 
 const realConsoleError = console.error;
 console.error = (format: unknown, ...values: unknown[]) => {
   // React passes the component name as an argument rather than interpolating
   // it, so the name is what gets matched, not the message.
   const isActWarning = String(format).includes("was not wrapped in act");
-  const blamesThirdParty = values.some((value) =>
-    THIRD_PARTY_COMPONENT.test(String(value).replace(/^ForwardRef\(/, "")),
+  const isSettled = values.some((value) =>
+    SETTLED_OUTSIDE_ACT.has(String(value)),
   );
-  if (isActWarning && blamesThirdParty) return;
+  if (isActWarning && isSettled) return;
   realConsoleError(format, ...values);
 };
 
