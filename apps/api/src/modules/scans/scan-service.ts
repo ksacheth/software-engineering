@@ -124,7 +124,12 @@ export async function startScan(
     // change outside the actions the API was assigned to audit, and SCAN_QUEUED
     // is already the record of what happened. A queued scan nothing picks up is
     // the stalled case: it holds its quota slot, stays visible, and the user can
-    // cancel it. Reclaiming it is the reconciler the spec leaves undecided.
+    // cancel it.
+    //
+    // Reclaiming it is a reconciler this PR does not build, tracked in #6. Until
+    // that exists the slot is held until someone cancels the row by hand, and
+    // since QUEUED occupies quota, enough of these will lock an organisation out
+    // of scanning.
     return { ok: false, refusal: { kind: "QUEUE_UNAVAILABLE" } };
   }
 
