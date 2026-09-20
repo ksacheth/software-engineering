@@ -22,9 +22,15 @@ export interface ScanJobPayload {
    * 1-based attempt number, so a resumed scan continues from its checkpoint
    * rather than restarting.
    *
-   * The API always enqueues 1: only the orchestrator knows that a resume
-   * happened, so only it increments this. BullMQ's own `attemptsMade` counts
-   * transport retries of one delivery and is a different thing.
+   * The API owns this value and is the only side that increments it. A first
+   * delivery carries 1; a resume carries the next number, taken from the
+   * `attempt` column it advanced in the same transaction as the status. Only
+   * the API can do this, because only it knows the user asked to resume and a
+   * paused worker has already exited (ADR-0007). The orchestrator reads the
+   * number to tell a resumption from a first delivery, and never increments it.
+   *
+   * BullMQ's own `attemptsMade` counts transport retries of one delivery and is
+   * a different thing.
    */
   attempt: number;
 }
