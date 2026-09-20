@@ -12,6 +12,10 @@ const prisma = new PrismaClient({
   },
 });
 
+/** Terminal outbox rows hold live credentials, so they go well before the
+ *  90-day evidence window. Documented in retention-and-maintenance.md. */
+const OUTBOX_RETENTION_DAYS = 30;
+
 interface RetentionOptions {
   retentionDays?: number;
   dryRun?: boolean;
@@ -33,8 +37,25 @@ export async function purgeRetention({
   dryRun = false,
 }: RetentionOptions = {}) {
   const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+  /**
+   * The outbox keeps its own, shorter window (see
+   * `packages/database/docs/retention-and-maintenance.md`).
+   *
+   * Terminal rows still embed a rendered verification, reset or deletion URL,
+   * and each of those is a live single-use credential. Holding them for the
+   * 90-day evidence window would be three times the exposure the policy sets,
+   * so this does not follow `retentionDays`.
+   */
+  const outboxCutoffDate = new Date(
+    Date.now() - OUTBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  );
+
   console.log(
     `[Retention Purge] Threshold date: ${cutoffDate.toISOString()} (${retentionDays} days)`,
+  );
+  console.log(
+    `[Retention Purge] Outbox threshold: ${outboxCutoffDate.toISOString()} (${OUTBOX_RETENTION_DAYS} days)`,
   );
 
   if (dryRun) {
@@ -49,7 +70,7 @@ export async function purgeRetention({
     const outboxCount = await prisma.emailOutbox.count({
       where: {
         status: { in: ["SENT", "DEAD_LETTER"] },
-        updatedAt: { lt: cutoffDate },
+        updatedAt: { lt: outboxCutoffDate },
       },
     });
     console.log(`[Dry Run] Candidates for purge:`);
@@ -115,7 +136,7 @@ export async function purgeRetention({
       `DELETE FROM "email_outbox"
        WHERE "status" IN ('SENT', 'DEAD_LETTER')
          AND "updatedAt" < $1;`,
-      cutoffDate,
+      outboxCutoffDate,
     );
 
     console.log(`[Retention Purge Complete]`);

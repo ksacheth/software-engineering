@@ -12,8 +12,13 @@
  */
 import { prisma } from "@wvs/database";
 import { config } from "../config/env";
-import { retryPendingEmails } from "../lib/email";
+import { retryPendingEmails, type RetrySummary } from "../lib/email";
 import { outboxCounts } from "../lib/email-outbox";
+
+const BATCH_SIZE = 50;
+
+/** Bounds a run so a persistently due row cannot hold the process open. */
+const MAX_PASSES = 20;
 
 async function main(): Promise<void> {
   const before = await outboxCounts();
@@ -24,7 +29,35 @@ async function main(): Promise<void> {
   });
   console.log("[email:retry] queue before:", before);
 
-  const summary = await retryPendingEmails(50);
+  // Drain until the queue stops yielding, rather than one batch and out.
+  // A single pass leaves anything past the batch size queued while the process
+  // still exits 0, so a cron run reports success with deliverable mail sitting
+  // untouched until the next one. The pass bound stops a row that keeps coming
+  // back due from spinning here forever; the backoff in email-outbox means a
+  // failing row is not due again within a run.
+  const summary: RetrySummary = {
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    deadLettered: 0,
+  };
+
+  for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+    const batch = await retryPendingEmails(BATCH_SIZE);
+    summary.attempted += batch.attempted;
+    summary.sent += batch.sent;
+    summary.failed += batch.failed;
+    summary.deadLettered += batch.deadLettered;
+
+    if (batch.attempted < BATCH_SIZE) break;
+
+    if (pass === MAX_PASSES - 1) {
+      console.warn(
+        `[email:retry] stopped after ${MAX_PASSES} passes with messages still due; another run will continue`,
+      );
+    }
+  }
+
   console.log("[email:retry] run:", summary);
 
   const after = await outboxCounts();

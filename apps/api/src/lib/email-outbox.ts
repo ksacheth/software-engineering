@@ -47,6 +47,20 @@ function sanitise(input: string, max = 2000): string {
     : withoutNul;
 }
 
+/**
+ * `u***@example.com`.
+ *
+ * Used only where the durable row could not be written, so the log line is the
+ * single remaining trace of a lost message and an operator has nothing else to
+ * search on. Everywhere else the row id identifies the record, and the address
+ * is left out entirely: logs are not covered by the outbox retention schedule.
+ */
+function maskRecipient(address: string): string {
+  const at = address.lastIndexOf("@");
+  if (at <= 0) return "***";
+  return `${address[0]}***${address.slice(at)}`;
+}
+
 function describe(error: unknown): string {
   if (error instanceof Error) {
     const code = (error as { code?: unknown }).code;
@@ -88,7 +102,7 @@ export async function recordFailedEmail(
     // of defence, so it shouts.
     console.error(
       "[email-outbox] failed to record undelivered message (SRS F.1 §3.2.3)",
-      { to: message.to, subject: message.subject },
+      { to: maskRecipient(message.to), kind: message.kind },
       dbError,
     );
   }
@@ -139,7 +153,7 @@ export async function markRetryFailed(
   if (exhausted) {
     console.error(
       `[email-outbox] giving up after ${attempts} attempts, message is now DEAD_LETTER`,
-      { to: row.recipient, subject: row.subject, kind: row.kind },
+      { id: row.id, kind: row.kind },
     );
   }
 

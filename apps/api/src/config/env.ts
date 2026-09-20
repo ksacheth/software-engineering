@@ -22,7 +22,10 @@ function loadRootEnv(): void {
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = line.indexOf("=");
+    // Indexed from `trimmed`, which is the string being sliced below: taking
+    // it from `line` shifts the split by the leading whitespace, so an
+    // indented `  PORT=4100` parses as the key `PORT=4` with the value `100`.
+    const eq = trimmed.indexOf("=");
     if (eq === -1) continue;
     const key = trimmed.slice(0, eq).trim();
     const value = unquote(trimmed.slice(eq + 1).trim());

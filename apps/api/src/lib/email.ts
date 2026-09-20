@@ -93,9 +93,12 @@ export async function sendEmail(message: EmailMessage): Promise<boolean> {
     await deliver(message);
     return true;
   } catch (error) {
+    // The recipient is deliberately absent: the outbox row written below is
+    // the record of who was affected, and it is purged on a retention
+    // schedule that application logs are not.
     console.error(
       "[email] delivery failed, message queued for retry (SRS §3.2.3)",
-      { to: message.to, subject: message.subject, kind: message.kind },
+      { kind: message.kind },
       error,
     );
     await recordFailedEmail(message, error);
@@ -143,6 +146,7 @@ export async function retryPendingEmails(
 
   for (const row of rows) {
     summary.attempted += 1;
+
     try {
       await deliver({
         to: row.recipient,
@@ -151,8 +155,6 @@ export async function retryPendingEmails(
         html: row.html ?? undefined,
         kind: row.kind as EmailMessage["kind"],
       });
-      await markSent(row.id);
-      summary.sent += 1;
     } catch (error) {
       const parked = await markRetryFailed(row, error);
       if (parked) {
@@ -161,9 +163,32 @@ export async function retryPendingEmails(
         summary.failed += 1;
       }
       console.error("[email] retry attempt failed", {
-        to: row.recipient,
+        id: row.id,
+        kind: row.kind,
         attempt: row.attempts + 1,
       });
+      continue;
+    }
+
+    // The relay has accepted the message, so bookkeeping is a separate failure
+    // domain and is not folded into the catch above. Recording a database
+    // error as a delivery failure would charge an attempt against a message
+    // that was in fact sent, and could eventually park a delivered message as
+    // DEAD_LETTER for an operator to chase.
+    //
+    // Delivery stays at-least-once: SMTP cannot join the transaction, so a
+    // failure here still leaves the row eligible for another attempt. What
+    // changes is that the row keeps an honest attempt count and the log says
+    // plainly which case this was.
+    summary.sent += 1;
+    try {
+      await markSent(row.id);
+    } catch (error) {
+      console.error(
+        "[email] delivered, but the outbox row could not be marked sent; it may be delivered again",
+        { id: row.id, kind: row.kind },
+        error,
+      );
     }
   }
 
@@ -177,10 +202,22 @@ export async function retryPendingEmails(
  * unref'd so it never holds the process open during shutdown.
  */
 export function startEmailRetryLoop(intervalMs: number): NodeJS.Timeout {
+  // A drain that outlives the interval must not be joined by a second one.
+  // `retryPendingEmails` selects rows without claiming them, so two overlapping
+  // drains select the same row and send it twice. Claiming rows is the worker's
+  // concern; keeping this single loop from racing itself is this function's.
+  let draining = false;
+
   const timer = setInterval(() => {
-    retryPendingEmails().catch((error) => {
-      console.error("[email] retry drain failed", error);
-    });
+    if (draining) return;
+    draining = true;
+    retryPendingEmails()
+      .catch((error) => {
+        console.error("[email] retry drain failed", error);
+      })
+      .finally(() => {
+        draining = false;
+      });
   }, intervalMs);
 
   timer.unref();
