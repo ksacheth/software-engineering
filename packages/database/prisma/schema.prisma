@@ -329,6 +329,10 @@ model ScanJob {
   status             ScanStatus      @default(QUEUED)
   phase              ScanPhase       @default(DISCOVERY)
   workerId           String?
+  /// 1-based delivery count, incremented by a resume so the orchestrator
+  /// continues from its checkpoint rather than crawling the target again.
+  /// Carried in the queue payload; see ADR-0006 and ADR-0007.
+  attempt            Int             @default(1)
   rateLimit          Int             @default(10)
   concurrency        Int             @default(5)
   maxDepth           Int             @default(5)

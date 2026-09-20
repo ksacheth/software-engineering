@@ -50,6 +50,27 @@ export async function enqueueScan(
   );
 }
 
+/**
+ * Drop a scan's job if the queue still holds it (ADR-0007).
+ *
+ * Cancelling a scan that never started must take the job with it, or it sits in
+ * Redis and runs later against a scan the user was told is finished.
+ *
+ * Returns whether a job was removed. A job a worker has already claimed cannot
+ * be removed, and that is not a failure: the row now reads CANCELLED and the
+ * orchestrator stops at its next checkpoint, which is the mechanism ADR-0007
+ * relies on for a running scan anyway.
+ */
+export async function removeScanJob(scanJobId: string): Promise<boolean> {
+  try {
+    const removed = await scanQueue().remove(scanJobQueueId(scanJobId));
+    return removed > 0;
+  } catch (error) {
+    console.error("[scans] could not remove queued job", scanJobId, error);
+    return false;
+  }
+}
+
 /** Test teardown helper: closes the shared connection so the process can exit. */
 export async function closeScanQueue(): Promise<void> {
   if (!queue) return;

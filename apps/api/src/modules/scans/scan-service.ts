@@ -11,7 +11,7 @@ import type { AuditAction } from "@wvs/database";
 import type { AuthContext } from "../../common/session";
 import { writeAudit } from "../../common/audit";
 import { reserveScan } from "./scan-reservation";
-import { enqueueScan } from "./scan-queue";
+import { enqueueScan, removeScanJob } from "./scan-queue";
 import {
   findScanForOrg,
   toScanDto,
@@ -184,7 +184,7 @@ export type ControlScanResult =
 
 type ControlOutcome =
   | { kind: "refused"; refusal: ScanRefusal }
-  | { kind: "applied"; count: number };
+  | { kind: "applied"; count: number; attempt: number };
 
 /**
  * C.2 on the resume path.
@@ -245,10 +245,65 @@ async function applyControl(
         organizationId: ctx.organizationId,
         status: scan.status,
       },
-      data: plan.data,
+      // A resume is a new delivery, not a retry of the old one, so the attempt
+      // advances with the status and in the same transaction: the number the
+      // worker is handed has to be the number the row records.
+      data:
+        action === "resume"
+          ? { ...plan.data, attempt: { increment: 1 } }
+          : plan.data,
     });
-    return { kind: "applied", count: updated.count };
+    if (updated.count === 0) return { kind: "applied", count: 0, attempt: 0 };
+
+    const row = await tx.scanJob.findUniqueOrThrow({
+      where: { id: scan.id },
+      select: { attempt: true },
+    });
+    return { kind: "applied", count: updated.count, attempt: row.attempt };
   });
+}
+
+/**
+ * Hand the control to the queue (ADR-0007).
+ *
+ * The row is the signal a running scan obeys, but two controls have work the
+ * queue has to be told about: a cancelled scan that never started still has a
+ * job waiting, and a paused scan's worker has exited, so only a fresh enqueue
+ * restarts it.
+ *
+ * Runs after the row is written, never before. If the queue write is lost the
+ * row still says what the user asked for, which is recoverable; the reverse
+ * would leave a scan nothing will run and nothing records as stopped.
+ */
+async function deliverControl(
+  scan: ScanWithRelations,
+  action: ScanAction,
+  attempt: number,
+): Promise<ScanRefusal | null> {
+  if (action === "cancel") {
+    await removeScanJob(scan.id);
+    return null;
+  }
+
+  if (action !== "resume") return null;
+
+  try {
+    await enqueueScan(scan.id, scan.organizationId, attempt);
+    return null;
+  } catch (error) {
+    console.error("[scans] resume enqueue failed", scan.id, error);
+
+    // Put the scan back where the user left it. Unlike a failed start, which
+    // has no earlier state to return to and so leaves the row QUEUED, a resume
+    // does: PAUSED is exactly what it was a moment ago, and it is a state the
+    // user can act on by resuming again once the queue is back. Leaving it
+    // RUNNING would show a scan that nothing is running.
+    await prisma.scanJob.updateMany({
+      where: { id: scan.id, status: "RUNNING" },
+      data: { status: "PAUSED", attempt: { decrement: 1 } },
+    });
+    return { kind: "QUEUE_UNAVAILABLE" };
+  }
 }
 
 /**
@@ -300,6 +355,11 @@ export async function controlScan(
       },
     };
   }
+
+  // Before the audit: a resume the queue refused is rolled back, and an audit
+  // record for it would claim a state change that did not survive the request.
+  const handoff = await deliverControl(scan, action, outcome.attempt);
+  if (handoff) return { ok: false, refusal: handoff };
 
   await writeAudit(ctx, {
     action: ACTION_AUDIT[action],

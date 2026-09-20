@@ -571,6 +571,56 @@ describe("controlling a scan", () => {
     expect(row.cancelledAt).not.toBeNull();
   });
 
+  test("cancelling a queued scan takes its job out of the queue", async () => {
+    // ADR-0007: otherwise the job runs later against a scan the user has
+    // already been told is finished.
+    const session = await createSession("ANALYST");
+    const target = await createVerifiedTarget(session.organizationId);
+
+    const started = await request(api, session, "/api/scans", {
+      method: "POST",
+      body: JSON.stringify({ targetId: target.id }),
+    });
+    const { scan } = (await started.json()) as { scan: { id: string } };
+    expect(await queue.getJob(scan.id)).toBeDefined();
+
+    const res = await request(api, session, `/api/scans/${scan.id}/cancel`, {
+      method: "POST",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await queue.getJob(scan.id)).toBeUndefined();
+  });
+
+  test("resuming re-enqueues the scan with the next attempt number", async () => {
+    // A paused worker has exited, so the row alone would leave the scan RUNNING
+    // with nothing running it (ADR-0007).
+    const session = await createSession("ANALYST");
+    const target = await createVerifiedTarget(session.organizationId);
+    const scan = await seedScan(session, target, "PAUSED");
+
+    const res = await request(api, session, `/api/scans/${scan.id}/resume`, {
+      method: "POST",
+    });
+
+    expect(res.status).toBe(200);
+
+    const job = await queue.getJob(scan.id);
+    expect(job).toBeDefined();
+    expect(job!.data).toEqual({
+      scanJobId: scan.id,
+      organizationId: session.organizationId,
+      attempt: 2,
+    });
+
+    // The row records the same attempt the worker was handed.
+    const row = await prisma.scanJob.findUniqueOrThrow({
+      where: { id: scan.id },
+    });
+    expect(row.attempt).toBe(2);
+    expect(row.status).toBe("RUNNING");
+  });
+
   test("refuses to pause a scan that is not running", async () => {
     const session = await createSession("ANALYST");
     const target = await createVerifiedTarget(session.organizationId);
