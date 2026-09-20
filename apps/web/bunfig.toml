@@ -1,0 +1,4 @@
+[test]
+# Registers a DOM and clears it between tests. Without this, rendering a
+# component throws before any assertion runs.
+preload = ["./src/test-support/setup.ts"]

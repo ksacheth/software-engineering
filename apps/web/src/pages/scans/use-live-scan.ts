@@ -219,14 +219,21 @@ export function useLiveScan(
     snapshot !== undefined &&
     new Date(patch.at).getTime() >= new Date(snapshot.updatedAt).getTime();
 
+  /**
+   * Warnings merge whatever the patch is doing.
+   *
+   * A warning is an event that happened, not a field that can be superseded, so
+   * it has no place in the freshness comparison above. Merging it only in the
+   * patch branch meant a `scan.warning` arriving on its own was dropped, since
+   * a warning sets no patch: the degradation the user most needs to see is the
+   * one least likely to be accompanied by anything else.
+   */
   const scan: Scan | undefined = snapshot
-    ? usePatch
-      ? {
-          ...snapshot,
-          ...patch.fields,
-          warnings: mergeScanWarnings(snapshot.warnings, streamedWarnings),
-        }
-      : snapshot
+    ? {
+        ...snapshot,
+        ...(usePatch ? patch.fields : {}),
+        warnings: mergeScanWarnings(snapshot.warnings, streamedWarnings),
+      }
     : undefined;
 
   const isPolling =
