@@ -19,6 +19,36 @@ export interface AuditEntry {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Record an action no user performed.
+ *
+ * Unattended actors still change state, and F.8 wants one record per event
+ * either way. `userId` stays null rather than being attributed to whoever
+ * happened to trigger the run: a reconciler's decision is the system's, and
+ * naming a user for it would make the audit log say something untrue.
+ */
+export async function writeSystemAudit(
+  organizationId: string,
+  entry: AuditEntry,
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action: entry.action,
+        userId: null,
+        organizationId,
+        resourceType: entry.resourceType,
+        resourceId: entry.resourceId,
+        metadata: entry.metadata
+          ? JSON.parse(JSON.stringify(entry.metadata))
+          : undefined,
+      },
+    });
+  } catch (error) {
+    console.error('[audit] failed to write system audit record', entry.action, error);
+  }
+}
+
 export async function writeAudit(ctx: AuthContext, entry: AuditEntry): Promise<void> {
   try {
     await prisma.auditLog.create({

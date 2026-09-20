@@ -51,6 +51,18 @@ export async function enqueueScan(
 }
 
 /**
+ * Whether the queue still holds a job for this scan.
+ *
+ * Used by the reconciler (#6) to tell a scan waiting on a busy fleet from one
+ * whose job was never created. Completed jobs are removed, so a `QUEUED` row
+ * with no job is a scan nothing will ever run.
+ */
+export async function hasScanJob(scanJobId: string): Promise<boolean> {
+  const job = await scanQueue().getJob(scanJobQueueId(scanJobId));
+  return job !== undefined;
+}
+
+/**
  * Drop a scan's job if the queue still holds it (ADR-0007).
  *
  * Cancelling a scan that never started must take the job with it, or it sits in

@@ -7,6 +7,7 @@
     "dev": "bun --hot src/main.ts",
     "start": "bun src/main.ts",
     "email:retry": "bun src/scripts/retry-emails.ts",
+    "scans:reconcile": "bun src/scripts/reconcile-scans.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
