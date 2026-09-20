@@ -35,8 +35,10 @@ export async function enqueueScan(
       // for one scan.
       jobId: scanJobQueueId(scanJobId),
       // No queue-level retries: a scan is long-running and stateful, and a blind
-      // retry would crawl a target twice. Resume is the orchestrator's job and
-      // restarts from the checkpoint.
+      // retry would crawl a target twice. A resume is a fresh enqueue carrying
+      // the next attempt number, not a retry of this delivery: only the API
+      // knows the user asked to resume, and a paused worker has exited by then
+      // (ADR-0007).
       attempts: 1,
       // Completed jobs are removed rather than retained, because a retained job
       // holds its id and would silently absorb a later enqueue of the same scan.

@@ -39,7 +39,10 @@ software/
 F.3 is split between this API and the orchestrator in `apps/worker`. They never
 call each other; the interface is a contract held in `packages/shared`
 (`@wvs/shared`), and the decision is recorded in
-[ADR-0006](docs/adr/0006-scan-execution-contract.md).
+[ADR-0006](docs/adr/0006-scan-execution-contract.md). How a pause, resume or
+cancel reaches a running job is recorded separately in
+[ADR-0007](docs/adr/0007-scan-control-delivery.md): the scan row is the signal,
+and the orchestrator reads it at each progress checkpoint.
 
 **Triggers and control** (`/api/scans`, unversioned to match the rest of the API):
 
