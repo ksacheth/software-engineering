@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { ReactNode } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Target } from "@/services/targets";
+import { aTarget as target } from "@/test-support/fixtures";
+import { resetMocks, stub, TargetApiError, toasts } from "@/test-support/mocks";
 
 /**
  * The scope editor (F.2).
@@ -22,66 +24,7 @@ import type { Target } from "@/services/targets";
 const saved: Array<{ includedPaths: string[]; excludedPaths: string[] }> = [];
 let saveFails = false;
 
-mock.module("@/services/targets", () => ({
-  updateTargetScope: async (
-    _id: string,
-    scope: { includedPaths: string[]; excludedPaths: string[] },
-  ) => {
-    if (saveFails) throw new TargetApiError(422, "Scope rejected by the API.");
-    saved.push(scope);
-    return { target: {} };
-  },
-  TargetApiError: class TargetApiError extends Error {
-    constructor(
-      public status: number,
-      message: string,
-    ) {
-      super(message);
-      this.name = "TargetApiError";
-    }
-  },
-}));
-
-const { TargetApiError } = await import("@/services/targets");
-
-const toasts: Array<{ kind: string; message: string }> = [];
-mock.module("sonner", () => ({
-  toast: {
-    success: (message: string) => toasts.push({ kind: "success", message }),
-    error: (message: string) => toasts.push({ kind: "error", message }),
-  },
-}));
-
 const { ScopeEditor } = await import("./scope-editor");
-
-function target(overrides: Partial<Target> = {}): Target {
-  return {
-    id: "target-1",
-    organizationId: "org-1",
-    origin: "https://a.test",
-    label: "Corporate site",
-    verificationMethod: "DNS_TXT",
-    verificationStatus: "VERIFIED",
-    verifiedAt: null,
-    verificationExpiresAt: null,
-    authorisationAck: true,
-    authorisationAckAt: null,
-    authorisationAckById: null,
-    verifiedIpRanges: ["93.184.216.34/32"],
-    includedPaths: [],
-    excludedPaths: [],
-    maxDepth: 3,
-    maxPages: 100,
-    maxRequests: 1000,
-    rateLimit: 5,
-    isArchived: false,
-    archivedAt: null,
-    createdAt: "2026-09-21T10:00:00.000Z",
-    updatedAt: "2026-09-21T10:00:00.000Z",
-    createdById: "user-1",
-    ...overrides,
-  };
-}
 
 function renderEditor(value: Target = target()) {
   const queryClient = new QueryClient({
@@ -112,9 +55,17 @@ async function addPath(field: HTMLElement, path: string) {
 }
 
 beforeEach(() => {
+  resetMocks();
   saved.length = 0;
-  toasts.length = 0;
   saveFails = false;
+  stub.targets("updateTargetScope", (async (
+    _id: string,
+    scope: { includedPaths: string[]; excludedPaths: string[] },
+  ) => {
+    if (saveFails) throw new TargetApiError(422, "Scope rejected by the API.");
+    saved.push(scope);
+    return { target: {} };
+  }) as never);
 });
 
 describe("adding a path", () => {

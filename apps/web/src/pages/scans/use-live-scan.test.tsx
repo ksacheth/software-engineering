@@ -1,15 +1,10 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Scan, ScanFindingSummary } from "@/services/scans";
+import { aScan } from "@/test-support/fixtures";
+import { resetMocks, stub } from "@/test-support/mocks";
 
 /**
  * The live scan view's merge rules (F.3).
@@ -33,17 +28,6 @@ import type { Scan, ScanFindingSummary } from "@/services/scans";
 type Handler = (message: unknown) => void;
 const subscribers = new Set<Handler>();
 
-mock.module("@/providers/websocket-provider", () => ({
-  useWebSocket: () => ({
-    status: "connected",
-    sendMessage: () => {},
-    subscribe: (handler: Handler) => {
-      subscribers.add(handler);
-      return () => subscribers.delete(handler);
-    },
-  }),
-}));
-
 /** Deliver a message to the view exactly as the gateway would. */
 function emit(message: unknown): void {
   act(() => {
@@ -57,18 +41,6 @@ const rows = new Map<string, Scan>();
 const durableFindings = new Map<string, ScanFindingSummary[]>();
 let scanFetches = 0;
 
-mock.module("@/services/scans", () => ({
-  fetchScan: async (id: string) => {
-    scanFetches += 1;
-    const scan = rows.get(id);
-    if (!scan) throw new Error(`no scan fixture for ${id}`);
-    return { scan };
-  },
-  fetchScanFindings: async (id: string) => ({
-    findings: durableFindings.get(id) ?? [],
-  }),
-}));
-
 const { useLiveScan } = await import("./use-live-scan");
 
 // ---------------------------------------------------------------- fixtures ---
@@ -77,42 +49,9 @@ const T0 = "2026-09-21T10:00:00.000Z";
 const T1 = "2026-09-21T10:00:10.000Z";
 const T2 = "2026-09-21T10:00:20.000Z";
 
-function scanRow(id: string, overrides: Partial<Scan> = {}): Scan {
-  return {
-    id,
-    organizationId: "org-1",
-    targetId: "target-1",
-    target: { id: "target-1", label: "Corporate site", origin: "https://a.test" },
-    startedBy: { id: "user-1", name: "Sam" },
-    scheduleId: null,
-    profile: "STANDARD",
-    status: "RUNNING",
-    phase: "DISCOVERY",
-    configuration: {} as Scan["configuration"],
-    includedPaths: [],
-    excludedPaths: [],
-    detectorVersions: null,
-    workerId: null,
-    pagesCrawled: 0,
-    requestsMade: 0,
-    findingsCount: 0,
-    progressPercentage: 0,
-    isDegraded: false,
-    blockingDetected: false,
-    bindingLimit: null,
-    failureReason: null,
-    warnings: [],
-    queuedAt: T0,
-    startedAt: T0,
-    completedAt: null,
-    pausedAt: null,
-    cancelledAt: null,
-    createdAt: T0,
-    updatedAt: T0,
-    createdById: "user-1",
-    ...overrides,
-  };
-}
+/** A scan row as the REST snapshot delivers it. */
+const scanRow = (id: string, overrides: Partial<Scan> = {}): Scan =>
+  aScan({ id, ...overrides });
 
 function findingEvent(
   scanJobId: string,
@@ -152,6 +91,25 @@ function renderLiveScan(
 }
 
 beforeEach(() => {
+  resetMocks();
+  stub.socket("useWebSocket", (() => ({
+    status: "connected",
+    sendMessage: () => {},
+    subscribe: (handler: Handler) => {
+      subscribers.add(handler);
+      return () => subscribers.delete(handler);
+    },
+  })) as never);
+  stub.scans("fetchScan", (async (id: string) => {
+    scanFetches += 1;
+    const scan = rows.get(id);
+    if (!scan) throw new Error(`no scan fixture for ${id}`);
+    return { scan };
+  }) as never);
+  stub.scans("fetchScanFindings", (async (id: string) => ({
+    findings: durableFindings.get(id) ?? [],
+  })) as never);
+
   subscribers.clear();
   rows.clear();
   durableFindings.clear();

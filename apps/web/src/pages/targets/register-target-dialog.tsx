@@ -79,6 +79,20 @@ export function RegisterTargetDialog({ open, onOpenChange }: RegisterTargetDialo
     });
   };
 
+  /**
+   * One way out of this dialog.
+   *
+   * The attestation below is a legal statement recorded once, against one
+   * origin, and never editable afterwards. Cancel used to call `onOpenChange`
+   * directly, which skipped this reset, so a user who ticked the box, changed
+   * their mind and reopened the dialog met a form already attesting for an
+   * origin they had not typed yet.
+   */
+  const closeDialog = () => {
+    resetForm();
+    onOpenChange(false);
+  };
+
   const isSubmitDisabled =
     !authorisationAck ||
     !origin.trim() ||
@@ -89,7 +103,10 @@ export function RegisterTargetDialog({ open, onOpenChange }: RegisterTargetDialo
     <Dialog
       open={open}
       onOpenChange={(isOpen) => {
-        if (!isOpen) resetForm();
+        if (!isOpen) {
+          closeDialog();
+          return;
+        }
         onOpenChange(isOpen);
       }}
     >
@@ -210,7 +227,7 @@ export function RegisterTargetDialog({ open, onOpenChange }: RegisterTargetDialo
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={closeDialog}
             >
               Cancel
             </Button>
