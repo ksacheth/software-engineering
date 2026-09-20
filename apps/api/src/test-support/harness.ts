@@ -1,6 +1,8 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 import { SQL } from "bun";
@@ -69,9 +71,37 @@ function adminUrl(): string {
 }
 
 /**
- * Create the test database if missing, then migrate it. Idempotent: the
- * presence of `scan_job` skips both steps, so repeated test runs are fast.
+ * Create the test database if missing, then apply any migration it is missing.
+ *
+ * The skip is keyed on how many migrations have been applied, not on whether
+ * some table exists. Keying it on a table meant the first run migrated and
+ * every run after that skipped, so a migration added later never reached this
+ * database and the suite failed against a stale schema with an error naming
+ * the new column rather than the missing migration.
  */
+/**
+ * True when every migration on disk is recorded as applied here.
+ *
+ * Counting is enough: migrations are only ever added, and `migrate deploy`
+ * is the single writer of that table.
+ */
+async function isFullyMigrated(databaseDir: string): Promise<boolean> {
+  const onDisk = (
+    await readdir(join(databaseDir, "prisma", "migrations"), {
+      withFileTypes: true,
+    })
+  ).filter((entry) => entry.isDirectory()).length;
+
+  try {
+    const applied = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
+      `select count(*)::bigint as count from "_prisma_migrations" where finished_at is not null`,
+    );
+    return Number(applied[0]?.count ?? 0) >= onDisk;
+  } catch {
+    return false; // No migration table yet, so nothing has been applied.
+  }
+}
+
 export async function prepareDatabase(): Promise<void> {
   const admin = new SQL(adminUrl());
   try {
@@ -85,13 +115,10 @@ export async function prepareDatabase(): Promise<void> {
     await admin.end();
   }
 
-  const migrated = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-    `select count(*)::bigint as count from information_schema.tables where table_schema = 'public' and table_name = 'scan_job'`,
-  );
-  if (Number(migrated[0]?.count ?? 0) > 0) return;
-
   const databaseDir = new URL("../../../../packages/database/", import.meta.url)
     .pathname;
+
+  if (await isFullyMigrated(databaseDir)) return;
   const result = Bun.spawnSync(["bun", "run", "prisma", "migrate", "deploy"], {
     cwd: databaseDir,
     env: {
