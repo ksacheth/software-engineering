@@ -1,5 +1,9 @@
 import type { Scan } from "@/services/scans";
-import type { Target } from "@/services/targets";
+import type {
+  Target,
+  TargetWithScannable,
+  VerificationInstructions,
+} from "@/services/targets";
 
 /**
  * Wire-shaped fixtures, shared so each test file does not carry its own copy.
@@ -84,6 +88,46 @@ export function aScan(overrides: Partial<Scan> = {}): Scan {
     createdAt: ISO,
     updatedAt: ISO,
     createdById: "user-1",
+    ...overrides,
+  };
+}
+
+/**
+ * A target as the list endpoint returns it, with the verdict attached.
+ *
+ * The verdict is computed by the API rather than the row, so a fixture that
+ * derived it here would be asserting the dashboard's guess instead of the
+ * answer C.2 actually turns on.
+ */
+export function aListedTarget(
+  overrides: Partial<TargetWithScannable> = {},
+): TargetWithScannable {
+  return {
+    ...aTarget(),
+    scannable: { scannable: true },
+    ...overrides,
+  };
+}
+
+export function dnsInstructions(
+  overrides: Partial<Extract<VerificationInstructions, { method: "DNS_TXT" }>> = {},
+): VerificationInstructions {
+  return {
+    method: "DNS_TXT",
+    recordName: "_wvs-challenge.a.test",
+    recordType: "TXT",
+    recordValue: "wvs-verify-0123456789abcdef",
+    ...overrides,
+  };
+}
+
+export function wellKnownInstructions(
+  overrides: Partial<Extract<VerificationInstructions, { method: "WELL_KNOWN" }>> = {},
+): VerificationInstructions {
+  return {
+    method: "WELL_KNOWN",
+    url: "https://a.test/.well-known/wvs-verify.txt",
+    content: "wvs-verify-0123456789abcdef",
     ...overrides,
   };
 }

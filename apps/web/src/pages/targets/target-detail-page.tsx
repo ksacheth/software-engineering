@@ -28,6 +28,7 @@ import { VerificationStatusBadge } from "./components/verification-status-badge"
 import { VerificationInstructionsCard } from "./components/verification-instructions-card";
 import { ScopeEditor } from "./components/scope-editor";
 import { VerifiedIpSetCard } from "./components/verified-ip-set-card";
+import { AuthorisationAckCard } from "./components/authorisation-ack-card";
 import { StartScanDialog } from "../scans/start-scan-dialog";
 import { useCanWrite } from "@/lib/use-role";
 import {
@@ -36,7 +37,6 @@ import {
   Archive,
   Trash2,
   Clock,
-  ShieldCheck,
   KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -340,42 +340,7 @@ export function TargetDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Legal Attestation Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="size-5 text-primary" />
-              Authorisation Acknowledgement
-            </CardTitle>
-            <CardDescription>
-              Recorded legal attestation of authority to scan this target.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex justify-between py-1.5 border-b border-border text-sm">
-              <span className="text-muted-foreground">Attestation</span>
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                Acknowledged
-              </span>
-            </div>
-
-            <div className="flex justify-between py-1.5 border-b border-border text-sm">
-              <span className="text-muted-foreground">Attested At</span>
-              <span className="text-xs font-mono">
-                {target.authorisationAckAt
-                  ? new Date(target.authorisationAckAt).toLocaleString()
-                  : "—"}
-              </span>
-            </div>
-
-            <p className="text-xs text-muted-foreground leading-relaxed pt-1">
-              The user has legally attested that they own or have written
-              permission from the owner to conduct security tests against this
-              target, and acknowledged that unauthorised scanning is a criminal
-              offence. Recorded once at registration and not editable.
-            </p>
-          </CardContent>
-        </Card>
+        <AuthorisationAckCard target={target} />
       </div>
 
       {/* Verified IP Set */}
