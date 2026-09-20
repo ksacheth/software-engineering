@@ -41,6 +41,7 @@ AGENTS.md
 .zcode
 .pi
 .commandcode
+docs/agents/
 
 # Agent skills lockfile, regenerated locally by the skills tooling
 skills-lock.json
