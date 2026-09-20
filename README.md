@@ -34,18 +34,63 @@ software/
 
 ---
 
-## Data Model (D1-D6)
+## Scan Execution (F.3)
+
+F.3 is split between this API and the orchestrator in `apps/worker`. They never
+call each other; the interface is a contract held in `packages/shared`
+(`@wvs/shared`), and the decision is recorded in
+[ADR-0006](docs/adr/0006-scan-execution-contract.md). How a pause, resume or
+cancel reaches a running job is recorded separately in
+[ADR-0007](docs/adr/0007-scan-control-delivery.md): the scan row is the signal,
+and the orchestrator reads it at each progress checkpoint.
+
+**Triggers and control** (`/api/scans`, unversioned to match the rest of the API):
+
+| Endpoint                                              | Purpose                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------ |
+| `POST /api/scans`                                     | Start a scan; returns the scan id immediately (202)          |
+| `GET /api/scans`                                      | Cursor-paginated list, filterable by `targetId` and `status` |
+| `GET /api/scans/:id`                                  | One scan, with its derived warnings and concurrency state    |
+| `GET /api/scans/:id/findings`                         | Read-only finding projection for the live view               |
+| `POST /api/scans/:id/pause` \| `/resume` \| `/cancel` | Control, along the legal transitions only                    |
+
+Errors are RFC 9457 problem details (`application/problem+json`); the older
+endpoints keep their custom shape. Reads are open to every role, state changes
+need `ADMIN`, `ANALYST` or `DEVELOPER`, and organisation scoping always comes
+from the session.
+
+Recorded gaps against SRS §3.2.4 on this surface: scan endpoints are unversioned
+to match the rest of the API (`/api/auth` is pinned by the authentication
+library's base path, so versioning only scans would leave two conventions), and
+they do not yet accept idempotency keys. A repeated start is instead refused
+because a second active scan of the same target is rejected, and the queue job
+id is the scan id.
+
+**Queue.** The API writes the `ScanJob` row (profile, all five limits, and the
+scope snapshot), then enqueues `{ scanJobId, organizationId, attempt }` on the
+BullMQ queue `wvs-scans` with the job id set to the scan id, so a double submit
+cannot create two jobs. The row, not the message, is the source of truth.
+
+**Events.** The orchestrator publishes `scan.status`, `scan.progress`,
+`scan.finding` and `scan.warning` to the Redis channel `wvs:scan-events`; every
+API instance subscribes and fans them out to its own WebSocket clients on `/ws`
+and `/ws/scans/{id}`. Nothing on that channel may have a side effect, because
+pub/sub delivers to every instance: a completion email published there would
+send once per instance. Side effects belong at the single point of state
+transition, in the orchestrator.
+
+---
 
 The persistence layer in [`packages/database`](packages/database) models all 6 core data stores via Prisma ORM:
 
-| Store | Scope | Key Entities & Characteristics |
-|---|---|---|
+| Store  | Scope                   | Key Entities & Characteristics                                                                                                                                                                              |
+| ------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **D1** | **Accounts & Sessions** | `User`, `Session`, `Account`, `Verification`, `TwoFactor`, `Organization`, `Member`, `Invitation`. Better Auth compatible, RBAC (`ADMIN`, `ANALYST`, `DEVELOPER`, `VIEWER`), brute-force lockout, TOTP 2FA. |
-| **D2** | **Targets & Scope** | `Target`, `NetworkBlocklist`. Ownership verification via DNS TXT or HTTP `/.well-known/`, 90-day re-verification cycle, path inclusion/exclusion, scan rate ceilings. |
-| **D3** | **Jobs & Checkpoints** | `ScanJob`, `ScanCheckpoint`. Execution lifecycle (`QUEUED` $\to$ `RUNNING` $\to$ `PAUSED` $\to$ `COMPLETED` / `ABORTED_SAFETY`), state checkpoints for resilient worker recovery, cron scheduling. |
-| **D4** | **Scan Records** | `CrawledPage`. Attack surface inventory, URL tree, forms, query parameters, HTTP headers, and reduced-confidence tracking. |
-| **D5** | **Findings & Evidence** | `Finding`, `FindingEvidence`, `FindingTriageHistory`. Immutable findings (DC-9), cross-scan fingerprinting (`NEW`, `PERSISTING`, `RESOLVED`), 90-day evidence retention and purging (F.6). |
-| **D6** | **Audit Log & Ledger** | `AuditLog`, `UrlLedger`, `SystemSetting`. Append-only audit trail for all critical actions, per-scan URL dispatch ledger, and system-wide emergency kill switch. |
+| **D2** | **Targets & Scope**     | `Target`, `NetworkBlocklist`. Ownership verification via DNS TXT or HTTP `/.well-known/`, 90-day re-verification cycle, path inclusion/exclusion, scan rate ceilings.                                       |
+| **D3** | **Jobs & Checkpoints**  | `ScanJob`, `ScanCheckpoint`. Execution lifecycle (`QUEUED` $\to$ `RUNNING` $\to$ `PAUSED` $\to$ `COMPLETED` / `ABORTED_SAFETY`), state checkpoints for resilient worker recovery, cron scheduling.          |
+| **D4** | **Scan Records**        | `CrawledPage`. Attack surface inventory, URL tree, forms, query parameters, HTTP headers, and reduced-confidence tracking.                                                                                  |
+| **D5** | **Findings & Evidence** | `Finding`, `FindingEvidence`, `FindingTriageHistory`. Immutable findings (DC-9), cross-scan fingerprinting (`NEW`, `PERSISTING`, `RESOLVED`), 90-day evidence retention and purging (F.6).                  |
+| **D6** | **Audit Log & Ledger**  | `AuditLog`, `UrlLedger`, `SystemSetting`. Append-only audit trail for all critical actions, per-scan URL dispatch ledger, and system-wide emergency kill switch.                                            |
 
 ---
 
@@ -126,20 +171,59 @@ cd apps/api && bun run dev
 bun run db:studio
 ```
 
+### 6. Email Delivery (optional)
+
+Verification, password-reset, and account-deletion mail is delivered over SMTP.
+Step 2 starts **Mailpit**, a local sink that captures every message and forwards
+none. Read captured mail at <http://localhost:8025>.
+
+Mailpit is the correct development default. Nothing reaches a real inbox while
+the default `SMTP_*` values are in place. To deliver to real inboxes, replace
+those values in `.env` and restart the API. No code change is needed, because
+`apps/api/src/lib/email.ts` speaks plain SMTP.
+
+| Relay             | Requires                   | Notes                                            |
+| ----------------- | -------------------------- | ------------------------------------------------ |
+| Mailpit (default) | Nothing                    | Local only; messages never leave the machine     |
+| Gmail             | 2FA plus an App Password   | No domain needed; roughly 500 sends/day          |
+| SendGrid          | Single Sender Verification | Send from one verified address; no domain needed |
+| Resend            | A domain you control       | Verified with SPF/DKIM records                   |
+
+Keep `SMTP_PORT` and `SMTP_SECURE` consistent: port `465` needs
+`SMTP_SECURE=true`, while `587` and `1025` need `false`. Also set `SMTP_FROM`
+to an address the relay has authorised, or it rejects the send.
+
+A message that fails to send is recorded in `email_outbox` rather than lost
+(SRS F.1 §3.2.3). Drain the queue with:
+
+```bash
+bun run email:retry
+```
+
+The command retries with exponential backoff, parks a message as
+`DEAD_LETTER` after 5 attempts, and exits non-zero while any dead letters
+remain, so a cron job fails loudly instead of losing mail quietly. An
+in-process loop is available via `EMAIL_RETRY_INTERVAL_MS`, but it is off by
+default: the drain belongs in `apps/worker`, because an API-instance loop would
+send duplicates once more than one instance runs (NFR-SCAL-1).
+
 ---
 
 ## Available Scripts
 
 From the repository root:
 
-| Command | Description |
-|---|---|
-| `bun run typecheck` | Run TypeScript compiler checks across all workspaces |
-| `bun run db:generate` | Generate Prisma client in `@wvs/database` |
-| `bun run db:push` | Push Prisma schema directly to PostgreSQL |
-| `bun run db:migrate:dev` | Create and apply database migrations |
-| `bun run db:migrate:deploy` | Apply pending migrations in production |
-| `bun run db:studio` | Launch Prisma Studio web GUI to browse data stores |
+| Command                     | Description                                            |
+| --------------------------- | ------------------------------------------------------ |
+| `bun run dev`               | Start the API and web app together in development mode |
+| `bun run typecheck`         | Run TypeScript compiler checks across all workspaces   |
+| `bun run test`              | Run every workspace's tests with a coverage report     |
+| `bun run db:generate`       | Generate Prisma client in `@wvs/database`              |
+| `bun run db:push`           | Push Prisma schema directly to PostgreSQL              |
+| `bun run db:migrate:dev`    | Create and apply database migrations                   |
+| `bun run db:migrate:deploy` | Apply pending migrations in production                 |
+| `bun run db:studio`         | Launch Prisma Studio web GUI to browse data stores     |
+| `bun run email:retry`       | Drain queued transactional email from `email_outbox`   |
 
 ---
 
