@@ -53,7 +53,7 @@ export interface ScanDto {
   createdById: string | null;
 }
 
-type ScanWithRelations = ScanJob & {
+export type ScanWithRelations = ScanJob & {
   target?: Pick<Target, "id" | "label" | "origin"> | null;
   createdBy?: Pick<User, "id" | "name"> | null;
 };

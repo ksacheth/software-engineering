@@ -502,6 +502,58 @@ describe("controlling a scan", () => {
     ).toBe("SCAN_RESUMED");
   });
 
+  test("refuses to resume when the target's authorisation lapsed while paused", async () => {
+    // C.2 has no bypass, and a pause can outlive a verification. The check made
+    // when the scan started says nothing about whether the target is still
+    // authorised now.
+    const session = await createSession("ANALYST");
+    const target = await createVerifiedTarget(session.organizationId);
+    const scan = await seedScan(session, target, "PAUSED");
+
+    await prisma.target.update({
+      where: { id: target.id },
+      data: { isArchived: true },
+    });
+
+    const res = await request(api, session, `/api/scans/${scan.id}/resume`, {
+      method: "POST",
+    });
+
+    expect(res.status).toBe(422);
+    const problem = (await res.json()) as { code: string };
+    expect(problem.code).toBe("ARCHIVED");
+
+    // The scan must stay paused: a refused resume that still moved the row
+    // would leave a RUNNING scan nothing is allowed to run.
+    const row = await prisma.scanJob.findUniqueOrThrow({
+      where: { id: scan.id },
+    });
+    expect(row.status).toBe("PAUSED");
+    expect(
+      await prisma.auditLog.count({ where: { resourceId: scan.id } }),
+    ).toBe(0);
+  });
+
+  test("refuses to resume when verification expired while paused", async () => {
+    const session = await createSession("ANALYST");
+    const target = await createVerifiedTarget(session.organizationId);
+    const scan = await seedScan(session, target, "PAUSED");
+
+    await prisma.target.update({
+      where: { id: target.id },
+      data: { verificationExpiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const res = await request(api, session, `/api/scans/${scan.id}/resume`, {
+      method: "POST",
+    });
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe(
+      "VERIFICATION_EXPIRED",
+    );
+  });
+
   test("cancels a running scan and records when", async () => {
     const session = await createSession("ANALYST");
     const target = await createVerifiedTarget(session.organizationId);

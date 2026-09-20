@@ -1,4 +1,4 @@
-import { prisma, type ScanJob } from "@wvs/database";
+import { Prisma, prisma, type ScanJob } from "@wvs/database";
 import {
   canCancel,
   canPause,
@@ -12,7 +12,12 @@ import type { AuthContext } from "../../common/session";
 import { writeAudit } from "../../common/audit";
 import { reserveScan } from "./scan-reservation";
 import { enqueueScan } from "./scan-queue";
-import { findScanForOrg, toScanDto, type ScanDto } from "./scan-queries";
+import {
+  findScanForOrg,
+  toScanDto,
+  type ScanDto,
+  type ScanWithRelations,
+} from "./scan-queries";
 
 /**
  * F.3 scan trigger and control.
@@ -177,6 +182,75 @@ export type ControlScanResult =
   | { ok: true; scan: ScanDto }
   | { ok: false; refusal: ScanRefusal };
 
+type ControlOutcome =
+  | { kind: "refused"; refusal: ScanRefusal }
+  | { kind: "applied"; count: number };
+
+/**
+ * C.2 on the resume path.
+ *
+ * A scan can sit paused for days, and a target's authorisation can lapse while
+ * it does: archived, re-verification failed, or the verification simply
+ * expired. Resuming on the strength of the check made when the scan started
+ * would carry on crawling a target that is no longer authorised, and C.2 says
+ * there is no path that does that. So the question is re-asked here, not only
+ * at start.
+ *
+ * Runs inside the caller's transaction, alongside the compare-and-set that
+ * writes the status, so nothing can revoke the target between the two.
+ */
+async function resumeRefusal(
+  tx: Prisma.TransactionClient,
+  targetId: string,
+): Promise<ScanRefusal | null> {
+  const target = await tx.target.findUnique({
+    where: { id: targetId },
+    select: {
+      isArchived: true,
+      authorisationAck: true,
+      verificationStatus: true,
+      verificationExpiresAt: true,
+      verifiedIpRanges: true,
+    },
+  });
+  if (!target) return { kind: "TARGET_NOT_FOUND" };
+
+  const verdict = isScannable(target);
+  if (verdict.scannable) return null;
+  return { kind: "TARGET_NOT_SCANNABLE", reason: verdict.reason! };
+}
+
+/**
+ * Write the planned status change.
+ *
+ * The resume authorisation check shares this transaction with the
+ * compare-and-set, so the target cannot be archived or its verification lapse
+ * between being checked and the scan being marked RUNNING.
+ */
+async function applyControl(
+  ctx: AuthContext,
+  scan: ScanWithRelations,
+  action: ScanAction,
+  plan: ActionPlan,
+): Promise<ControlOutcome> {
+  return prisma.$transaction(async (tx): Promise<ControlOutcome> => {
+    if (action === "resume") {
+      const refusal = await resumeRefusal(tx, scan.targetId);
+      if (refusal) return { kind: "refused", refusal };
+    }
+
+    const updated = await tx.scanJob.updateMany({
+      where: {
+        id: scan.id,
+        organizationId: ctx.organizationId,
+        status: scan.status,
+      },
+      data: plan.data,
+    });
+    return { kind: "applied", count: updated.count };
+  });
+}
+
 /**
  * Pause, resume or cancel.
  *
@@ -206,16 +280,13 @@ export async function controlScan(
     };
   }
 
-  const updated = await prisma.scanJob.updateMany({
-    where: {
-      id: scan.id,
-      organizationId: ctx.organizationId,
-      status: scan.status,
-    },
-    data: plan.data,
-  });
+  const outcome = await applyControl(ctx, scan, action, plan);
 
-  if (updated.count === 0) {
+  if (outcome.kind === "refused") {
+    return { ok: false, refusal: outcome.refusal };
+  }
+
+  if (outcome.count === 0) {
     const current = await findScanForOrg(ctx, scanJobId);
     if (!current) return { ok: false, refusal: { kind: "SCAN_NOT_FOUND" } };
     const recheck = planAction(action, current);
