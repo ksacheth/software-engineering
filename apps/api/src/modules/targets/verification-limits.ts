@@ -1,5 +1,6 @@
-import Redis from 'ioredis';
-import { redisConnectionOptions } from '../../config/env';
+import Redis from "ioredis";
+import { redisConnectionOptions } from "../../config/env";
+import { incrementInWindow } from "../../common/fixed-window-counter";
 
 /**
  * Rate limits on verification attempts (F.2).
@@ -20,14 +21,17 @@ export const MAX_CONCURRENT_PER_ORG = 3;
 let client: Redis | null = null;
 
 function redis(): Redis {
-  client ??= new Redis({ ...redisConnectionOptions(), maxRetriesPerRequest: 2 });
+  client ??= new Redis({
+    ...redisConnectionOptions(),
+    maxRetriesPerRequest: 2,
+  });
   return client;
 }
 
 export type LimitRefusal =
-  | { kind: 'TOO_SOON'; retryAfterSeconds: number }
-  | { kind: 'HOURLY_QUOTA'; retryAfterSeconds: number }
-  | { kind: 'ORG_CONCURRENCY' };
+  | { kind: "TOO_SOON"; retryAfterSeconds: number }
+  | { kind: "HOURLY_QUOTA"; retryAfterSeconds: number }
+  | { kind: "ORG_CONCURRENCY" };
 
 export type LimitResult =
   | { allowed: true; release: () => Promise<void> }
@@ -50,30 +54,31 @@ export async function acquireVerificationSlot(
   try {
     const cooldownTtl = await r.ttl(cooldownKey);
     if (cooldownTtl > 0) {
-      return { allowed: false, refusal: { kind: 'TOO_SOON', retryAfterSeconds: cooldownTtl } };
-    }
-
-    const attempts = await r.incr(hourlyKey);
-    if (attempts === 1) {
-      await r.expire(hourlyKey, 3600);
-    }
-    if (attempts > MAX_ATTEMPTS_PER_HOUR) {
-      const ttl = await r.ttl(hourlyKey);
       return {
         allowed: false,
-        refusal: { kind: 'HOURLY_QUOTA', retryAfterSeconds: ttl > 0 ? ttl : 3600 },
+        refusal: { kind: "TOO_SOON", retryAfterSeconds: cooldownTtl },
       };
     }
 
-    const inflight = await r.incr(concurrencyKey);
-    // Guard against a leaked counter if a process dies mid-verification.
-    if (inflight === 1) await r.expire(concurrencyKey, 120);
-    if (inflight > MAX_CONCURRENT_PER_ORG) {
-      await r.decr(concurrencyKey);
-      return { allowed: false, refusal: { kind: 'ORG_CONCURRENCY' } };
+    const hourly = await incrementInWindow(r, hourlyKey, 3600);
+    if (hourly.count > MAX_ATTEMPTS_PER_HOUR) {
+      return {
+        allowed: false,
+        refusal: {
+          kind: "HOURLY_QUOTA",
+          retryAfterSeconds: hourly.ttlSeconds,
+        },
+      };
     }
 
-    await r.set(cooldownKey, '1', 'EX', MIN_SECONDS_BETWEEN_ATTEMPTS);
+    // Guard against a leaked counter if a process dies mid-verification.
+    const { count: inflight } = await incrementInWindow(r, concurrencyKey, 120);
+    if (inflight > MAX_CONCURRENT_PER_ORG) {
+      await r.decr(concurrencyKey);
+      return { allowed: false, refusal: { kind: "ORG_CONCURRENCY" } };
+    }
+
+    await r.set(cooldownKey, "1", "EX", MIN_SECONDS_BETWEEN_ATTEMPTS);
 
     return {
       allowed: true,
@@ -86,18 +91,21 @@ export async function acquireVerificationSlot(
       },
     };
   } catch (error) {
-    console.error('[verification-limits] redis unavailable, failing closed', error);
-    return { allowed: false, refusal: { kind: 'ORG_CONCURRENCY' } };
+    console.error(
+      "[verification-limits] redis unavailable, failing closed",
+      error,
+    );
+    return { allowed: false, refusal: { kind: "ORG_CONCURRENCY" } };
   }
 }
 
 export function describeLimitRefusal(refusal: LimitRefusal): string {
   switch (refusal.kind) {
-    case 'TOO_SOON':
+    case "TOO_SOON":
       return `Please wait ${refusal.retryAfterSeconds}s before retrying verification.`;
-    case 'HOURLY_QUOTA':
+    case "HOURLY_QUOTA":
       return `Verification attempt limit reached. Try again in ${Math.ceil(refusal.retryAfterSeconds / 60)} minutes.`;
-    case 'ORG_CONCURRENCY':
-      return 'Too many verifications in progress. Try again shortly.';
+    case "ORG_CONCURRENCY":
+      return "Too many verifications in progress. Try again shortly.";
   }
 }

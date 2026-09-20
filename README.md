@@ -43,13 +43,13 @@ call each other; the interface is a contract held in `packages/shared`
 
 **Triggers and control** (`/api/scans`, unversioned to match the rest of the API):
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /api/scans` | Start a scan; returns the scan id immediately (202) |
-| `GET /api/scans` | Cursor-paginated list, filterable by `targetId` and `status` |
-| `GET /api/scans/:id` | One scan, with its derived warnings and concurrency state |
-| `GET /api/scans/:id/findings` | Read-only finding projection for the live view |
-| `POST /api/scans/:id/pause` \| `/resume` \| `/cancel` | Control, along the legal transitions only |
+| Endpoint                                              | Purpose                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------ |
+| `POST /api/scans`                                     | Start a scan; returns the scan id immediately (202)          |
+| `GET /api/scans`                                      | Cursor-paginated list, filterable by `targetId` and `status` |
+| `GET /api/scans/:id`                                  | One scan, with its derived warnings and concurrency state    |
+| `GET /api/scans/:id/findings`                         | Read-only finding projection for the live view               |
+| `POST /api/scans/:id/pause` \| `/resume` \| `/cancel` | Control, along the legal transitions only                    |
 
 Errors are RFC 9457 problem details (`application/problem+json`); the older
 endpoints keep their custom shape. Reads are open to every role, state changes
@@ -77,7 +77,6 @@ send once per instance. Side effects belong at the single point of state
 transition, in the orchestrator.
 
 ---
-
 
 The persistence layer in [`packages/database`](packages/database) models all 6 core data stores via Prisma ORM:
 
@@ -215,7 +214,7 @@ From the repository root:
 | --------------------------- | ------------------------------------------------------ |
 | `bun run dev`               | Start the API and web app together in development mode |
 | `bun run typecheck`         | Run TypeScript compiler checks across all workspaces   |
-| `bun run test`              | Run every workspace's tests with a coverage report      |
+| `bun run test`              | Run every workspace's tests with a coverage report     |
 | `bun run db:generate`       | Generate Prisma client in `@wvs/database`              |
 | `bun run db:push`           | Push Prisma schema directly to PostgreSQL              |
 | `bun run db:migrate:dev`    | Create and apply database migrations                   |

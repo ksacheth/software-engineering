@@ -45,7 +45,9 @@ export interface ScanGatewayOptions {
   pingIntervalMs?: number;
 }
 
-function parsePath(url: string | undefined): { scanJobId: string | null } | null {
+function parsePath(
+  url: string | undefined,
+): { scanJobId: string | null } | null {
   const pathname = new URL(url ?? "/", "http://gateway.local").pathname;
   if (pathname === "/ws") return { scanJobId: null };
 
@@ -100,7 +102,10 @@ export function attachScanGateway(
   const ownership = new Map<string, { organizationId: string; at: number }>();
 
   /** Authorisation for the multiplexed path: an organisation sees only its own scans. */
-  async function ownsScan(organizationId: string, scanJobId: string): Promise<boolean> {
+  async function ownsScan(
+    organizationId: string,
+    scanJobId: string,
+  ): Promise<boolean> {
     const cached = ownership.get(scanJobId);
     if (cached && Date.now() - cached.at < OWNERSHIP_TTL_MS) {
       return cached.organizationId === organizationId;
@@ -115,7 +120,10 @@ export function attachScanGateway(
     if (ownership.size >= OWNERSHIP_CACHE_MAX) {
       ownership.clear();
     }
-    ownership.set(scanJobId, { organizationId: scan.organizationId, at: Date.now() });
+    ownership.set(scanJobId, {
+      organizationId: scan.organizationId,
+      at: Date.now(),
+    });
     return scan.organizationId === organizationId;
   }
 
@@ -178,7 +186,11 @@ export function attachScanGateway(
     });
   }
 
-  const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+  const onUpgrade = (
+    req: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+  ): void => {
     void handleUpgrade(req, socket, head).catch((error) => {
       console.error("[scan-gateway] upgrade failed", error);
       reject(socket, 500, "Internal Server Error");
@@ -187,7 +199,12 @@ export function attachScanGateway(
   server.on("upgrade", onUpgrade);
 
   const subscription = subscribeToScanEvents((event: ScanEvent) => {
-    void fanOut(event);
+    // `fanOut` awaits an ownership query and writes to sockets that may be
+    // closing, and nothing upstream catches a rejection out of the Redis
+    // message handler. One failed fan-out must not take the process down.
+    void fanOut(event).catch((error) => {
+      console.error("[scan-gateway] fan-out failed", error);
+    });
   });
 
   async function fanOut(event: ScanEvent): Promise<void> {

@@ -12,31 +12,31 @@
  */
 
 export const SCAN_STATUSES = [
-  'QUEUED',
-  'RUNNING',
-  'PAUSED',
-  'COMPLETED',
-  'FAILED',
-  'CANCELLED',
-  'ABORTED_SAFETY',
+  "QUEUED",
+  "RUNNING",
+  "PAUSED",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+  "ABORTED_SAFETY",
 ] as const;
 
 export type ScanStatus = (typeof SCAN_STATUSES)[number];
 
 export const SCAN_PHASES = [
-  'DISCOVERY',
-  'DETECTION',
-  'REPORTING',
-  'COMPLETED',
+  "DISCOVERY",
+  "DETECTION",
+  "REPORTING",
+  "COMPLETED",
 ] as const;
 
 export type ScanPhase = (typeof SCAN_PHASES)[number];
 
 export const TERMINAL_SCAN_STATUSES = [
-  'COMPLETED',
-  'FAILED',
-  'CANCELLED',
-  'ABORTED_SAFETY',
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+  "ABORTED_SAFETY",
 ] as const satisfies readonly ScanStatus[];
 
 /**
@@ -47,9 +47,9 @@ export const TERMINAL_SCAN_STATUSES = [
  * quota.
  */
 export const QUOTA_OCCUPYING_SCAN_STATUSES = [
-  'QUEUED',
-  'RUNNING',
-  'PAUSED',
+  "QUEUED",
+  "RUNNING",
+  "PAUSED",
 ] as const satisfies readonly ScanStatus[];
 
 const TERMINAL = new Set<ScanStatus>(TERMINAL_SCAN_STATUSES);
@@ -64,9 +64,9 @@ const QUOTA_OCCUPYING = new Set<ScanStatus>(QUOTA_OCCUPYING_SCAN_STATUSES);
  *   terminal -> (nothing)
  */
 const TRANSITIONS: Record<ScanStatus, readonly ScanStatus[]> = {
-  QUEUED: ['RUNNING', 'CANCELLED', 'FAILED'],
-  RUNNING: ['PAUSED', 'COMPLETED', 'FAILED', 'CANCELLED', 'ABORTED_SAFETY'],
-  PAUSED: ['RUNNING', 'CANCELLED', 'FAILED'],
+  QUEUED: ["RUNNING", "CANCELLED", "FAILED"],
+  RUNNING: ["PAUSED", "COMPLETED", "FAILED", "CANCELLED", "ABORTED_SAFETY"],
+  PAUSED: ["RUNNING", "CANCELLED", "FAILED"],
   COMPLETED: [],
   FAILED: [],
   CANCELLED: [],
@@ -85,7 +85,7 @@ export function isTerminalScanStatus(status: ScanStatus): boolean {
  */
 export function isScanStatus(value: unknown): value is ScanStatus {
   return (
-    typeof value === 'string' &&
+    typeof value === "string" &&
     (SCAN_STATUSES as readonly string[]).includes(value)
   );
 }
@@ -103,11 +103,11 @@ export function occupiesQuota(status: ScanStatus): boolean {
  * which command was impossible rather than quoting a transition.
  */
 export function canPause(status: ScanStatus): boolean {
-  return status === 'RUNNING';
+  return status === "RUNNING";
 }
 
 export function canResume(status: ScanStatus): boolean {
-  return status === 'PAUSED';
+  return status === "PAUSED";
 }
 
 export function canCancel(status: ScanStatus): boolean {

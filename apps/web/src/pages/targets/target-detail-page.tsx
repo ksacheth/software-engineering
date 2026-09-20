@@ -1,14 +1,16 @@
-import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getTarget, archiveTarget, deleteTarget } from "@/services/targets";
+import { Button } from "@/components/ui/button";
 import {
-  getTarget,
-  archiveTarget,
-  deleteTarget,
-} from '@/services/targets';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,15 +21,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Spinner } from '@/components/ui/spinner';
-import { ScannableBadge } from './components/scannable-badge';
-import { VerificationStatusBadge } from './components/verification-status-badge';
-import { VerificationInstructionsCard } from './components/verification-instructions-card';
-import { ScopeEditor } from './components/scope-editor';
-import { VerifiedIpSetCard } from './components/verified-ip-set-card';
-import { StartScanDialog } from '../scans/start-scan-dialog';
-import { useCanWrite } from '@/lib/use-role';
+} from "@/components/ui/alert-dialog";
+import { Spinner } from "@/components/ui/spinner";
+import { ScannableBadge } from "./components/scannable-badge";
+import { VerificationStatusBadge } from "./components/verification-status-badge";
+import { VerificationInstructionsCard } from "./components/verification-instructions-card";
+import { ScopeEditor } from "./components/scope-editor";
+import { VerifiedIpSetCard } from "./components/verified-ip-set-card";
+import { StartScanDialog } from "../scans/start-scan-dialog";
+import { useCanWrite } from "@/lib/use-role";
 import {
   ArrowLeft,
   ExternalLink,
@@ -36,8 +38,8 @@ import {
   Clock,
   ShieldCheck,
   KeyRound,
-} from 'lucide-react';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { toast } from "sonner";
 
 export function TargetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,7 +49,7 @@ export function TargetDetailPage() {
   const [showReverify, setShowReverify] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['target', id],
+    queryKey: ["target", id],
     queryFn: () => getTarget(id!),
     enabled: Boolean(id),
   });
@@ -55,24 +57,28 @@ export function TargetDetailPage() {
   const archiveMutation = useMutation({
     mutationFn: () => archiveTarget(id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['target', id] });
-      queryClient.invalidateQueries({ queryKey: ['targets'] });
-      toast.success('Target archived');
+      queryClient.invalidateQueries({ queryKey: ["target", id] });
+      queryClient.invalidateQueries({ queryKey: ["targets"] });
+      toast.success("Target archived");
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to archive target');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to archive target",
+      );
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTarget(id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['targets'] });
-      toast.success('Target deleted');
-      navigate('/targets');
+      queryClient.invalidateQueries({ queryKey: ["targets"] });
+      toast.success("Target deleted");
+      navigate("/targets");
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete target');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete target",
+      );
     },
   });
 
@@ -90,7 +96,9 @@ export function TargetDetailPage() {
         <Alert variant="destructive">
           <AlertTitle>Error loading target</AlertTitle>
           <AlertDescription>
-            {error instanceof Error ? error.message : 'Target could not be found.'}
+            {error instanceof Error
+              ? error.message
+              : "Target could not be found."}
           </AlertDescription>
         </Alert>
         <Button variant="outline" asChild className="w-fit">
@@ -107,23 +115,31 @@ export function TargetDetailPage() {
 
   // Expiry check: show warning band when verificationExpiresAt is under 14 days away (display only, not a verdict)
   const now = Date.now();
-  const expiresAtMs = target.verificationExpiresAt ? new Date(target.verificationExpiresAt).getTime() : null;
+  const expiresAtMs = target.verificationExpiresAt
+    ? new Date(target.verificationExpiresAt).getTime()
+    : null;
   const msRemaining = expiresAtMs !== null ? expiresAtMs - now : null;
-  const daysRemaining = msRemaining !== null ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24)) : null;
+  const daysRemaining =
+    msRemaining !== null
+      ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24))
+      : null;
   const isExpiringSoon =
-    target.verificationStatus === 'VERIFIED' &&
+    target.verificationStatus === "VERIFIED" &&
     msRemaining !== null &&
     msRemaining > 0 &&
     msRemaining <= 14 * 24 * 60 * 60 * 1000;
 
-  const isVerified = target.verificationStatus === 'VERIFIED';
+  const isVerified = target.verificationStatus === "VERIFIED";
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-6xl mx-auto">
       {/* Top Navigation & Actions Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/targets" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+          <Link
+            to="/targets"
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft data-icon="inline-start" />
             Back to Targets
           </Link>
@@ -148,7 +164,11 @@ export function TargetDetailPage() {
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 border-destructive/30">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 border-destructive/30"
+              >
                 <Trash2 data-icon="inline-start" />
                 Delete Target
               </Button>
@@ -157,7 +177,10 @@ export function TargetDetailPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete target?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action is permanent and cannot be undone. Target <span className="font-semibold">{target.origin}</span>, along with all associated scan records and findings, will be removed.
+                  This action is permanent and cannot be undone. Target{" "}
+                  <span className="font-semibold">{target.origin}</span>, along
+                  with all associated scan records and findings, will be
+                  removed.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -166,7 +189,9 @@ export function TargetDetailPage() {
                   onClick={() => deleteMutation.mutate()}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
-                  {deleteMutation.isPending && <Spinner data-icon="inline-start" />}
+                  {deleteMutation.isPending && (
+                    <Spinner data-icon="inline-start" />
+                  )}
                   Delete
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -180,7 +205,9 @@ export function TargetDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight">{target.label}</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {target.label}
+              </h1>
               <VerificationStatusBadge status={target.verificationStatus} />
               <ScannableBadge scannable={scannable} showReasonText />
             </div>
@@ -196,7 +223,9 @@ export function TargetDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {canWrite && <StartScanDialog target={target} scannable={scannable} />}
+            {canWrite && (
+              <StartScanDialog target={target} scannable={scannable} />
+            )}
             <Button variant="secondary" size="sm" asChild>
               <Link to={`/targets/${target.id}/verify`}>
                 <KeyRound data-icon="inline-start" />
@@ -211,7 +240,8 @@ export function TargetDetailPage() {
             <Archive className="size-4" />
             <AlertTitle>Target Archived</AlertTitle>
             <AlertDescription>
-              This target is archived. Scanning and verification operations are disabled.
+              This target is archived. Scanning and verification operations are
+              disabled.
             </AlertDescription>
           </Alert>
         )}
@@ -224,11 +254,16 @@ export function TargetDetailPage() {
               Ownership Verification Expiring Soon
             </AlertTitle>
             <AlertDescription className="text-amber-800 dark:text-amber-200">
-              Ownership verification expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'} (on{' '}
-              {new Date(target.verificationExpiresAt!).toLocaleDateString(undefined, {
-                dateStyle: 'medium',
-              })}
-              ). Per C.2, scanning is refused once verification lapses. Re-verify ownership to avoid interruption.
+              Ownership verification expires in {daysRemaining} day
+              {daysRemaining === 1 ? "" : "s"} (on{" "}
+              {new Date(target.verificationExpiresAt!).toLocaleDateString(
+                undefined,
+                {
+                  dateStyle: "medium",
+                },
+              )}
+              ). Per C.2, scanning is refused once verification lapses.
+              Re-verify ownership to avoid interruption.
             </AlertDescription>
           </Alert>
         )}
@@ -261,7 +296,9 @@ export function TargetDetailPage() {
             <div className="flex justify-between py-1.5 border-b border-border text-sm">
               <span className="text-muted-foreground">Method</span>
               <span className="font-mono text-xs font-medium">
-                {target.verificationMethod === 'DNS_TXT' ? 'DNS TXT Record' : 'Well-Known File'}
+                {target.verificationMethod === "DNS_TXT"
+                  ? "DNS TXT Record"
+                  : "Well-Known File"}
               </span>
             </div>
 
@@ -275,7 +312,7 @@ export function TargetDetailPage() {
               <span className="text-xs font-mono">
                 {target.verifiedAt
                   ? new Date(target.verifiedAt).toLocaleString()
-                  : '—'}
+                  : "—"}
               </span>
             </div>
 
@@ -284,7 +321,7 @@ export function TargetDetailPage() {
               <span className="text-xs font-mono">
                 {target.verificationExpiresAt
                   ? new Date(target.verificationExpiresAt).toLocaleString()
-                  : '—'}
+                  : "—"}
               </span>
             </div>
 
@@ -327,12 +364,15 @@ export function TargetDetailPage() {
               <span className="text-xs font-mono">
                 {target.authorisationAckAt
                   ? new Date(target.authorisationAckAt).toLocaleString()
-                  : '—'}
+                  : "—"}
               </span>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed pt-1">
-              The user has legally attested that they own or have written permission from the owner to conduct security tests against this target, and acknowledged that unauthorised scanning is a criminal offence. Recorded once at registration and not editable.
+              The user has legally attested that they own or have written
+              permission from the owner to conduct security tests against this
+              target, and acknowledged that unauthorised scanning is a criminal
+              offence. Recorded once at registration and not editable.
             </p>
           </CardContent>
         </Card>

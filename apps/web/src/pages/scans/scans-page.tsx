@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { SCAN_STATUSES, type ScanStatus } from '@wvs/shared';
-import { fetchScans } from '@/services/scans';
-import { fetchTargets } from '@/services/targets';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { SCAN_STATUSES, type ScanStatus } from "@wvs/shared";
+import { fetchScans } from "@/services/scans";
+import { fetchTargets } from "@/services/targets";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,14 +12,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Empty,
   EmptyContent,
@@ -27,19 +27,22 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Spinner } from '@/components/ui/spinner';
-import { ScanStatusBadge } from './components/scan-status-badge';
-import { Radar, ArrowRight } from 'lucide-react';
+} from "@/components/ui/empty";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+import { ScanStatusBadge } from "./components/scan-status-badge";
+import { Radar, ArrowRight } from "lucide-react";
 
-const ALL = 'ALL';
+const ALL = "ALL";
 
-function formatStarted(scan: { startedAt: string | null; queuedAt: string }): string {
+function formatStarted(scan: {
+  startedAt: string | null;
+  queuedAt: string;
+}): string {
   const value = scan.startedAt ?? scan.queuedAt;
   return new Date(value).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    dateStyle: "medium",
+    timeStyle: "short",
   });
 }
 
@@ -49,12 +52,12 @@ export function ScansPage() {
   const [status, setStatus] = useState<string>(ALL);
 
   const targetsQuery = useQuery({
-    queryKey: ['targets'],
+    queryKey: ["targets"],
     queryFn: () => fetchTargets(true),
   });
 
   const scansQuery = useInfiniteQuery({
-    queryKey: ['scans', { targetId, status }],
+    queryKey: ["scans", { targetId, status }],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       fetchScans(
@@ -118,7 +121,7 @@ export function ScansPage() {
           <AlertDescription>
             {scansQuery.error instanceof Error
               ? scansQuery.error.message
-              : 'Could not fetch scans.'}
+              : "Could not fetch scans."}
           </AlertDescription>
         </Alert>
       )}
@@ -138,7 +141,8 @@ export function ScansPage() {
             <EmptyHeader>
               <EmptyTitle>No scans yet</EmptyTitle>
               <EmptyDescription>
-                Open a verified target and start a scan to see its progress here.
+                Open a verified target and start a scan to see its progress
+                here.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -174,9 +178,16 @@ export function ScansPage() {
                 >
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">
-                        {scan.target?.label ?? 'Deleted target'}
-                      </span>
+                      {/* The row click is a pointer affordance only. The link
+                          is what makes the scan reachable by keyboard and by
+                          a screen reader (SRS 3.2.1), as on the targets list. */}
+                      <Link
+                        to={`/scans/${scan.id}`}
+                        className="text-sm font-medium transition-colors hover:text-primary"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {scan.target?.label ?? "Deleted target"}
+                      </Link>
                       <span className="font-mono text-xs text-muted-foreground">
                         {scan.target?.origin ?? scan.targetId}
                       </span>
@@ -192,7 +203,9 @@ export function ScansPage() {
                   <TableCell className="text-right text-sm">
                     {scan.findingsCount}
                     {scan.failureReason ? (
-                      <span className="ml-2 text-xs text-destructive">failed</span>
+                      <span className="ml-2 text-xs text-destructive">
+                        failed
+                      </span>
                     ) : null}
                   </TableCell>
                 </TableRow>
@@ -207,7 +220,9 @@ export function ScansPage() {
                 onClick={() => void scansQuery.fetchNextPage()}
                 disabled={scansQuery.isFetchingNextPage}
               >
-                {scansQuery.isFetchingNextPage && <Spinner data-icon="inline-start" />}
+                {scansQuery.isFetchingNextPage && (
+                  <Spinner data-icon="inline-start" />
+                )}
                 Load more
               </Button>
             </div>

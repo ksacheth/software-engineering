@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   SCAN_CONFIGURATION_BOUNDS,
   SCAN_PROFILE_PRESETS,
   SCAN_PROFILES,
   type ScanConfiguration,
   type ScanProfile,
-} from '@wvs/shared';
+} from "@wvs/shared";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Field,
   FieldDescription,
@@ -24,18 +24,18 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Spinner } from '@/components/ui/spinner';
-import { Play, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
-import { startScan, ScanApiError } from '@/services/scans';
-import type { ScannableVerdict, Target } from '@/services/targets';
-import { formatNotScannableReason } from '../targets/components/scannable-badge';
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+import { Play, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import { startScan, ScanApiError } from "@/services/scans";
+import type { ScannableVerdict, Target } from "@/services/targets";
+import { formatNotScannableReason } from "../targets/components/scannable-badge";
 
 /**
  * Start a scan from the target detail page.
@@ -47,17 +47,17 @@ import { formatNotScannableReason } from '../targets/components/scannable-badge'
  */
 
 const PROFILE_SUMMARY: Record<ScanProfile, string> = {
-  PASSIVE: 'Gentlest. Small surface, minimum load on a production site.',
-  STANDARD: 'The default balance of coverage and time.',
-  THOROUGH: 'Widest crawl for a staging or low-traffic target.',
+  PASSIVE: "Gentlest. Small surface, minimum load on a production site.",
+  STANDARD: "The default balance of coverage and time.",
+  THOROUGH: "Widest crawl for a staging or low-traffic target.",
 };
 
 const LIMIT_FIELDS: { key: keyof ScanConfiguration; label: string }[] = [
-  { key: 'rateLimit', label: 'Requests / second' },
-  { key: 'concurrency', label: 'Concurrency' },
-  { key: 'maxDepth', label: 'Crawl depth' },
-  { key: 'maxPages', label: 'Page ceiling' },
-  { key: 'maxRequests', label: 'Request ceiling' },
+  { key: "rateLimit", label: "Requests / second" },
+  { key: "concurrency", label: "Concurrency" },
+  { key: "maxDepth", label: "Crawl depth" },
+  { key: "maxPages", label: "Page ceiling" },
+  { key: "maxRequests", label: "Request ceiling" },
 ];
 
 export interface StartScanDialogProps {
@@ -69,9 +69,11 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [profile, setProfile] = useState<ScanProfile>('STANDARD');
+  const [profile, setProfile] = useState<ScanProfile>("STANDARD");
   const [customise, setCustomise] = useState(false);
-  const [overrides, setOverrides] = useState<Partial<Record<keyof ScanConfiguration, string>>>({});
+  const [overrides, setOverrides] = useState<
+    Partial<Record<keyof ScanConfiguration, string>>
+  >({});
   const [problems, setProblems] = useState<string[]>([]);
 
   const effective = useMemo((): ScanConfiguration => {
@@ -81,7 +83,7 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
     const resolved = { ...preset };
     for (const { key } of LIMIT_FIELDS) {
       const raw = overrides[key];
-      if (raw === undefined || raw.trim() === '') continue;
+      if (raw === undefined || raw.trim() === "") continue;
       const parsed = Number(raw);
       if (Number.isFinite(parsed)) resolved[key] = parsed;
     }
@@ -96,9 +98,9 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
         configuration: customise ? effective : undefined,
       }),
     onSuccess: ({ scan }) => {
-      void queryClient.invalidateQueries({ queryKey: ['scans'] });
+      void queryClient.invalidateQueries({ queryKey: ["scans"] });
       setOpen(false);
-      toast.success('Scan queued');
+      toast.success("Scan queued");
       navigate(`/scans/${scan.id}`);
     },
     onError: (error: unknown) => {
@@ -110,7 +112,11 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
         );
         return;
       }
-      setProblems([error instanceof Error ? error.message : 'The scan could not be started']);
+      setProblems([
+        error instanceof Error
+          ? error.message
+          : "The scan could not be started",
+      ]);
     },
   });
 
@@ -140,8 +146,8 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
             Start a scan of {target.label}
           </DialogTitle>
           <DialogDescription>
-            {target.origin}. The profile sets the crawl limits; you can lower them for a
-            fragile target, but never above system policy.
+            {target.origin}. The profile sets the crawl limits; you can lower
+            them for a fragile target, but never above system policy.
           </DialogDescription>
         </DialogHeader>
 
@@ -179,16 +185,20 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
                   htmlFor={`profile-${option}`}
                   className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3"
                 >
-                  <RadioGroupItem value={option} id={`profile-${option}`} className="mt-0.5" />
+                  <RadioGroupItem
+                    value={option}
+                    id={`profile-${option}`}
+                    className="mt-0.5"
+                  />
                   <span className="flex flex-col gap-1">
                     <span className="text-sm font-medium">{option}</span>
                     <span className="text-xs text-muted-foreground">
                       {PROFILE_SUMMARY[option]}
                     </span>
                     <span className="font-mono text-xs text-muted-foreground">
-                      {SCAN_PROFILE_PRESETS[option].rateLimit} req/s ·{' '}
-                      {SCAN_PROFILE_PRESETS[option].maxDepth} deep ·{' '}
-                      {SCAN_PROFILE_PRESETS[option].maxPages} pages ·{' '}
+                      {SCAN_PROFILE_PRESETS[option].rateLimit} req/s ·{" "}
+                      {SCAN_PROFILE_PRESETS[option].maxDepth} deep ·{" "}
+                      {SCAN_PROFILE_PRESETS[option].maxPages} pages ·{" "}
                       {SCAN_PROFILE_PRESETS[option].maxRequests} requests
                     </span>
                   </span>
@@ -204,7 +214,9 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
               onCheckedChange={(checked) => setCustomise(checked === true)}
             />
             <div className="flex flex-col gap-1">
-              <FieldLabel htmlFor="customise-limits">Customise limits</FieldLabel>
+              <FieldLabel htmlFor="customise-limits">
+                Customise limits
+              </FieldLabel>
               <FieldDescription>
                 Leave a field blank to keep the profile value. Bounds: rate 1-
                 {SCAN_CONFIGURATION_BOUNDS.rateLimit.max}/s, depth 1-
@@ -226,9 +238,12 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
                     min={SCAN_CONFIGURATION_BOUNDS[key].min}
                     max={SCAN_CONFIGURATION_BOUNDS[key].max}
                     placeholder={String(SCAN_PROFILE_PRESETS[profile][key])}
-                    value={overrides[key] ?? ''}
+                    value={overrides[key] ?? ""}
                     onChange={(event) =>
-                      setOverrides((current) => ({ ...current, [key]: event.target.value }))
+                      setOverrides((current) => ({
+                        ...current,
+                        [key]: event.target.value,
+                      }))
                     }
                   />
                 </Field>
@@ -237,17 +252,25 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
           )}
 
           <p className="rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
-            Will run with: {effective.rateLimit} req/s · concurrency {effective.concurrency} ·
-            depth {effective.maxDepth} · {effective.maxPages} pages · {effective.maxRequests}{' '}
-            requests
+            Will run with: {effective.rateLimit} req/s · concurrency{" "}
+            {effective.concurrency} · depth {effective.maxDepth} ·{" "}
+            {effective.maxPages} pages · {effective.maxRequests} requests
           </p>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Spinner data-icon="inline-start" /> : <Play data-icon="inline-start" />}
+              {mutation.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <Play data-icon="inline-start" />
+              )}
               Start Scan
             </Button>
           </DialogFooter>

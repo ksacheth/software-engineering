@@ -1,5 +1,9 @@
 import { Queue } from "bullmq";
-import { SCAN_QUEUE_NAME, scanJobQueueId, type ScanJobPayload } from "@wvs/shared";
+import {
+  SCAN_QUEUE_NAME,
+  scanJobQueueId,
+  type ScanJobPayload,
+} from "@wvs/shared";
 import { redisConnectionOptions } from "../../config/env";
 
 /**

@@ -1,9 +1,20 @@
-import { Router, type NextFunction, type Request, type Response } from "express";
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { isScanStatus, SCAN_STATUSES } from "@wvs/shared";
 import { requireAuth, requireRole } from "../../common/session";
 import { sendProblem } from "../../common/problem";
 import { parseStartScanRequest } from "./scan-request";
-import { describeNotScannable, startScan, controlScan, type ScanRefusal, type ScanAction } from "./scan-service";
+import {
+  describeNotScannable,
+  startScan,
+  controlScan,
+  type ScanRefusal,
+  type ScanAction,
+} from "./scan-service";
 import {
   decodeScanCursor,
   findScanForOrg,
@@ -12,7 +23,10 @@ import {
   MAX_PAGE_SIZE,
   toScanDto,
 } from "./scan-queries";
-import { acquireScanInitiation, MAX_STARTS_PER_MINUTE } from "./scan-initiation";
+import {
+  acquireScanInitiation,
+  MAX_STARTS_PER_MINUTE,
+} from "./scan-initiation";
 
 /**
  * F.3 scan trigger, progress reads and control.
@@ -101,7 +115,8 @@ export function createScansRouter(): Router {
         sendProblem(res, {
           title: "Validation failed",
           status: 400,
-          detail: "The scan request contains problems that must be fixed together.",
+          detail:
+            "The scan request contains problems that must be fixed together.",
           errors: parsed.errors,
         });
         return;
@@ -187,13 +202,21 @@ export function createScansRouter(): Router {
           title: "Validation failed",
           status: 400,
           detail: "Invalid cursor.",
-          errors: [{ pointer: "/cursor", detail: "cursor is not a cursor this API issued." }],
+          errors: [
+            {
+              pointer: "/cursor",
+              detail: "cursor is not a cursor this API issued.",
+            },
+          ],
         });
         return;
       }
 
       const result = await listScans(ctx, {
-        targetId: typeof req.query.targetId === "string" ? req.query.targetId : undefined,
+        targetId:
+          typeof req.query.targetId === "string"
+            ? req.query.targetId
+            : undefined,
         status: statusParam,
         limit,
         cursor: typeof cursorParam === "string" ? cursorParam : undefined,
@@ -236,18 +259,20 @@ export function createScansRouter(): Router {
   });
 
   // -------------------------------------------------------------- control ---
-  const control = (action: ScanAction) => async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await controlScan(req.auth!, req.params.id!, action);
-      if (!result.ok) {
-        sendRefusal(res, result.refusal);
-        return;
+  const control =
+    (action: ScanAction) =>
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await controlScan(req.auth!, req.params.id!, action);
+        if (!result.ok) {
+          sendRefusal(res, result.refusal);
+          return;
+        }
+        res.json({ scan: result.scan });
+      } catch (error) {
+        next(error);
       }
-      res.json({ scan: result.scan });
-    } catch (error) {
-      next(error);
-    }
-  };
+    };
 
   router.post("/:id/pause", control("pause"));
   router.post("/:id/resume", control("resume"));

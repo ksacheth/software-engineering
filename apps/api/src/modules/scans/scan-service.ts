@@ -140,7 +140,9 @@ const ACTION_AUDIT: Record<ScanAction, AuditAction> = {
 interface ActionPlan {
   allowed: boolean;
   detail: string;
-  data: Partial<Pick<ScanJob, "status" | "startedAt" | "pausedAt" | "cancelledAt">>;
+  data: Partial<
+    Pick<ScanJob, "status" | "startedAt" | "pausedAt" | "cancelledAt">
+  >;
 }
 
 function planAction(action: ScanAction, scan: ScanJob): ActionPlan {
@@ -232,7 +234,11 @@ export async function controlScan(
     action: ACTION_AUDIT[action],
     resourceType: "scan",
     resourceId: scan.id,
-    metadata: { from: scan.status, to: plan.data.status, targetId: scan.targetId },
+    metadata: {
+      from: scan.status,
+      to: plan.data.status,
+      targetId: scan.targetId,
+    },
   });
 
   const refreshed = await findScanForOrg(ctx, scanJobId);

@@ -36,7 +36,10 @@ const BASE_DATABASE_URL = new URL(
  * database does not, because the raw Postgres driver would forward it as a
  * server option and fail.
  */
-const SOURCE_DATABASE_URL = withDatabase(BASE_DATABASE_URL, TEST_DATABASE_NAME).toString();
+const SOURCE_DATABASE_URL = withDatabase(
+  BASE_DATABASE_URL,
+  TEST_DATABASE_NAME,
+).toString();
 const ADMIN_DATABASE_URL = withDatabase(BASE_DATABASE_URL, "postgres");
 ADMIN_DATABASE_URL.search = "";
 
@@ -87,7 +90,8 @@ export async function prepareDatabase(): Promise<void> {
   );
   if (Number(migrated[0]?.count ?? 0) > 0) return;
 
-  const databaseDir = new URL("../../../../packages/database/", import.meta.url).pathname;
+  const databaseDir = new URL("../../../../packages/database/", import.meta.url)
+    .pathname;
   const result = Bun.spawnSync(["bun", "run", "prisma", "migrate", "deploy"], {
     cwd: databaseDir,
     env: {
@@ -112,7 +116,11 @@ export async function prepareDatabase(): Promise<void> {
  * and restored immediately after. Nothing in application code can do this: the
  * production role has no DDL rights and never runs a reset.
  */
-const APPEND_ONLY_TABLES = ["audit_log", "url_ledger", "finding_triage_history"];
+const APPEND_ONLY_TABLES = [
+  "audit_log",
+  "url_ledger",
+  "finding_triage_history",
+];
 
 /** Truncate every application table, leaving the migration ledger alone. */
 export async function resetDatabase(): Promise<void> {
@@ -131,7 +139,9 @@ export async function resetDatabase(): Promise<void> {
     );
   }
   try {
-    await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
+    await prisma.$executeRawUnsafe(
+      `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`,
+    );
   } finally {
     for (const table of appendOnly) {
       await prisma.$executeRawUnsafe(
@@ -197,7 +207,9 @@ export interface TestSession {
  * is the genuine article, including its signature, and the organisation comes
  * from the signup hook rather than from a fixture.
  */
-export async function createSession(role: Role = "ANALYST"): Promise<TestSession> {
+export async function createSession(
+  role: Role = "ANALYST",
+): Promise<TestSession> {
   const email = `${randomUUID()}@example.test`;
   const password = TEST_PASSWORD;
 
@@ -219,8 +231,9 @@ export async function createSession(role: Role = "ANALYST"): Promise<TestSession
     returnHeaders: true,
   });
 
-  const setCookies =
-    signIn.headers.getSetCookie?.() ?? [signIn.headers.get("set-cookie") ?? ""];
+  const setCookies = signIn.headers.getSetCookie?.() ?? [
+    signIn.headers.get("set-cookie") ?? "",
+  ];
   const cookie = setCookies
     .map((entry) => entry.split(";")[0])
     .filter(Boolean)

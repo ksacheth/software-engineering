@@ -70,20 +70,47 @@ export function useLiveScan(
   const findingsRef = useRef(new Map<string, ScanFindingSummary>());
 
   /**
-   * Apply a patch, newest wins.
+   * Discard the previous scan's live state when the id changes.
    *
-   * The orchestrator may publish several events within the same millisecond
-   * (a status change and the progress that accompanied it), so equal
-   * timestamps merge rather than replace: a naive last-write-wins would let a
-   * progress event erase the status that arrived with it.
+   * `/scans/:id` is one route, so React Router reuses this component when only
+   * the parameter changes. Without this the previous scan's findings union
+   * into the new scan's list, and its patch wins the `updatedAt` comparison
+   * below, so a finished scan's status can render on a queued one.
+   *
+   * Rendered rather than deferred to an effect: an effect would let one paint
+   * of the new id show the old scan's data.
+   */
+  const renderedScanJobId = useRef(scanJobId);
+  if (renderedScanJobId.current !== scanJobId) {
+    renderedScanJobId.current = scanJobId;
+    findingsRef.current = new Map();
+    setPatch(null);
+    setLastEventAt(null);
+    setStreamedWarnings([]);
+    setFindings([]);
+  }
+
+  /**
+   * Apply a patch: newest wins per field, and fields always accumulate.
+   *
+   * Events carry disjoint field sets. `scan.progress` carries counters,
+   * `scan.status` carries a status, and neither carries the other. Replacing
+   * the patch on a newer event would therefore drop whatever the previous
+   * event contributed, and since the surviving patch still out-dates the REST
+   * snapshot, the view falls back to the snapshot's older counters and
+   * visibly moves backwards.
+   *
+   * So every event merges. A newer event wins the fields it carries and the
+   * timestamp; an older one that arrives late fills only the gaps, because
+   * what is already applied is by definition fresher.
    */
   const applyPatch = useCallback((at: string, fields: Partial<Scan>) => {
     setPatch((current) => {
-      if (current && at < current.at) return current;
-      if (current && at === current.at) {
-        return { at: current.at, fields: { ...current.fields, ...fields } };
+      if (!current) return { at, fields };
+      if (at < current.at) {
+        return { at: current.at, fields: { ...fields, ...current.fields } };
       }
-      return { at, fields };
+      return { at, fields: { ...current.fields, ...fields } };
     });
     setLastEventAt((current) => (current === null || at > current ? at : current));
   }, []);

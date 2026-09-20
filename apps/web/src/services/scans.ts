@@ -4,7 +4,7 @@ import type {
   ScanProfile,
   ScanStatus,
   ScanWarning,
-} from '@wvs/shared';
+} from "@wvs/shared";
 
 /**
  * F.3 scan service.
@@ -15,7 +15,13 @@ import type {
  * as well as the human-readable detail.
  */
 
-export type { ScanConfiguration, ScanPhase, ScanProfile, ScanStatus, ScanWarning };
+export type {
+  ScanConfiguration,
+  ScanPhase,
+  ScanProfile,
+  ScanStatus,
+  ScanWarning,
+};
 
 export interface ScanTargetRef {
   id: string;
@@ -72,10 +78,14 @@ export class ScanApiError extends Error {
   constructor(
     status: number,
     message: string,
-    options: { code?: string; scanStatus?: string; errors?: ProblemFieldError[] } = {},
+    options: {
+      code?: string;
+      scanStatus?: string;
+      errors?: ProblemFieldError[];
+    } = {},
   ) {
     super(message);
-    this.name = 'ScanApiError';
+    this.name = "ScanApiError";
     this.status = status;
     this.code = options.code;
     this.scanStatus = options.scanStatus;
@@ -103,12 +113,14 @@ export interface StartScanInput {
   configuration?: Partial<ScanConfiguration>;
 }
 
-export async function startScan(input: StartScanInput): Promise<{ scan: Scan }> {
-  const res = await fetch('/api/scans', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function startScan(
+  input: StartScanInput,
+): Promise<{ scan: Scan }> {
+  const res = await fetch("/api/scans", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
-    credentials: 'same-origin',
+    credentials: "same-origin",
   });
   return handleResponse<{ scan: Scan }>(res);
 }
@@ -123,19 +135,19 @@ export async function fetchScans(
   cursor?: string,
 ): Promise<{ scans: Scan[]; nextCursor: string | null }> {
   const params = new URLSearchParams();
-  if (filters.targetId) params.set('targetId', filters.targetId);
-  if (filters.status) params.set('status', filters.status);
-  if (cursor) params.set('cursor', cursor);
+  if (filters.targetId) params.set("targetId", filters.targetId);
+  if (filters.status) params.set("status", filters.status);
+  if (cursor) params.set("cursor", cursor);
 
   const query = params.toString();
-  const res = await fetch(`/api/scans${query ? `?${query}` : ''}`, {
-    credentials: 'same-origin',
+  const res = await fetch(`/api/scans${query ? `?${query}` : ""}`, {
+    credentials: "same-origin",
   });
   return handleResponse<{ scans: Scan[]; nextCursor: string | null }>(res);
 }
 
 export async function fetchScan(id: string): Promise<{ scan: Scan }> {
-  const res = await fetch(`/api/scans/${id}`, { credentials: 'same-origin' });
+  const res = await fetch(`/api/scans/${id}`, { credentials: "same-origin" });
   return handleResponse<{ scan: Scan }>(res);
 }
 
@@ -158,30 +170,32 @@ export interface ScanFindingSummary {
 export async function fetchScanFindings(
   id: string,
 ): Promise<{ findings: ScanFindingSummary[] }> {
-  const res = await fetch(`/api/scans/${id}/findings`, { credentials: 'same-origin' });
+  const res = await fetch(`/api/scans/${id}/findings`, {
+    credentials: "same-origin",
+  });
   return handleResponse<{ findings: ScanFindingSummary[] }>(res);
 }
 
 export async function pauseScan(id: string): Promise<{ scan: Scan }> {
   const res = await fetch(`/api/scans/${id}/pause`, {
-    method: 'POST',
-    credentials: 'same-origin',
+    method: "POST",
+    credentials: "same-origin",
   });
   return handleResponse<{ scan: Scan }>(res);
 }
 
 export async function resumeScan(id: string): Promise<{ scan: Scan }> {
   const res = await fetch(`/api/scans/${id}/resume`, {
-    method: 'POST',
-    credentials: 'same-origin',
+    method: "POST",
+    credentials: "same-origin",
   });
   return handleResponse<{ scan: Scan }>(res);
 }
 
 export async function cancelScan(id: string): Promise<{ scan: Scan }> {
   const res = await fetch(`/api/scans/${id}/cancel`, {
-    method: 'POST',
-    credentials: 'same-origin',
+    method: "POST",
+    credentials: "same-origin",
   });
   return handleResponse<{ scan: Scan }>(res);
 }

@@ -1,5 +1,6 @@
 import Redis from "ioredis";
 import { redisConnectionOptions } from "../../config/env";
+import { incrementInWindow } from "../../common/fixed-window-counter";
 
 /**
  * NFR-SEC-4: scan initiation is rate-limited.
@@ -19,7 +20,10 @@ const WINDOW_SECONDS = 60;
 let client: Redis | null = null;
 
 function redis(): Redis {
-  client ??= new Redis({ ...redisConnectionOptions(), maxRetriesPerRequest: 2 });
+  client ??= new Redis({
+    ...redisConnectionOptions(),
+    maxRetriesPerRequest: 2,
+  });
   return client;
 }
 
@@ -33,13 +37,13 @@ export async function acquireScanInitiation(
   const key = `scan:initiate:${organizationId}`;
 
   try {
-    const starts = await redis().incr(key);
-    if (starts === 1) {
-      await redis().expire(key, WINDOW_SECONDS);
-    }
-    if (starts > MAX_STARTS_PER_MINUTE) {
-      const ttl = await redis().ttl(key);
-      return { allowed: false, retryAfterSeconds: ttl > 0 ? ttl : WINDOW_SECONDS };
+    const { count, ttlSeconds } = await incrementInWindow(
+      redis(),
+      key,
+      WINDOW_SECONDS,
+    );
+    if (count > MAX_STARTS_PER_MINUTE) {
+      return { allowed: false, retryAfterSeconds: ttlSeconds };
     }
     return { allowed: true };
   } catch (error) {

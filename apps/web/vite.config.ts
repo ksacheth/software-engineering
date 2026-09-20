@@ -1,8 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import fs from "node:fs";
+import path from "node:path";
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 /**
  * The API port, read from the repo-root .env so the dashboard's dev-time
@@ -10,11 +10,13 @@ import { defineConfig } from 'vite';
  */
 function readApiPort(): string {
   try {
-    const env = fs.readFileSync(path.resolve(__dirname, '../../.env'), 'utf8');
-    const match = /^PORT=(.+)$/m.exec(env);
-    return match ? match[1]!.trim().replace(/^["']|["']$/g, '') : '4100';
+    const env = fs.readFileSync(path.resolve(__dirname, "../../.env"), "utf8");
+    // Digits only: a line such as `PORT=4100 # API port` would otherwise be
+    // carried verbatim into the dashboard's dev WebSocket URL.
+    const match = /^PORT=["']?(\d+)["']?\s*(?:#.*)?$/m.exec(env);
+    return match ? match[1]! : "4100";
   } catch {
-    return '4100';
+    return "4100";
   }
 }
 
@@ -22,7 +24,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      "@": path.resolve(__dirname, "./src"),
     },
   },
   define: {
@@ -31,8 +33,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
-        target: 'http://localhost:4100',
+      "/api": {
+        target: "http://localhost:4100",
         changeOrigin: true,
       },
       // No '/ws' proxy entry: with Vite running on Bun (which `bun run dev`

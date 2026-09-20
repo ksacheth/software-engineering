@@ -25,7 +25,10 @@ export interface ScanEventSubscription {
 export function subscribeToScanEvents(
   handler: ScanEventHandler,
 ): ScanEventSubscription {
-  const subscriber = new Redis({ ...redisConnectionOptions(), maxRetriesPerRequest: 2 });
+  const subscriber = new Redis({
+    ...redisConnectionOptions(),
+    maxRetriesPerRequest: 2,
+  });
 
   subscriber.on("message", (_channel: string, payload: string) => {
     let parsed: unknown;

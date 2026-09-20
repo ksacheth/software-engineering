@@ -61,7 +61,14 @@ beforeEach(async () => {
 async function seedScan(
   session: TestSession,
   target: TestTarget,
-  status: "QUEUED" | "RUNNING" | "PAUSED" | "COMPLETED" | "FAILED" | "CANCELLED" | "ABORTED_SAFETY",
+  status:
+    | "QUEUED"
+    | "RUNNING"
+    | "PAUSED"
+    | "COMPLETED"
+    | "FAILED"
+    | "CANCELLED"
+    | "ABORTED_SAFETY",
   extra: Record<string, unknown> = {},
 ) {
   return prisma.scanJob.create({
@@ -70,7 +77,8 @@ async function seedScan(
       organizationId: session.organizationId,
       status,
       createdById: session.userId,
-      startedAt: status === "RUNNING" || status === "PAUSED" ? new Date() : null,
+      startedAt:
+        status === "RUNNING" || status === "PAUSED" ? new Date() : null,
       completedAt: status === "COMPLETED" ? new Date() : null,
       ...extra,
     },
@@ -80,7 +88,10 @@ async function seedScan(
 interface OpenSocket {
   socket: WebSocket;
   messages: unknown[];
-  next(predicate: (message: unknown) => boolean, timeoutMs?: number): Promise<unknown>;
+  next(
+    predicate: (message: unknown) => boolean,
+    timeoutMs?: number,
+  ): Promise<unknown>;
   close(): void;
 }
 
@@ -93,7 +104,10 @@ async function openSocket(
     headers: { ...headers, ...(cookie ? { cookie } : {}) },
   });
   const messages: unknown[] = [];
-  const waiters: { predicate: (m: unknown) => boolean; resolve: (m: unknown) => void }[] = [];
+  const waiters: {
+    predicate: (m: unknown) => boolean;
+    resolve: (m: unknown) => void;
+  }[] = [];
 
   socket.on("message", (data) => {
     let parsed: unknown;
@@ -189,7 +203,9 @@ describe("starting a scan", () => {
     });
     expect(scan.target).toMatchObject({ id: target.id });
 
-    const row = await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id as string } });
+    const row = await prisma.scanJob.findUniqueOrThrow({
+      where: { id: scan.id as string },
+    });
     expect(row.status).toBe("QUEUED");
     expect(row.organizationId).toBe(session.organizationId);
     expect(row.createdById).toBe(session.userId);
@@ -226,7 +242,10 @@ describe("starting a scan", () => {
     });
 
     const { scan } = (await res.json()) as {
-      scan: { startedBy: { id: string; name: string } | null; createdById: string };
+      scan: {
+        startedBy: { id: string; name: string } | null;
+        createdById: string;
+      };
     };
     expect(scan.createdById).toBe(session.userId);
     expect(scan.startedBy?.id).toBe(session.userId);
@@ -243,7 +262,9 @@ describe("starting a scan", () => {
     });
     const { scan } = (await res.json()) as { scan: { id: string } };
 
-    const audits = await prisma.auditLog.findMany({ where: { resourceId: scan.id } });
+    const audits = await prisma.auditLog.findMany({
+      where: { resourceId: scan.id },
+    });
     expect(audits).toHaveLength(1);
     expect(audits[0]!.action).toBe("SCAN_QUEUED");
     expect(audits[0]!.userId).toBe(session.userId);
@@ -263,7 +284,9 @@ describe("starting a scan", () => {
     });
 
     expect(res.status).toBe(400);
-    expect(res.headers.get("content-type")).toContain("application/problem+json");
+    expect(res.headers.get("content-type")).toContain(
+      "application/problem+json",
+    );
 
     const problem = (await res.json()) as {
       title: string;
@@ -442,14 +465,21 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "RUNNING");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/pause`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/pause`, {
+      method: "POST",
+    });
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { scan: { status: string } };
     expect(body.scan.status).toBe("PAUSED");
-    expect((await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } })).pausedAt).not.toBeNull();
+    expect(
+      (await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } }))
+        .pausedAt,
+    ).not.toBeNull();
 
-    const audits = await prisma.auditLog.findMany({ where: { resourceId: scan.id } });
+    const audits = await prisma.auditLog.findMany({
+      where: { resourceId: scan.id },
+    });
     expect(audits).toHaveLength(1);
     expect(audits[0]!.action).toBe("SCAN_PAUSED");
   });
@@ -459,14 +489,17 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "PAUSED");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/resume`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/resume`, {
+      method: "POST",
+    });
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { scan: { status: string } };
     expect(body.scan.status).toBe("RUNNING");
-    expect((await prisma.auditLog.findMany({ where: { resourceId: scan.id } }))[0]!.action).toBe(
-      "SCAN_RESUMED",
-    );
+    expect(
+      (await prisma.auditLog.findMany({ where: { resourceId: scan.id } }))[0]!
+        .action,
+    ).toBe("SCAN_RESUMED");
   });
 
   test("cancels a running scan and records when", async () => {
@@ -474,10 +507,14 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "RUNNING");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/cancel`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/cancel`, {
+      method: "POST",
+    });
 
     expect(res.status).toBe(200);
-    const row = await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } });
+    const row = await prisma.scanJob.findUniqueOrThrow({
+      where: { id: scan.id },
+    });
     expect(row.status).toBe("CANCELLED");
     expect(row.cancelledAt).not.toBeNull();
   });
@@ -487,13 +524,22 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "QUEUED");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/pause`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/pause`, {
+      method: "POST",
+    });
 
     expect(res.status).toBe(409);
-    const problem = (await res.json()) as { code: string; scanStatus: string; detail: string };
+    const problem = (await res.json()) as {
+      code: string;
+      scanStatus: string;
+      detail: string;
+    };
     expect(problem.code).toBe("CANNOT_PAUSE");
     expect(problem.scanStatus).toBe("QUEUED");
-    expect((await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } })).status).toBe("QUEUED");
+    expect(
+      (await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } }))
+        .status,
+    ).toBe("QUEUED");
   });
 
   test("tells the user a queued scan has not started when they resume it", async () => {
@@ -501,7 +547,9 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "QUEUED");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/resume`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/resume`, {
+      method: "POST",
+    });
 
     expect(res.status).toBe(409);
     const problem = (await res.json()) as { code: string; detail: string };
@@ -514,14 +562,17 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "COMPLETED");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/cancel`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/cancel`, {
+      method: "POST",
+    });
 
     expect(res.status).toBe(409);
     const problem = (await res.json()) as { code: string };
     expect(problem.code).toBe("CANNOT_CANCEL");
-    expect((await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } })).status).toBe(
-      "COMPLETED",
-    );
+    expect(
+      (await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } }))
+        .status,
+    ).toBe("COMPLETED");
   });
 
   test("does not find another organisation's scan", async () => {
@@ -530,14 +581,19 @@ describe("controlling a scan", () => {
     const target = await createVerifiedTarget(other.organizationId);
     const scan = await seedScan(other, target, "RUNNING");
 
-    const res = await request(api, session, `/api/scans/${scan.id}/pause`, { method: "POST" });
+    const res = await request(api, session, `/api/scans/${scan.id}/pause`, {
+      method: "POST",
+    });
     expect(res.status).toBe(404);
 
     const read = await request(api, session, `/api/scans/${scan.id}`);
     expect(read.status).toBe(404);
 
     // And the row is untouched.
-    expect((await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } })).status).toBe("RUNNING");
+    expect(
+      (await prisma.scanJob.findUniqueOrThrow({ where: { id: scan.id } }))
+        .status,
+    ).toBe("RUNNING");
   });
 });
 
@@ -545,7 +601,9 @@ describe("reading scans", () => {
   test("lists newest first with the target attached", async () => {
     const session = await createSession("ANALYST");
     const target = await createVerifiedTarget(session.organizationId);
-    await seedScan(session, target, "COMPLETED", { createdAt: new Date("2026-01-01T00:00:00Z") });
+    await seedScan(session, target, "COMPLETED", {
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    });
     await seedScan(session, target, "FAILED", {
       createdAt: new Date("2026-02-01T00:00:00Z"),
       failureReason: "DNS resolution failed",
@@ -555,10 +613,17 @@ describe("reading scans", () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      scans: { status: string; target: { id: string }; failureReason: string | null }[];
+      scans: {
+        status: string;
+        target: { id: string };
+        failureReason: string | null;
+      }[];
       nextCursor: string | null;
     };
-    expect(body.scans.map((scan) => scan.status)).toEqual(["FAILED", "COMPLETED"]);
+    expect(body.scans.map((scan) => scan.status)).toEqual([
+      "FAILED",
+      "COMPLETED",
+    ]);
     expect(body.scans[0]!.target.id).toBe(target.id);
     expect(body.scans[0]!.failureReason).toBe("DNS resolution failed");
     expect(body.nextCursor).toBeNull();
@@ -600,19 +665,29 @@ describe("reading scans", () => {
     expect(firstPage.nextCursor).not.toBeNull();
 
     const secondPage = (await (
-      await request(api, session, `/api/scans?limit=2&cursor=${firstPage.nextCursor}`)
+      await request(
+        api,
+        session,
+        `/api/scans?limit=2&cursor=${firstPage.nextCursor}`,
+      )
     ).json()) as { scans: { id: string }[]; nextCursor: string | null };
     expect(secondPage.scans).toHaveLength(1);
     expect(secondPage.nextCursor).toBeNull();
 
-    const ids = [...firstPage.scans, ...secondPage.scans].map((scan) => scan.id);
+    const ids = [...firstPage.scans, ...secondPage.scans].map(
+      (scan) => scan.id,
+    );
     expect(new Set(ids).size).toBe(3);
   });
 
   test("refuses a malformed cursor and an unknown status", async () => {
     const session = await createSession("ANALYST");
 
-    const badCursor = await request(api, session, "/api/scans?cursor=not-a-cursor");
+    const badCursor = await request(
+      api,
+      session,
+      "/api/scans?cursor=not-a-cursor",
+    );
     expect(badCursor.status).toBe(400);
 
     const badStatus = await request(api, session, "/api/scans?status=STALLED");
@@ -630,7 +705,10 @@ describe("reading scans", () => {
     const target = await createVerifiedTarget(session.organizationId);
     const scan = await seedScan(session, target, "COMPLETED", {
       degradations: [
-        { code: "RENDERING_UNAVAILABLE", message: "JavaScript rendering was unavailable." },
+        {
+          code: "RENDERING_UNAVAILABLE",
+          message: "JavaScript rendering was unavailable.",
+        },
       ],
       blockingDetected: true,
       bindingLimit: "PAGE_CEILING_REACHED",
@@ -639,7 +717,9 @@ describe("reading scans", () => {
     const res = await request(api, session, `/api/scans/${scan.id}`);
     expect(res.status).toBe(200);
 
-    const body = (await res.json()) as { scan: { warnings: { code: string }[] } };
+    const body = (await res.json()) as {
+      scan: { warnings: { code: string }[] };
+    };
     expect(body.scan.warnings.map((warning) => warning.code).sort()).toEqual([
       "CRAWL_LIMIT_REACHED",
       "RENDERING_UNAVAILABLE",
@@ -686,7 +766,11 @@ describe("reading scans", () => {
     const otherTarget = await createVerifiedTarget(other.organizationId);
     const otherScan = await seedScan(other, otherTarget, "RUNNING");
 
-    const res = await request(api, session, `/api/scans/${otherScan.id}/findings`);
+    const res = await request(
+      api,
+      session,
+      `/api/scans/${otherScan.id}/findings`,
+    );
     expect(res.status).toBe(404);
   });
 });
@@ -797,7 +881,11 @@ describe("live updates", () => {
       );
       // Give the fan-out a chance to (incorrectly) deliver before asserting.
       await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(client.messages.filter((message) => !isScanEventOfType(message, "ping"))).toEqual([]);
+      expect(
+        client.messages.filter(
+          (message) => !isScanEventOfType(message, "ping"),
+        ),
+      ).toEqual([]);
     } finally {
       client.close();
       await publisher.quit();
@@ -810,7 +898,9 @@ describe("live updates", () => {
     const otherTarget = await createVerifiedTarget(other.organizationId);
     const otherScan = await seedScan(other, otherTarget, "RUNNING");
 
-    await expect(openSocket(`/ws/scans/${otherScan.id}`, session.cookie)).rejects.toThrow();
+    await expect(
+      openSocket(`/ws/scans/${otherScan.id}`, session.cookie),
+    ).rejects.toThrow();
   });
 
   test("refuses a socket without a session", async () => {
@@ -844,7 +934,9 @@ describe("live updates", () => {
 
     const client = await openSocket(`/ws/scans/${scan.id}`, session.cookie);
     try {
-      const ping = (await client.next((message) => isScanEventOfType(message, "ping"))) as {
+      const ping = (await client.next((message) =>
+        isScanEventOfType(message, "ping"),
+      )) as {
         at: string;
       };
       expect(Number.isNaN(new Date(ping.at).getTime())).toBe(false);

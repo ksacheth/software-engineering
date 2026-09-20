@@ -1,9 +1,21 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useSession } from '@better-auth-ui/react';
-import { WS_PING_INTERVAL_MS, isScanSocketPing } from '@wvs/shared';
-import { authClient } from '@/lib/auth-client';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useSession } from "@better-auth-ui/react";
+import { WS_PING_INTERVAL_MS, isScanSocketPing } from "@wvs/shared";
+import { authClient } from "@/lib/auth-client";
 
-export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+export type WebSocketStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "error";
 
 interface WebSocketContextValue {
   status: WebSocketStatus;
@@ -46,7 +58,7 @@ function getReconnectDelay(attempt: number) {
  * accepts the dashboard origin for exactly this case.
  */
 function resolveScanSocketUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   if (import.meta.env.DEV) {
     return `${protocol}//${window.location.hostname}:${__WVS_API_PORT__}/ws`;
   }
@@ -56,9 +68,11 @@ function resolveScanSocketUrl(): string {
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const { data: session, isPending } = useSession(authClient);
   const [settledSession, setSettledSession] = useState<typeof session>();
-  const [status, setStatus] = useState<WebSocketStatus>('disconnected');
+  const [status, setStatus] = useState<WebSocketStatus>("disconnected");
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const reconnectAttemptRef = useRef(0);
   const subscribersRef = useRef(new Set<WebSocketMessageHandler>());
   const lastPingRef = useRef(0);
@@ -80,15 +94,56 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // The watchdog belongs to one socket. It is cleared whenever that socket
+    // is gone, so a reconnect cannot leave the previous interval running.
+    const clearPingWatchdog = () => {
+      if (pingWatchdog) {
+        clearInterval(pingWatchdog);
+        pingWatchdog = null;
+      }
+    };
+
+    /**
+     * Arm the watchdog for the half-open case described above.
+     *
+     * One watchdog at a time: the previous socket's interval is cleared here,
+     * so a reconnect cannot leave a timer running against a socket that is
+     * already gone.
+     */
+    const startPingWatchdog = (ws: WebSocket) => {
+      clearPingWatchdog();
+      pingWatchdog = setInterval(() => {
+        if (!isActive) return;
+        if (Date.now() - lastPingRef.current <= PING_TIMEOUT_MS) return;
+        releaseSocket(ws);
+        ws.close();
+      }, WS_PING_INTERVAL_MS);
+    };
+
+    /**
+     * Drop the shared reference, but only while it is still this socket.
+     * Releasing a newer, live socket would silently turn `sendMessage` into a
+     * no-op, which is the very failure the watchdog exists to recover from.
+     */
+    const releaseSocket = (ws: WebSocket) => {
+      if (socketRef.current === ws) {
+        socketRef.current = null;
+      }
+    };
+
     const scheduleReconnect = () => {
+      clearPingWatchdog();
       reconnectAttemptRef.current += 1;
       if (reconnectAttemptRef.current > MAX_RECONNECT_ATTEMPTS) {
-        setStatus('error');
+        setStatus("error");
         return;
       }
 
-      setStatus('disconnected');
-      reconnectTimeoutRef.current = setTimeout(connect, getReconnectDelay(reconnectAttemptRef.current));
+      setStatus("disconnected");
+      reconnectTimeoutRef.current = setTimeout(
+        connect,
+        getReconnectDelay(reconnectAttemptRef.current),
+      );
     };
 
     function connect() {
@@ -96,13 +151,13 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       try {
         const ws = new WebSocket(resolveScanSocketUrl());
         socketRef.current = ws;
-        setStatus('connecting');
+        setStatus("connecting");
 
         ws.onopen = () => {
           if (!isActive) return;
           reconnectAttemptRef.current = 0;
           lastPingRef.current = Date.now();
-          setStatus('connected');
+          setStatus("connected");
         };
 
         ws.onmessage = (event) => {
@@ -133,19 +188,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
         ws.onclose = () => {
           if (!isActive) return;
-          if (socketRef.current === ws) {
-            socketRef.current = null;
-          }
+          releaseSocket(ws);
           scheduleReconnect();
         };
 
-        // Watchdog for the half-open case above.
-        pingWatchdog = setInterval(() => {
-          if (!isActive) return;
-          if (Date.now() - lastPingRef.current <= PING_TIMEOUT_MS) return;
-          socketRef.current = null;
-          ws.close();
-        }, WS_PING_INTERVAL_MS);
+        startPingWatchdog(ws);
       } catch {
         if (!isActive) return;
         scheduleReconnect();
@@ -157,13 +204,13 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     } else {
       clearReconnectTimeout();
       reconnectAttemptRef.current = 0;
-      setStatus('disconnected');
+      setStatus("disconnected");
     }
 
     return () => {
       isActive = false;
       clearReconnectTimeout();
-      if (pingWatchdog) clearInterval(pingWatchdog);
+      clearPingWatchdog();
       const socket = socketRef.current;
       socketRef.current = null;
       if (socket) {
@@ -174,7 +221,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback((data: unknown) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(typeof data === 'string' ? data : JSON.stringify(data));
+      socketRef.current.send(
+        typeof data === "string" ? data : JSON.stringify(data),
+      );
     }
   }, []);
 
@@ -193,7 +242,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 export function useWebSocket() {
   const context = useContext(WebSocketContext);
   if (!context) {
-    throw new Error('useWebSocket must be used within a WebSocketProvider');
+    throw new Error("useWebSocket must be used within a WebSocketProvider");
   }
   return context;
 }

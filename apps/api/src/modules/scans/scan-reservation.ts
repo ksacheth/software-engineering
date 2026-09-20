@@ -1,4 +1,5 @@
 import { Prisma, prisma, type ScanJob } from "@wvs/database";
+import { isScannable, type NotScannableReason } from "@wvs/scope-rules";
 import {
   QUOTA_OCCUPYING_SCAN_STATUSES,
   type ScanConfiguration,
@@ -22,6 +23,7 @@ const MAX_SERIALIZATION_RETRIES = 3;
 export type ScanReservation =
   | { ok: true; scan: ScanJob }
   | { ok: false; kind: "TARGET_NOT_FOUND" }
+  | { ok: false; kind: "TARGET_NOT_SCANNABLE"; reason: NotScannableReason }
   | { ok: false; kind: "ORG_CONCURRENCY"; limit: number }
   | { ok: false; kind: "TARGET_ALREADY_ACTIVE"; scanJobId: string };
 
@@ -78,10 +80,30 @@ export async function reserveScan(
               organizationId: true,
               includedPaths: true,
               excludedPaths: true,
+              isArchived: true,
+              authorisationAck: true,
+              verificationStatus: true,
+              verificationExpiresAt: true,
+              verifiedIpRanges: true,
             },
           });
           if (!target || target.organizationId !== input.organizationId) {
             return { ok: false, kind: "TARGET_NOT_FOUND" } as const;
+          }
+
+          // C.2 is re-answered here, inside the serializable transaction, and
+          // not only by the caller. The caller's check reads the target in a
+          // separate statement, so an archive or a verification revoked in
+          // between would otherwise still produce a queued scan: the window is
+          // small, but what slips through it is an unauthorised crawl against
+          // a third party, which is the one thing C.2 exists to prevent.
+          const verdict = isScannable(target);
+          if (!verdict.scannable) {
+            return {
+              ok: false,
+              kind: "TARGET_NOT_SCANNABLE",
+              reason: verdict.reason!,
+            } as const;
           }
 
           // A second scan of the same target would be two crawls against one
@@ -126,7 +148,10 @@ export async function reserveScan(
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (isSerializationFailure(error) && attempt < MAX_SERIALIZATION_RETRIES) {
+      if (
+        isSerializationFailure(error) &&
+        attempt < MAX_SERIALIZATION_RETRIES
+      ) {
         continue;
       }
       throw error;

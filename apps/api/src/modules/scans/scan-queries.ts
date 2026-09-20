@@ -64,7 +64,11 @@ export function toScanDto(scan: ScanWithRelations): ScanDto {
     organizationId: scan.organizationId,
     targetId: scan.targetId,
     target: scan.target
-      ? { id: scan.target.id, label: scan.target.label, origin: scan.target.origin }
+      ? {
+          id: scan.target.id,
+          label: scan.target.label,
+          origin: scan.target.origin,
+        }
       : null,
     startedBy: scan.createdBy
       ? { id: scan.createdBy.id, name: scan.createdBy.name }
@@ -154,7 +158,6 @@ export async function listScanFindings(
   return findings;
 }
 
-
 export async function findScanForOrg(
   ctx: AuthContext,
   scanJobId: string,
@@ -173,7 +176,10 @@ export interface ScanCursor {
   id: string;
 }
 
-export function encodeScanCursor(scan: { createdAt: Date; id: string }): string {
+export function encodeScanCursor(scan: {
+  createdAt: Date;
+  id: string;
+}): string {
   return Buffer.from(
     JSON.stringify({ createdAt: scan.createdAt.toISOString(), id: scan.id }),
   ).toString("base64url");

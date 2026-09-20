@@ -1,4 +1,9 @@
-import { SCAN_PHASES, SCAN_STATUSES, type ScanPhase, type ScanStatus } from './lifecycle.js';
+import {
+  SCAN_PHASES,
+  SCAN_STATUSES,
+  type ScanPhase,
+  type ScanStatus,
+} from "./lifecycle.js";
 
 /**
  * F.3 live scan events.
@@ -15,31 +20,31 @@ import { SCAN_PHASES, SCAN_STATUSES, type ScanPhase, type ScanStatus } from './l
  */
 
 export const SCAN_EVENT_TYPES = [
-  'scan.status',
-  'scan.progress',
-  'scan.finding',
-  'scan.warning',
+  "scan.status",
+  "scan.progress",
+  "scan.finding",
+  "scan.warning",
 ] as const;
 
 export type ScanEventType = (typeof SCAN_EVENT_TYPES)[number];
 
 export const SCAN_WARNING_CODES = [
-  'DNS_RESOLUTION_FAILED',
-  'RENDERING_UNAVAILABLE',
-  'ADVISORY_DATA_UNAVAILABLE',
-  'TARGET_BLOCKING_DETECTED',
-  'CRAWL_LIMIT_REACHED',
+  "DNS_RESOLUTION_FAILED",
+  "RENDERING_UNAVAILABLE",
+  "ADVISORY_DATA_UNAVAILABLE",
+  "TARGET_BLOCKING_DETECTED",
+  "CRAWL_LIMIT_REACHED",
 ] as const;
 
 export type ScanWarningCode = (typeof SCAN_WARNING_CODES)[number];
 
 /** Duplicated from the Prisma enum; the API asserts the two stay assignable. */
 export const FINDING_SEVERITIES = [
-  'INFO',
-  'LOW',
-  'MEDIUM',
-  'HIGH',
-  'CRITICAL',
+  "INFO",
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
 ] as const;
 
 export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
@@ -51,7 +56,7 @@ export interface ScanEventBase {
 }
 
 export interface ScanStatusEvent extends ScanEventBase {
-  type: 'scan.status';
+  type: "scan.status";
   status: ScanStatus;
   /** Present when the publisher knows the phase; optional so a terminal
    * status can be published without inventing one. */
@@ -64,7 +69,7 @@ export interface ScanStatusEvent extends ScanEventBase {
  * A snapshot, not a delta: duplicated or late progress messages are harmless.
  */
 export interface ScanProgressEvent extends ScanEventBase {
-  type: 'scan.progress';
+  type: "scan.progress";
   phase: ScanPhase;
   pagesCrawled: number;
   requestsMade: number;
@@ -77,7 +82,7 @@ export interface ScanProgressEvent extends ScanEventBase {
  * would let a second finding overwrite the first.
  */
 export interface ScanFindingEvent extends ScanEventBase {
-  type: 'scan.finding';
+  type: "scan.finding";
   fingerprint: string;
   detectorId: string;
   name: string;
@@ -86,7 +91,7 @@ export interface ScanFindingEvent extends ScanEventBase {
 }
 
 export interface ScanWarningEvent extends ScanEventBase {
-  type: 'scan.warning';
+  type: "scan.warning";
   code: ScanWarningCode;
   message: string;
 }
@@ -98,27 +103,29 @@ export type ScanEvent =
   | ScanWarningEvent;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasScanEnvelope(value: Record<string, unknown>): boolean {
-  if (typeof value.scanJobId !== 'string' || value.scanJobId.length === 0) {
+  if (typeof value.scanJobId !== "string" || value.scanJobId.length === 0) {
     return false;
   }
-  if (typeof value.at !== 'string') return false;
+  if (typeof value.at !== "string") return false;
   const parsed = new Date(value.at);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value.at;
 }
 
 function isNonNegativeNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function isOneOf<T extends string>(
   value: unknown,
   allowed: readonly T[],
 ): value is T {
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value);
+  return (
+    typeof value === "string" && (allowed as readonly string[]).includes(value)
+  );
 }
 
 /**
@@ -132,15 +139,15 @@ export function isScanEvent(value: unknown): value is ScanEvent {
   if (!isRecord(value) || !hasScanEnvelope(value)) return false;
 
   switch (value.type) {
-    case 'scan.status':
+    case "scan.status":
       return (
         isOneOf(value.status, SCAN_STATUSES) &&
         (value.phase === undefined || isOneOf(value.phase, SCAN_PHASES)) &&
         (value.failureReason === undefined ||
           value.failureReason === null ||
-          typeof value.failureReason === 'string')
+          typeof value.failureReason === "string")
       );
-    case 'scan.progress':
+    case "scan.progress":
       return (
         isOneOf(value.phase, SCAN_PHASES) &&
         isNonNegativeNumber(value.pagesCrawled) &&
@@ -148,18 +155,22 @@ export function isScanEvent(value: unknown): value is ScanEvent {
         isNonNegativeNumber(value.findingsCount) &&
         isNonNegativeNumber(value.progressPercentage)
       );
-    case 'scan.finding':
+    case "scan.finding":
       return (
-        typeof value.fingerprint === 'string' &&
-        typeof value.detectorId === 'string' &&
-        typeof value.name === 'string' &&
+        // Non-empty: the live view accumulates findings in a Map keyed by
+        // fingerprint, so an empty one would collapse every finding of a scan
+        // onto a single entry. Dropping the event is the lesser failure.
+        typeof value.fingerprint === "string" &&
+        value.fingerprint.length > 0 &&
+        typeof value.detectorId === "string" &&
+        typeof value.name === "string" &&
         isOneOf(value.severity, FINDING_SEVERITIES) &&
-        typeof value.affectedUrl === 'string'
+        typeof value.affectedUrl === "string"
       );
-    case 'scan.warning':
+    case "scan.warning":
       return (
         isOneOf(value.code, SCAN_WARNING_CODES) &&
-        typeof value.message === 'string'
+        typeof value.message === "string"
       );
     default:
       return false;

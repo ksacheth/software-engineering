@@ -64,7 +64,8 @@ export function parseStartScanRequest(body: unknown): StartScanParse {
   }
 
   const profile = parsed.data.profile ?? "STANDARD";
-  const overrides = (parsed.data.configuration ?? {}) as Partial<ScanConfiguration>;
+  const overrides = (parsed.data.configuration ??
+    {}) as Partial<ScanConfiguration>;
   const resolved = resolveScanConfiguration(profile, overrides);
 
   if (!resolved.configuration) {

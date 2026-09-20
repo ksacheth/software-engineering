@@ -94,9 +94,7 @@ export function toHeaders(source: { headers: IncomingHttpHeaders }): Headers {
  * an unscoped query: every user gets an organisation at signup (see
  * lib/auth.ts), so its absence means the signup hook did not complete.
  */
-export async function resolveAuth(
-  headers: Headers,
-): Promise<AuthResolution> {
+export async function resolveAuth(headers: Headers): Promise<AuthResolution> {
   const session = await auth.api.getSession({ headers });
 
   if (!session?.user) {

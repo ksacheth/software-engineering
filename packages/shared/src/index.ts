@@ -7,4 +7,4 @@
  * rather than imported (ADR-0005 spirit); a compile-time assertion in the API
  * guards against the duplication drifting.
  */
-export * from './scans/index.js';
+export * from "./scans/index.js";

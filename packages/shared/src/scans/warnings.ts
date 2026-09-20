@@ -1,4 +1,4 @@
-import { SCAN_WARNING_CODES, type ScanWarningCode } from './events.js';
+import { SCAN_WARNING_CODES, type ScanWarningCode } from "./events.js";
 
 /**
  * Warnings survive a page reload.
@@ -25,15 +25,15 @@ export interface ScanWarningSource {
 }
 
 const CRAWL_CEILING_LIMITS: Record<string, string> = {
-  DEPTH_REACHED: 'The configured crawl depth bound this scan.',
-  PAGE_CEILING_REACHED: 'The configured page ceiling bound this scan.',
-  REQUEST_CEILING_REACHED: 'The configured request ceiling bound this scan.',
-  TIMEOUT: 'The scan stopped at its time limit.',
+  DEPTH_REACHED: "The configured crawl depth bound this scan.",
+  PAGE_CEILING_REACHED: "The configured page ceiling bound this scan.",
+  REQUEST_CEILING_REACHED: "The configured request ceiling bound this scan.",
+  TIMEOUT: "The scan stopped at its time limit.",
 };
 
 function isWarningCode(value: unknown): value is ScanWarningCode {
   return (
-    typeof value === 'string' &&
+    typeof value === "string" &&
     (SCAN_WARNING_CODES as readonly string[]).includes(value)
   );
 }
@@ -43,13 +43,13 @@ function parseDegradations(value: unknown): ScanWarning[] {
 
   const warnings: ScanWarning[] = [];
   for (const entry of value) {
-    if (typeof entry !== 'object' || entry === null) continue;
+    if (typeof entry !== "object" || entry === null) continue;
     const candidate = entry as { code?: unknown; message?: unknown };
     if (!isWarningCode(candidate.code)) continue;
     warnings.push({
       code: candidate.code,
       message:
-        typeof candidate.message === 'string' && candidate.message.length > 0
+        typeof candidate.message === "string" && candidate.message.length > 0
           ? candidate.message
           : candidate.code,
     });
@@ -66,9 +66,9 @@ export function deriveScanWarnings(source: ScanWarningSource): ScanWarning[] {
 
   if (source.blockingDetected) {
     addWarning(byCode, {
-      code: 'TARGET_BLOCKING_DETECTED',
+      code: "TARGET_BLOCKING_DETECTED",
       message:
-        'The target appeared to block the scan, so results carry reduced confidence.',
+        "The target appeared to block the scan, so results carry reduced confidence.",
     });
   }
 
@@ -76,7 +76,7 @@ export function deriveScanWarnings(source: ScanWarningSource): ScanWarning[] {
     ? CRAWL_CEILING_LIMITS[source.bindingLimit]
     : undefined;
   if (limitMessage) {
-    addWarning(byCode, { code: 'CRAWL_LIMIT_REACHED', message: limitMessage });
+    addWarning(byCode, { code: "CRAWL_LIMIT_REACHED", message: limitMessage });
   }
 
   return [...byCode.values()];

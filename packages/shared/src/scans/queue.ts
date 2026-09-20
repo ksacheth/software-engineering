@@ -12,7 +12,7 @@
  * BullMQ queue name. Exported so the orchestrator enqueues nothing else by
  * accident. No colon: BullMQ uses `:` as its Redis key separator.
  */
-export const SCAN_QUEUE_NAME = 'wvs-scans';
+export const SCAN_QUEUE_NAME = "wvs-scans";
 
 export interface ScanJobPayload {
   scanJobId: string;
@@ -30,14 +30,14 @@ export interface ScanJobPayload {
 }
 
 export function isScanJobPayload(value: unknown): value is ScanJobPayload {
-  if (typeof value !== 'object' || value === null) return false;
+  if (typeof value !== "object" || value === null) return false;
   const payload = value as Record<string, unknown>;
   return (
-    typeof payload.scanJobId === 'string' &&
+    typeof payload.scanJobId === "string" &&
     payload.scanJobId.length > 0 &&
-    typeof payload.organizationId === 'string' &&
+    typeof payload.organizationId === "string" &&
     payload.organizationId.length > 0 &&
-    typeof payload.attempt === 'number' &&
+    typeof payload.attempt === "number" &&
     Number.isInteger(payload.attempt) &&
     payload.attempt >= 1
   );

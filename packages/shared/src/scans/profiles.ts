@@ -9,7 +9,7 @@
  * Profiles vary depth and breadth, not request rate: a more thorough profile
  * cannot be a faster one.
  */
-export const SCAN_PROFILES = ['PASSIVE', 'STANDARD', 'THOROUGH'] as const;
+export const SCAN_PROFILES = ["PASSIVE", "STANDARD", "THOROUGH"] as const;
 
 export type ScanProfile = (typeof SCAN_PROFILES)[number];
 
@@ -27,9 +27,27 @@ export interface ScanConfiguration {
 }
 
 export const SCAN_PROFILE_PRESETS: Record<ScanProfile, ScanConfiguration> = {
-  PASSIVE: { rateLimit: 5, concurrency: 5, maxDepth: 3, maxPages: 100, maxRequests: 1000 },
-  STANDARD: { rateLimit: 10, concurrency: 5, maxDepth: 5, maxPages: 200, maxRequests: 2000 },
-  THOROUGH: { rateLimit: 10, concurrency: 5, maxDepth: 10, maxPages: 1000, maxRequests: 10000 },
+  PASSIVE: {
+    rateLimit: 5,
+    concurrency: 5,
+    maxDepth: 3,
+    maxPages: 100,
+    maxRequests: 1000,
+  },
+  STANDARD: {
+    rateLimit: 10,
+    concurrency: 5,
+    maxDepth: 5,
+    maxPages: 200,
+    maxRequests: 2000,
+  },
+  THOROUGH: {
+    rateLimit: 10,
+    concurrency: 5,
+    maxDepth: 10,
+    maxPages: 1000,
+    maxRequests: 10000,
+  },
 };
 
 /**
@@ -52,18 +70,18 @@ export const SCAN_CONFIGURATION_BOUNDS: Record<
 };
 
 const FIELD_LABELS: Record<keyof ScanConfiguration, string> = {
-  rateLimit: 'Request rate',
-  concurrency: 'Concurrency',
-  maxDepth: 'Crawl depth',
-  maxPages: 'Page ceiling',
-  maxRequests: 'Request ceiling',
+  rateLimit: "Request rate",
+  concurrency: "Concurrency",
+  maxDepth: "Crawl depth",
+  maxPages: "Page ceiling",
+  maxRequests: "Request ceiling",
 };
 
 export type ScanConfigurationProblemCode =
-  | 'NOT_AN_INTEGER'
-  | 'TOO_LOW'
-  | 'TOO_HIGH'
-  | 'REQUESTS_BELOW_PAGES';
+  | "NOT_AN_INTEGER"
+  | "TOO_LOW"
+  | "TOO_HIGH"
+  | "REQUESTS_BELOW_PAGES";
 
 export interface ScanConfigurationProblem {
   field: keyof ScanConfiguration;
@@ -92,7 +110,9 @@ export function resolveScanConfiguration(
   const problems: ScanConfigurationProblem[] = [];
   const configuration = { ...SCAN_PROFILE_PRESETS[profile] };
 
-  for (const key of Object.keys(SCAN_CONFIGURATION_BOUNDS) as (keyof ScanConfiguration)[]) {
+  for (const key of Object.keys(
+    SCAN_CONFIGURATION_BOUNDS,
+  ) as (keyof ScanConfiguration)[]) {
     const override = overrides[key];
     if (override === undefined) continue;
 
@@ -102,7 +122,7 @@ export function resolveScanConfiguration(
     if (!Number.isInteger(override)) {
       problems.push({
         field: key,
-        code: 'NOT_AN_INTEGER',
+        code: "NOT_AN_INTEGER",
         message: `${label} must be a whole number.`,
       });
       continue;
@@ -111,7 +131,7 @@ export function resolveScanConfiguration(
     if (override < min) {
       problems.push({
         field: key,
-        code: 'TOO_LOW',
+        code: "TOO_LOW",
         message: `${label} must be at least ${min}.`,
       });
       continue;
@@ -120,7 +140,7 @@ export function resolveScanConfiguration(
     if (override > max) {
       problems.push({
         field: key,
-        code: 'TOO_HIGH',
+        code: "TOO_HIGH",
         message: `${label} must not exceed ${max}.`,
       });
       continue;
@@ -130,16 +150,17 @@ export function resolveScanConfiguration(
   }
 
   if (
-    !problems.some((problem) =>
-      problem.field === 'maxPages' || problem.field === 'maxRequests',
+    !problems.some(
+      (problem) =>
+        problem.field === "maxPages" || problem.field === "maxRequests",
     ) &&
     configuration.maxRequests < configuration.maxPages
   ) {
     problems.push({
-      field: 'maxRequests',
-      code: 'REQUESTS_BELOW_PAGES',
+      field: "maxRequests",
+      code: "REQUESTS_BELOW_PAGES",
       message:
-        'The request ceiling must be at least the page ceiling, or the scan would stop for the wrong reason.',
+        "The request ceiling must be at least the page ceiling, or the scan would stop for the wrong reason.",
     });
   }
 
