@@ -8,6 +8,7 @@
     "start": "bun src/main.ts",
     "email:retry": "bun src/scripts/retry-emails.ts",
     "scans:reconcile": "bun src/scripts/reconcile-scans.ts",
+    "seed:findings": "bun src/scripts/seed-dev-findings.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test --coverage"
   },
