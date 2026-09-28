@@ -103,6 +103,35 @@ scope decision that permitted or blocked it. Distinct from the audit log, which
 records user and administrator actions.
 _Avoid_: request log, audit log
 
+**Administrator**:
+An operator of the WVS deployment (the `ADMIN` role). Acts across every
+organisation on accounts, quotas, the network blocklist and the kill switch, but
+has no access to any other organisation's targets, scans or findings.
+_Avoid_: superuser, organisation owner
+
+**Kill switch**:
+An administrator's system-wide halt. While engaged, every active scan is aborted
+and no scan may start, resume or issue a request. Releasing it restarts nothing.
+_Avoid_: emergency stop, global pause
+
+**Network blocklist**:
+Hosts and address ranges, maintained by administrators, that no target may
+resolve to and no scan may reach. Applied on top of the fixed refusal of
+private, loopback and cloud-metadata addresses.
+_Avoid_: denylist, IP blacklist
+
+**Quota**:
+An administrator-set limit on an organisation's scanning: how many scans it may
+run at once and the fastest request rate its scans may use. Distinct from crawl
+limits, which a user sets per scan.
+_Avoid_: plan, allowance
+
+**Suspension**:
+An administrator's indefinite block on an account's sign-in, lifted only by an
+administrator. Distinct from lockout, which follows failed sign-ins and expires
+on its own.
+_Avoid_: ban, lockout, deactivation
+
 ## Repo layout (Turborepo + bun workspaces)
 
 ```
