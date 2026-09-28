@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor } from "better-auth/plugins";
+import { APIError } from "better-auth/api";
 import { prisma } from "@wvs/database";
 import { sendEmail } from "./email";
 import {
@@ -73,6 +74,21 @@ export const auth = betterAuth({
     session: {
       create: {
         before: async (session) => {
+          // F.8: a suspended account gets no session, whichever way it signs
+          // in. Checked here rather than on the sign-in route because every
+          // path that authenticates (password, two-factor, a future provider)
+          // ends by creating a session.
+          const user = await prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { suspendedAt: true },
+          });
+          if (user?.suspendedAt) {
+            throw new APIError("FORBIDDEN", {
+              message: "This account has been suspended by an administrator.",
+              code: "ACCOUNT_SUSPENDED",
+            });
+          }
+
           const member = await prisma.member.findUnique({
             where: { userId: session.userId },
             select: { organizationId: true },

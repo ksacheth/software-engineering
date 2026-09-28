@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { IncomingHttpHeaders } from "node:http";
 import { prisma, type Role } from "@wvs/database";
 import { auth } from "../lib/auth";
+import { sendProblem } from "./problem";
 
 /**
  * Session resolution and organisation scoping (F.1, NFR-SEC-2).
@@ -156,4 +157,43 @@ export function requireRole(...roles: string[]) {
     }
     next();
   };
+}
+
+/**
+ * Route guard for the administration API (F.8, ADR-0009).
+ *
+ * An administrator acts across every organisation, so the role alone is not
+ * enough: the account must also have two-factor authentication enabled, or a
+ * stolen password is enough to halt every scan and rewrite anyone's role. The
+ * flag is read from the database rather than the session, so turning 2FA off
+ * takes effect on the next request.
+ */
+export async function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (!req.auth || req.auth.role !== "ADMIN") {
+    sendProblem(res, { title: "Forbidden", status: 403 });
+    return;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.auth.userId },
+      select: { twoFactorEnabled: true },
+    });
+    if (!user?.twoFactorEnabled) {
+      sendProblem(res, {
+        title: "Two-factor authentication required",
+        status: 403,
+        detail:
+          "Administration requires two-factor authentication. Enable it in your security settings, then try again.",
+        code: "TWO_FACTOR_REQUIRED",
+      });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 }

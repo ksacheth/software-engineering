@@ -11,6 +11,8 @@ import type { AuditAction } from "@wvs/database";
 import type { AuthContext } from "../../common/session";
 import { writeAudit } from "../../common/audit";
 import { reserveScan } from "./scan-reservation";
+import { isScanningHalted } from "../scope-guard/kill-switch";
+import { activeBlocklist } from "../scope-guard/blocklist";
 import { enqueueScan, removeScanJob } from "./scan-queue";
 import {
   findScanForOrg,
@@ -33,6 +35,9 @@ export type ScanRefusal =
   | { kind: "ORG_CONCURRENCY"; limit: number }
   | { kind: "TARGET_ALREADY_ACTIVE"; scanJobId: string }
   | { kind: "QUEUE_UNAVAILABLE" }
+  | { kind: "KILL_SWITCH_ENGAGED" }
+  | { kind: "ORG_SCANNING_SUSPENDED" }
+  | { kind: "RATE_LIMIT_ABOVE_QUOTA"; limit: number }
   | { kind: "SCAN_NOT_FOUND" }
   | {
       kind: "ILLEGAL_TRANSITION";
@@ -45,6 +50,8 @@ export interface StartScanInput {
   targetId: string;
   profile: ScanProfile;
   configuration: ScanConfiguration;
+  /** See `StartScanRequest.rateLimitExplicit`. */
+  rateLimitExplicit: boolean;
 }
 
 export type StartScanResult =
@@ -63,6 +70,8 @@ const NOT_SCANNABLE_DETAIL: Record<NotScannableReason, string> = {
     "This target has an empty verified IP set, so scanning would bypass the Scope Guard (C.2).",
   AUTHORISATION_NOT_ACKNOWLEDGED:
     "The authorisation acknowledgement is missing, so scanning is not permitted.",
+  BLOCKLISTED:
+    "This target's host or address is on the network blocklist, so it cannot be scanned. Contact an administrator if you believe this is wrong.",
 };
 
 export function describeNotScannable(reason: NotScannableReason): string {
@@ -87,7 +96,7 @@ export async function startScan(
   });
   if (!target) return { ok: false, refusal: { kind: "TARGET_NOT_FOUND" } };
 
-  const verdict = isScannable(target);
+  const verdict = isScannable(target, await activeBlocklist());
   if (!verdict.scannable) {
     return {
       ok: false,
@@ -100,6 +109,7 @@ export async function startScan(
     targetId: target.id,
     profile: input.profile,
     configuration: input.configuration,
+    rateLimitExplicit: input.rateLimitExplicit,
     createdById: ctx.userId,
   });
   if (!reservation.ok) return { ok: false, refusal: reservation };
@@ -112,7 +122,11 @@ export async function startScan(
       targetId: target.id,
       origin: target.origin,
       profile: input.profile,
-      configuration: input.configuration,
+      // The rate the scan will actually run at, which a quota may have lowered.
+      configuration: {
+        ...input.configuration,
+        rateLimit: reservation.scan.rateLimit,
+      },
     },
   });
 
@@ -208,9 +222,14 @@ async function resumeRefusal(
   tx: Prisma.TransactionClient,
   targetId: string,
 ): Promise<ScanRefusal | null> {
+  // ADR-0008: a paused scan is one the kill switch would have aborted, so one
+  // found paused while it is engaged is a straggler and stays where it is.
+  if (await isScanningHalted(tx)) return { kind: "KILL_SWITCH_ENGAGED" };
+
   const target = await tx.target.findUnique({
     where: { id: targetId },
     select: {
+      origin: true,
       isArchived: true,
       authorisationAck: true,
       verificationStatus: true,
@@ -220,7 +239,7 @@ async function resumeRefusal(
   });
   if (!target) return { kind: "TARGET_NOT_FOUND" };
 
-  const verdict = isScannable(target);
+  const verdict = isScannable(target, await activeBlocklist(tx));
   if (verdict.scannable) return null;
   return { kind: "TARGET_NOT_SCANNABLE", reason: verdict.reason! };
 }

@@ -12,6 +12,7 @@ import {
 } from "../../common/session";
 import { writeAudit } from "../../common/audit";
 import { classifyOrigin, describeRefusal, parseOrigin } from "./origin";
+import { activeBlocklist } from "../scope-guard/blocklist";
 import {
   checkDnsTxt,
   checkWellKnown,
@@ -88,19 +89,22 @@ export function createTargetsRouter(): Router {
       const { organizationId } = req.auth!;
       const includeArchived = req.query.includeArchived === "true";
 
-      const targets = await prisma.target.findMany({
-        where: {
-          organizationId,
-          ...(includeArchived ? {} : { isArchived: false }),
-        },
-        orderBy: { createdAt: "desc" },
-      });
+      const [targets, blocklist] = await Promise.all([
+        prisma.target.findMany({
+          where: {
+            organizationId,
+            ...(includeArchived ? {} : { isArchived: false }),
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        activeBlocklist(),
+      ]);
 
       res.json({
         targets: targets.map((t) => ({
           ...t,
           verificationToken: undefined, // Never leak the proof in a list view.
-          scannable: isScannable(t),
+          scannable: isScannable(t, blocklist),
         })),
       });
     } catch (error) {
@@ -149,7 +153,7 @@ export function createTargetsRouter(): Router {
         );
       }
 
-      const classified = await classifyOrigin(origin);
+      const classified = await classifyOrigin(origin, await activeBlocklist());
       if (!classified.ok) {
         await writeAudit(ctx, {
           action: "TARGET_REFUSED",
@@ -218,7 +222,7 @@ export function createTargetsRouter(): Router {
       res.json({
         target,
         instructions: buildInstructions(target),
-        scannable: isScannable(target),
+        scannable: isScannable(target, await activeBlocklist()),
       });
     } catch (error) {
       next(error);
@@ -247,7 +251,8 @@ export function createTargetsRouter(): Router {
       try {
         // Re-run the address gate. DNS can change between registration and now,
         // and this is the moment addresses are committed to verifiedIpRanges.
-        const classified = await classifyOrigin(target.origin);
+        const blocklist = await activeBlocklist();
+        const classified = await classifyOrigin(target.origin, blocklist);
         if (!classified.ok) {
           await recordFailure(ctx, target.id, { refusal: classified.refusal });
           return res.status(422).json({
@@ -305,7 +310,10 @@ export function createTargetsRouter(): Router {
           },
         });
 
-        res.json({ target: updated, scannable: isScannable(updated) });
+        res.json({
+          target: updated,
+          scannable: isScannable(updated, blocklist),
+        });
       } finally {
         await slot.release();
       }

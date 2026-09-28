@@ -23,3 +23,15 @@ export {
   type ScannableVerdict,
   type NotScannableReason,
 } from './scannable.js';
+
+export {
+  matchBlocklist,
+  parseBlocklistPattern,
+  BLOCKLIST_PATTERN_TYPES,
+  type BlocklistEntry,
+  type BlocklistSubject,
+  type BlocklistVerdict,
+  type BlocklistPatternType,
+  type BlocklistPatternProblem,
+  type ParseBlocklistPatternResult,
+} from './blocklist.js';

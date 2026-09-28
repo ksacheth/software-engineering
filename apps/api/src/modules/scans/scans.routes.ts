@@ -81,6 +81,38 @@ function sendRefusal(res: Response, refusal: ScanRefusal): void {
         code: "QUEUE_UNAVAILABLE",
       });
       return;
+    case "ORG_SCANNING_SUSPENDED":
+      sendProblem(res, {
+        title: "Scanning is suspended for your organisation",
+        status: 403,
+        detail:
+          "An administrator has set your organisation's concurrent scan limit to zero. Contact an administrator to restore it.",
+        code: "ORG_SCANNING_SUSPENDED",
+      });
+      return;
+    case "RATE_LIMIT_ABOVE_QUOTA":
+      sendProblem(res, {
+        title: "Request rate above your organisation's quota",
+        status: 422,
+        detail: `Your organisation's scans may send at most ${refusal.limit} request${refusal.limit === 1 ? "" : "s"} per second.`,
+        code: "RATE_LIMIT_ABOVE_QUOTA",
+        errors: [
+          {
+            pointer: "/configuration/rateLimit",
+            detail: `rateLimit must be at most ${refusal.limit}.`,
+          },
+        ],
+      });
+      return;
+    case "KILL_SWITCH_ENGAGED":
+      sendProblem(res, {
+        title: "Scanning is halted",
+        status: 503,
+        detail:
+          "An administrator has engaged the kill switch, so no scan can start or resume until it is released.",
+        code: "KILL_SWITCH_ENGAGED",
+      });
+      return;
     case "ILLEGAL_TRANSITION":
       sendProblem(res, {
         title: "Scan is not in a state that allows that action",

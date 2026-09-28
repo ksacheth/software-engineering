@@ -634,6 +634,96 @@ describe("the address refusal gate at registration", () => {
   });
 });
 
+// -------------------------------------------------------- network blocklist ---
+
+/** An active blocklist entry, as an administrator would have written it. */
+async function block(patternType: "CIDR" | "HOST_SUFFIX" | "IP_RANGE", pattern: string, isActive = true) {
+  return prisma.networkBlocklist.create({
+    data: { patternType, pattern, reason: "Test entry", isActive },
+  });
+}
+
+describe("the network blocklist (F.8)", () => {
+  test("refuses to register a host on it, naming the entry", async () => {
+    const session = await createSession("ANALYST");
+    const hostname = `portal.${randomUUID().slice(0, 8)}.gov.example`;
+    publish(hostname, {});
+    await block("HOST_SUFFIX", "gov.example");
+
+    const response = await request(api, session, "/api/targets", {
+      method: "POST",
+      body: JSON.stringify({
+        origin: `https://${hostname}`,
+        label: "Blocked",
+        authorisationAck: true,
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    const body = await readBody(response);
+    expect(body.rule).toMatchObject({ kind: "BLOCKLIST", pattern: "gov.example" });
+    expect(body.error).toContain("blocklist");
+    expect(await prisma.target.count()).toBe(0);
+  });
+
+  test("refuses to register a host that resolves into a blocked range", async () => {
+    const session = await createSession("ANALYST");
+    const hostname = uniqueHost();
+    zone.set(hostname, { a: [PUBLIC_IPV4] });
+    await block("CIDR", "93.184.216.0/24");
+
+    const response = await request(api, session, "/api/targets", {
+      method: "POST",
+      body: JSON.stringify({
+        origin: `https://${hostname}`,
+        label: "Blocked",
+        authorisationAck: true,
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    expect((await readBody(response)).rule).toMatchObject({
+      kind: "BLOCKLIST",
+      matched: PUBLIC_IPV4,
+    });
+  });
+
+  test("an inactive entry blocks nothing", async () => {
+    const session = await createSession("ANALYST");
+    await block("CIDR", "93.184.216.0/24", false);
+    await register(session);
+  });
+
+  test("refuses to verify a target that has been blocked since it was registered", async () => {
+    const session = await createSession("ANALYST");
+    const target = await register(session);
+    publishToken(target.hostname, target.verificationToken);
+    await block("CIDR", "93.184.216.0/24");
+
+    const response = await request(api, session, `/api/targets/${target.id}/verify`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(422);
+    expect((await readBody(response)).rule).toMatchObject({ kind: "BLOCKLIST" });
+    const row = await prisma.target.findUniqueOrThrow({ where: { id: target.id } });
+    expect(row.verificationStatus).not.toBe("VERIFIED");
+  });
+
+  test("a verified target that is blocked later stays registered but reads as not scannable", async () => {
+    const session = await createSession("ANALYST");
+    const target = await register(session);
+    publishToken(target.hostname, target.verificationToken);
+    await request(api, session, `/api/targets/${target.id}/verify`, { method: "POST" });
+    await block("CIDR", "93.184.216.0/24");
+
+    const body = await readBody(await request(api, session, `/api/targets/${target.id}`));
+
+    expect(body.target.isArchived).toBe(false);
+    expect(body.scannable).toEqual({ scannable: false, reason: "BLOCKLISTED" });
+  });
+});
+
 // -------------------------------------------------------------------- read ---
 
 describe("reading targets", () => {
