@@ -1,3 +1,4 @@
+import type { FindingDetail, FindingSummary } from "@/services/findings";
 import type { Scan } from "@/services/scans";
 import type {
   Target,
@@ -128,6 +129,50 @@ export function wellKnownInstructions(
     method: "WELL_KNOWN",
     url: "https://a.test/.well-known/wvs-verify.txt",
     content: "wvs-verify-0123456789abcdef",
+    ...overrides,
+  };
+}
+
+export function aFinding(overrides: Partial<FindingSummary> = {}): FindingSummary {
+  return {
+    id: "finding-1",
+    fingerprint: "fp-1",
+    scanJobId: "scan-1",
+    target: { id: "target-1", label: "Corporate site", origin: "https://a.test" },
+    detectorId: "P-01",
+    name: "Missing Content-Security-Policy",
+    severity: "MEDIUM",
+    confidence: "CONFIRMED",
+    cwe: "CWE-693",
+    owaspCategory: "A05:2021",
+    affectedUrl: "https://a.test/",
+    affectedParameter: null,
+    cvssScore: null,
+    epssScore: null,
+    occurrenceCount: 1,
+    createdAt: ISO,
+    diffStatus: "PERSISTING",
+    triage: { state: "OPEN", justification: null, updatedAt: null, updatedBy: null },
+    ...overrides,
+  };
+}
+
+export function aFindingDetail(
+  overrides: Partial<FindingDetail> = {},
+): FindingDetail {
+  return {
+    ...aFinding(),
+    description: "The page sends no Content-Security-Policy header.",
+    remediation: "Send a restrictive Content-Security-Policy.",
+    cvssVector: null,
+    cveId: null,
+    epssPercentile: null,
+    advisoryData: null,
+    occurrences: null,
+    scan: { id: "scan-1", status: "COMPLETED", profile: "STANDARD", completedAt: ISO },
+    seen: { first: ISO, last: ISO, scans: 1 },
+    evidence: { status: "NONE" },
+    triageHistory: [],
     ...overrides,
   };
 }

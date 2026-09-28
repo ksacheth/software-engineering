@@ -55,18 +55,21 @@ function overridable<T extends Record<string, unknown>>(real: T) {
 
 const realScans = await import("@/services/scans");
 const realTargets = await import("@/services/targets");
+const realFindings = await import("@/services/findings");
 const realSocket = await import("@/providers/websocket-provider");
 const realRole = await import("@/lib/use-role");
 const realToast = await import("sonner");
 
 const scansMock = overridable(realScans);
 const targetsMock = overridable(realTargets);
+const findingsMock = overridable(realFindings);
 const socketMock = overridable(realSocket);
 const roleMock = overridable(realRole);
 const toastMock = overridable(realToast.toast as unknown as Record<string, unknown>);
 
 mock.module("@/services/scans", () => scansMock.exports);
 mock.module("@/services/targets", () => targetsMock.exports);
+mock.module("@/services/findings", () => findingsMock.exports);
 mock.module("@/providers/websocket-provider", () => socketMock.exports);
 mock.module("@/lib/use-role", () => roleMock.exports);
 mock.module("sonner", () => ({ ...realToast, toast: toastMock.exports }));
@@ -77,6 +80,8 @@ export const stub = {
     scansMock.set(key, implementation),
   targets: (key: keyof typeof realTargets, implementation: Fn) =>
     targetsMock.set(key, implementation),
+  findings: (key: keyof typeof realFindings, implementation: Fn) =>
+    findingsMock.set(key, implementation),
   socket: (key: keyof typeof realSocket, implementation: Fn) =>
     socketMock.set(key, implementation),
   role: (key: keyof typeof realRole, implementation: Fn) =>
@@ -89,6 +94,7 @@ export const toasts: { kind: string; message: string }[] = [];
 export function resetMocks(): void {
   scansMock.clear();
   targetsMock.clear();
+  findingsMock.clear();
   socketMock.clear();
   roleMock.clear();
   toastMock.clear();
@@ -107,3 +113,4 @@ resetMocks();
 /** The real error classes, so `instanceof` in the code under test still holds. */
 export const { ScanApiError } = realScans;
 export const { TargetApiError } = realTargets;
+export const { FindingApiError } = realFindings;
