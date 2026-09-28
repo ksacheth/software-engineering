@@ -21,6 +21,8 @@ export function formatNotScannableReason(reason?: NotScannableReason | string): 
       return 'No verified addresses recorded (fails closed)';
     case 'AUTHORISATION_NOT_ACKNOWLEDGED':
       return 'Authorisation not acknowledged';
+    case 'BLOCKLISTED':
+      return 'On the network blocklist';
     default:
       return reason ? reason.replace(/_/g, ' ') : 'Not scannable';
   }

@@ -59,6 +59,8 @@ const realFindings = await import("@/services/findings");
 const realSocket = await import("@/providers/websocket-provider");
 const realRole = await import("@/lib/use-role");
 const realToast = await import("sonner");
+const realAdmin = await import("@/services/admin");
+const realKillSwitch = await import("@/lib/use-kill-switch");
 
 const scansMock = overridable(realScans);
 const targetsMock = overridable(realTargets);
@@ -66,6 +68,8 @@ const findingsMock = overridable(realFindings);
 const socketMock = overridable(realSocket);
 const roleMock = overridable(realRole);
 const toastMock = overridable(realToast.toast as unknown as Record<string, unknown>);
+const adminMock = overridable(realAdmin);
+const killSwitchMock = overridable(realKillSwitch);
 
 mock.module("@/services/scans", () => scansMock.exports);
 mock.module("@/services/targets", () => targetsMock.exports);
@@ -73,6 +77,8 @@ mock.module("@/services/findings", () => findingsMock.exports);
 mock.module("@/providers/websocket-provider", () => socketMock.exports);
 mock.module("@/lib/use-role", () => roleMock.exports);
 mock.module("sonner", () => ({ ...realToast, toast: toastMock.exports }));
+mock.module("@/services/admin", () => adminMock.exports);
+mock.module("@/lib/use-kill-switch", () => killSwitchMock.exports);
 
 /** Redirect one export of a module, for the duration of a test. */
 export const stub = {
@@ -86,6 +92,10 @@ export const stub = {
     socketMock.set(key, implementation),
   role: (key: keyof typeof realRole, implementation: Fn) =>
     roleMock.set(key, implementation),
+  admin: (key: keyof typeof realAdmin, implementation: Fn) =>
+    adminMock.set(key, implementation),
+  killSwitch: (key: keyof typeof realKillSwitch, implementation: Fn) =>
+    killSwitchMock.set(key, implementation),
 };
 
 /** Toasts raised during a test, newest last. */
@@ -98,7 +108,15 @@ export function resetMocks(): void {
   socketMock.clear();
   roleMock.clear();
   toastMock.clear();
+  adminMock.clear();
+  killSwitchMock.clear();
   toasts.length = 0;
+
+  // Hooks that would otherwise poll the API or read a session. A test about
+  // the kill switch or a quota sets them; every other test gets a system that
+  // is running normally under the default quota.
+  killSwitchMock.set("useKillSwitchEngaged", (() => false) as Fn);
+  roleMock.set("useQuota", (() => null) as Fn);
 
   for (const kind of ["success", "error", "info", "warning", "message"]) {
     toastMock.set(kind, ((message: string) => {
@@ -114,3 +132,4 @@ resetMocks();
 export const { ScanApiError } = realScans;
 export const { TargetApiError } = realTargets;
 export const { FindingApiError } = realFindings;
+export const { AdminApiError } = realAdmin;

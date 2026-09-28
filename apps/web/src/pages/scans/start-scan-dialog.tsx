@@ -36,6 +36,8 @@ import { toast } from "sonner";
 import { startScan, ScanApiError } from "@/services/scans";
 import type { ScannableVerdict, Target } from "@/services/targets";
 import { formatNotScannableReason } from "../targets/components/scannable-badge";
+import { useKillSwitchEngaged } from "@/lib/use-kill-switch";
+import { useQuota } from "@/lib/use-role";
 
 /**
  * Start a scan from the target detail page.
@@ -60,6 +62,19 @@ const LIMIT_FIELDS: { key: keyof ScanConfiguration; label: string }[] = [
   { key: "maxRequests", label: "Request ceiling" },
 ];
 
+/** Why a scan cannot be started right now, or undefined when it can. */
+function startDisabledReason(
+  halted: boolean,
+  scannable: ScannableVerdict,
+): string | undefined {
+  if (halted) {
+    return "Scanning is halted: an administrator has engaged the kill switch";
+  }
+  return scannable.scannable
+    ? undefined
+    : formatNotScannableReason(scannable.reason);
+}
+
 export interface StartScanDialogProps {
   target: Target;
   scannable: ScannableVerdict;
@@ -75,9 +90,20 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
     Partial<Record<keyof ScanConfiguration, string>>
   >({});
   const [problems, setProblems] = useState<string[]>([]);
+  const halted = useKillSwitchEngaged();
+  // F.8: the organisation's cap on request rate. The API lowers a preset's
+  // rate to it and refuses a chosen rate above it, so the dialog does the same
+  // arithmetic to show the rate the scan will really run at.
+  const rateCap = Math.min(
+    useQuota()?.scanRateLimit ?? SCAN_CONFIGURATION_BOUNDS.rateLimit.max,
+    SCAN_CONFIGURATION_BOUNDS.rateLimit.max,
+  );
 
   const effective = useMemo((): ScanConfiguration => {
-    const preset = SCAN_PROFILE_PRESETS[profile];
+    const preset = {
+      ...SCAN_PROFILE_PRESETS[profile],
+      rateLimit: Math.min(SCAN_PROFILE_PRESETS[profile].rateLimit, rateCap),
+    };
     if (!customise) return preset;
 
     const resolved = { ...preset };
@@ -88,7 +114,7 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
       if (Number.isFinite(parsed)) resolved[key] = parsed;
     }
     return resolved;
-  }, [customise, overrides, profile]);
+  }, [customise, overrides, profile, rateCap]);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -120,9 +146,7 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
     },
   });
 
-  const disabledReason = !scannable.scannable
-    ? formatNotScannableReason(scannable.reason)
-    : undefined;
+  const disabledReason = startDisabledReason(halted, scannable);
 
   return (
     <Dialog
@@ -219,7 +243,7 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
               </FieldLabel>
               <FieldDescription>
                 Leave a field blank to keep the profile value. Bounds: rate 1-
-                {SCAN_CONFIGURATION_BOUNDS.rateLimit.max}/s, depth 1-
+                {rateCap}/s, depth 1-
                 {SCAN_CONFIGURATION_BOUNDS.maxDepth.max}, pages 1-
                 {SCAN_CONFIGURATION_BOUNDS.maxPages.max}, requests 1-
                 {SCAN_CONFIGURATION_BOUNDS.maxRequests.max}.
@@ -236,7 +260,11 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
                     id={`limit-${key}`}
                     type="number"
                     min={SCAN_CONFIGURATION_BOUNDS[key].min}
-                    max={SCAN_CONFIGURATION_BOUNDS[key].max}
+                    max={
+                      key === "rateLimit"
+                        ? rateCap
+                        : SCAN_CONFIGURATION_BOUNDS[key].max
+                    }
                     placeholder={String(SCAN_PROFILE_PRESETS[profile][key])}
                     value={overrides[key] ?? ""}
                     onChange={(event) =>
@@ -256,6 +284,12 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
             {effective.concurrency} · depth {effective.maxDepth} ·{" "}
             {effective.maxPages} pages · {effective.maxRequests} requests
           </p>
+          {rateCap < SCAN_CONFIGURATION_BOUNDS.rateLimit.max && (
+            <p className="text-xs text-muted-foreground">
+              Your organisation's limit is {rateCap} req/s, set by an
+              administrator.
+            </p>
+          )}
 
           <DialogFooter>
             <Button

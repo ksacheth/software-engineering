@@ -108,7 +108,7 @@ export function App() {
                     element={<FindingDetailPage />}
                   />
                   <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/admin" element={<AdminPage />} />
+                  <Route path="/admin/*" element={<AdminPage />} />
                   <Route path="/settings/*" element={<SettingsPage />} />
                 </Route>
 

@@ -313,3 +313,23 @@ async function renderDialogAndOpen() {
   await open();
   return view;
 }
+
+describe("F.8 limits set by an administrator", () => {
+  test("cannot be opened while the kill switch is engaged, and says why", () => {
+    stub.killSwitch("useKillSwitchEngaged", () => true);
+    renderDialog();
+
+    expect(trigger().hasAttribute("disabled")).toBe(true);
+    expect(trigger().getAttribute("title")).toContain("kill switch");
+  });
+
+  test("shows the organisation's rate cap and runs a preset at it", async () => {
+    // The API lowers a preset's rate to the quota, so the dialog has to show
+    // the rate the scan will really use rather than the preset's.
+    stub.role("useQuota", () => ({ maxConcurrentScans: 2, scanRateLimit: 5 }));
+    await renderDialogAndOpen();
+
+    expect(screen.getByText(/Will run with: 5 req\/s/)).toBeTruthy();
+    expect(screen.getByText(/organisation's limit is 5 req\/s/)).toBeTruthy();
+  });
+});
