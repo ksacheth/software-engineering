@@ -13,6 +13,7 @@ import { createAuthRouter } from "./modules/auth/auth.routes";
 import { createMeRouter } from "./modules/auth/me.routes";
 import { createTargetsRouter } from "./modules/targets/targets.routes";
 import { createScansRouter } from "./modules/scans/scans.routes";
+import { createFindingsRouter } from "./modules/findings/findings.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp(): Express {
   app.use("/api/me", createMeRouter());
   app.use("/api/targets", createTargetsRouter());
   app.use("/api/scans", createScansRouter());
+  app.use("/api/findings", createFindingsRouter());
 
   // 404
   app.use((_req, res) => {
