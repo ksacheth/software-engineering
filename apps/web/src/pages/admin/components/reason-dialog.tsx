@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -56,21 +56,23 @@ export function ReasonDialog({
   const [reason, setReason] = useState("");
   const [phrase, setPhrase] = useState("");
 
+  // Cleared on every close, not only the ones the dialog starts itself: a
+  // successful action is closed by the parent, and a parent that keeps one
+  // instance mounted would otherwise reopen it with the last reason and the
+  // confirmation phrase already typed.
+  useEffect(() => {
+    if (!open) {
+      setReason("");
+      setPhrase("");
+    }
+  }, [open]);
+
   const ready =
     (!requireReason || reason.trim().length > 0) &&
     (!confirmPhrase || phrase === confirmPhrase);
 
   return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          setReason("");
-          setPhrase("");
-        }
-        onOpenChange(next);
-      }}
-    >
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>

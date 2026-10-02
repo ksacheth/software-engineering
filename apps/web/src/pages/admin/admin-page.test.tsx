@@ -178,6 +178,45 @@ describe("the kill switch", () => {
     await waitFor(() => expect(called("releaseKillSwitch")).toHaveLength(1));
     expect(called("releaseKillSwitch")[0]!.args).toEqual(["Resolved"]);
   });
+
+  test("a confirmation never carries over to the next engage or release", async () => {
+    stub.admin(
+      "engageKillSwitch",
+      record("engageKillSwitch", () => {
+        killSwitch = { ...released, engaged: true };
+        return { killSwitch, abortedScans: 0 };
+      }),
+    );
+    stub.admin(
+      "releaseKillSwitch",
+      record("releaseKillSwitch", () => {
+        killSwitch = released;
+        return { killSwitch };
+      }),
+    );
+    const user = userEvent.setup();
+    renderAdmin();
+
+    await user.click(await screen.findByRole("button", { name: "Engage kill switch" }));
+    let dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByLabelText("Reason"), "Runaway scan");
+    await user.type(within(dialog).getByLabelText(/Type HALT/), "HALT");
+    await user.click(within(dialog).getByRole("button", { name: "Halt all scans" }));
+
+    await user.click(await screen.findByRole("button", { name: "Release kill switch" }));
+    dialog = await screen.findByRole("alertdialog");
+    expect((within(dialog).getByLabelText("Reason") as HTMLTextAreaElement).value).toBe("");
+    await user.type(within(dialog).getByLabelText("Reason"), "Resolved");
+    await user.click(within(dialog).getByRole("button", { name: "Release" }));
+
+    await user.click(await screen.findByRole("button", { name: "Engage kill switch" }));
+    dialog = await screen.findByRole("alertdialog");
+    expect((within(dialog).getByLabelText("Reason") as HTMLTextAreaElement).value).toBe("");
+    expect((within(dialog).getByLabelText(/Type HALT/) as HTMLInputElement).value).toBe("");
+    expect(
+      within(dialog).getByRole("button", { name: "Halt all scans" }).hasAttribute("disabled"),
+    ).toBe(true);
+  });
 });
 
 describe("health", () => {
@@ -334,6 +373,7 @@ describe("organisations and quotas", () => {
       { maxConcurrentScans: 0, scanRateLimit: 5 },
     ]);
   });
+
 });
 
 describe("the network blocklist", () => {
