@@ -26,6 +26,7 @@ import { DashboardPage } from "@/pages/dashboard/dashboard-page";
 import { ScansPage } from "@/pages/scans/scans-page";
 import { ScanDetailPage } from "@/pages/scans/scan-detail-page";
 import { FindingsPage } from "@/pages/findings/findings-page";
+import { FindingDetailPage } from "@/pages/findings/finding-detail-page";
 import { ReportsPage } from "@/pages/reports/reports-page";
 import { AdminPage } from "@/pages/admin/admin-page";
 import { SettingsPage } from "@/pages/settings/settings-page";
@@ -102,6 +103,10 @@ export function App() {
                   <Route path="/scans" element={<ScansPage />} />
                   <Route path="/scans/:id" element={<ScanDetailPage />} />
                   <Route path="/findings" element={<FindingsPage />} />
+                  <Route
+                    path="/findings/:id"
+                    element={<FindingDetailPage />}
+                  />
                   <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/settings/*" element={<SettingsPage />} />

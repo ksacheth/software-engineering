@@ -1,14 +1,20 @@
 import type {
+  ComparisonStatus as PrismaComparisonStatus,
+  FindingConfidence as PrismaFindingConfidence,
   FindingSeverity as PrismaFindingSeverity,
   ScanPhase as PrismaScanPhase,
   ScanProfile as PrismaScanProfile,
   ScanStatus as PrismaScanStatus,
+  TriageState as PrismaTriageState,
 } from "@wvs/database";
 import type {
+  ComparisonStatus,
+  FindingConfidence,
   FindingSeverity,
   ScanPhase,
   ScanProfile,
   ScanStatus,
+  TriageState,
 } from "@wvs/shared";
 
 /**
@@ -42,4 +48,13 @@ export type ScanPhaseMatchesPrisma = Assert<
 >;
 export type FindingSeverityMatchesPrisma = Assert<
   MutuallyAssignable<PrismaFindingSeverity, FindingSeverity>
+>;
+export type FindingConfidenceMatchesPrisma = Assert<
+  MutuallyAssignable<PrismaFindingConfidence, FindingConfidence>
+>;
+export type ComparisonStatusMatchesPrisma = Assert<
+  MutuallyAssignable<PrismaComparisonStatus, ComparisonStatus>
+>;
+export type TriageStateMatchesPrisma = Assert<
+  MutuallyAssignable<PrismaTriageState, TriageState>
 >;

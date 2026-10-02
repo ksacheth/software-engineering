@@ -76,8 +76,21 @@ _Avoid_: IP allowlist, IP range
 
 **Triage state**:
 A human judgement about a finding (OPEN, CONFIRMED, FALSE_POSITIVE,
-ACCEPTED_RISK) that persists across scans. Orthogonal to diff status.
+ACCEPTED_RISK, RESOLVED) that persists across scans. It is held per
+`(target, fingerprint)`, not per finding row, so triaging a finding from any
+scan sets it for every scan of that target. A fingerprint nobody has triaged is
+OPEN. Triage RESOLVED is a person's claim that the issue is fixed and awaits a
+rescan; diff RESOLVED is the machine's observation that a rescan no longer
+found it. The two are shown side by side and never merged. Orthogonal to diff
+status.
 _Avoid_: finding status
+
+**Current posture**:
+For each target, the findings of its most recent COMPLETED scan. What the
+findings list shows by default. A finding that has disappeared is not part of
+the current posture; it appears as diff RESOLVED on the scan that stopped
+seeing it.
+_Avoid_: latest findings, dashboard findings
 
 **Diff status**:
 A machine comparison of a finding against the previous scan (NEW, PERSISTING,

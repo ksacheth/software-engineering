@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import {
   PROGRESS_INTERVAL_MS,
   isTerminalScanStatus,
-  type FindingSeverity,
   type ScanStatus,
 } from "@wvs/shared";
 import {
@@ -24,6 +23,7 @@ import {
   ScanApiError,
   type Scan,
 } from "@/services/scans";
+import { fetchResolvedSince } from "@/services/findings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -43,36 +43,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 import { useCanWrite } from "@/lib/use-role";
 import { useWebSocket } from "@/providers/websocket-provider";
 import { ScanStatusBadge } from "./components/scan-status-badge";
 import { useLiveScan } from "./use-live-scan";
 import type { ScanFindingSummary } from "@/services/scans";
-
-const SEVERITY_CLASSES: Record<FindingSeverity, string> = {
-  INFO: "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300",
-  LOW: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  MEDIUM:
-    "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  HIGH: "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300",
-  CRITICAL: "border-destructive/30 bg-destructive/10 text-destructive",
-};
-
-function asSeverity(value: string): FindingSeverity {
-  return (value in SEVERITY_CLASSES ? value : "INFO") as FindingSeverity;
-}
-
-function SeverityBadge({ severity }: { severity: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={cn("cursor-default", SEVERITY_CLASSES[asSeverity(severity)])}
-    >
-      {severity}
-    </Badge>
-  );
-}
+import {
+  SeverityBadge,
+  TriageBadge,
+} from "../findings/components/finding-badges";
+import { FindingsTable } from "../findings/components/findings-table";
 
 function ConnectionBadge({
   socketStatus,
@@ -147,7 +127,19 @@ function FindingTable({ findings }: { findings: ScanFindingSummary[] }) {
               <SeverityBadge severity={finding.severity} />
             </TableCell>
             <TableCell className="text-sm font-medium">
-              {finding.name}
+              {/* A finding streamed live is keyed by its fingerprint until the
+                  durable row is read back, and only a durable row has a
+                  detail page to link to. */}
+              {finding.id !== finding.fingerprint ? (
+                <Link
+                  to={`/findings/${finding.id}`}
+                  className="transition-colors hover:text-primary"
+                >
+                  {finding.name}
+                </Link>
+              ) : (
+                finding.name
+              )}
             </TableCell>
             <TableCell className="font-mono text-xs text-muted-foreground">
               {finding.detectorId}
@@ -159,6 +151,77 @@ function FindingTable({ findings }: { findings: ScanFindingSummary[] }) {
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/**
+ * What the previous scan found and this one did not (diff RESOLVED). This
+ * scan wrote no row for them, so each links to its last earlier sighting.
+ */
+function ResolvedSinceCard({ scanId }: { scanId: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["findings", "resolved", scanId],
+    queryFn: () => fetchResolvedSince(scanId),
+  });
+  const resolved = data?.findings ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Resolved since previous scan</CardTitle>
+        <CardDescription>
+          Found by an earlier scan and not seen by this one.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Spinner className="mx-auto size-6" />
+        ) : error ? (
+          <p className="text-sm text-destructive">
+            {error instanceof Error ? error.message : "Could not load resolved findings."}
+          </p>
+        ) : resolved.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Nothing from the previous scan has gone away.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Severity</TableHead>
+                <TableHead>Finding</TableHead>
+                <TableHead>Triage</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {resolved.map((finding) => (
+                <TableRow key={finding.fingerprint}>
+                  <TableCell>
+                    <SeverityBadge severity={finding.severity} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <Link
+                        to={`/findings/${finding.id}`}
+                        className="text-sm font-medium transition-colors hover:text-primary"
+                      >
+                        {finding.name}
+                      </Link>
+                      <span className="truncate font-mono text-xs text-muted-foreground">
+                        {finding.affectedUrl}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <TriageBadge state={finding.triage.state} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -488,18 +551,36 @@ export function ScanDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Findings so far</CardTitle>
-          <CardDescription>
-            Live findings, and any recorded before this view was opened. Full
-            finding detail arrives with F.6.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FindingTable findings={findings} />
-        </CardContent>
-      </Card>
+      {scan.status === "COMPLETED" ? (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Findings</CardTitle>
+              <CardDescription>
+                Everything this scan found, compared with the previous scan of
+                the target.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FindingsTable scanId={scan.id} />
+            </CardContent>
+          </Card>
+          <ResolvedSinceCard scanId={scan.id} />
+        </>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Findings so far</CardTitle>
+            <CardDescription>
+              Live findings, and any recorded before this view was opened. The
+              full list with triage appears when the scan completes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FindingTable findings={findings} />
+          </CardContent>
+        </Card>
+      )}
 
       <ReproCard scan={scan} />
     </div>

@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Scan, ScanFindingSummary } from "@/services/scans";
-import { aScan } from "@/test-support/fixtures";
+import type { FindingFilters, FindingSummary } from "@/services/findings";
+import { aFinding, aScan } from "@/test-support/fixtures";
 import { resetMocks, ScanApiError, stub, toasts } from "@/test-support/mocks";
 
 /**
@@ -23,6 +24,9 @@ import { resetMocks, ScanApiError, stub, toasts } from "@/test-support/mocks";
 
 let row: Scan;
 let findings: ScanFindingSummary[] = [];
+let listed: FindingSummary[] = [];
+let resolved: FindingSummary[] = [];
+const listCalls: FindingFilters[] = [];
 let fetchRejectsWith: Error | null = null;
 let fetchHangs = false;
 let scanFetches = 0;
@@ -75,6 +79,9 @@ beforeEach(() => {
   resetMocks();
   row = freshScan();
   findings = [];
+  listed = [];
+  resolved = [];
+  listCalls.length = 0;
   fetchRejectsWith = null;
   fetchHangs = false;
   scanFetches = 0;
@@ -97,6 +104,13 @@ beforeEach(() => {
     return { scan: row };
   }) as never);
   stub.scans("fetchScanFindings", (async () => ({ findings })) as never);
+  stub.findings("fetchFindings", (async (filters: FindingFilters) => {
+    listCalls.push(filters);
+    return { findings: listed, nextCursor: null };
+  }) as never);
+  stub.findings("fetchResolvedSince", (async () => ({
+    findings: resolved,
+  })) as never);
 
   for (const name of ["pauseScan", "resumeScan", "cancelScan"] as const) {
     stub.scans(name, (async (id: string) => {
@@ -426,7 +440,7 @@ describe("findings", () => {
 
     const row = await screen.findByText("Missing security header");
     const cells = row.closest("tr")!;
-    expect(within(cells).getByText("HIGH")).toBeTruthy();
+    expect(within(cells).getByText("High")).toBeTruthy();
     expect(within(cells).getByText("P-01")).toBeTruthy();
     expect(within(cells).getByText("https://a.test/login")).toBeTruthy();
   });
@@ -439,6 +453,56 @@ describe("findings", () => {
     await showScan();
 
     expect(await screen.findByText("CATASTROPHIC")).toBeTruthy();
+  });
+});
+
+describe("findings once the scan completes", () => {
+  test("replace the live list with this scan's full findings", async () => {
+    listed = [aFinding({ id: "f-9", name: "Reflected XSS", diffStatus: "NEW" })];
+    await showScan(freshScan({ status: "COMPLETED" }));
+
+    expect(await screen.findByRole("link", { name: "Reflected XSS" })).toBeTruthy();
+    expect(listCalls.at(-1)).toMatchObject({ scanId: "scan-1" });
+    expect(screen.queryByText("Findings so far")).toBeNull();
+    expect(screen.getByText("New")).toBeTruthy();
+  });
+
+  test("list what the previous scan found and this one did not", async () => {
+    resolved = [
+      aFinding({ id: "f-old", name: "Directory listing enabled", diffStatus: "RESOLVED" }),
+    ];
+    await showScan(freshScan({ status: "COMPLETED" }));
+
+    const link = await screen.findByRole("link", { name: "Directory listing enabled" });
+    expect(link.getAttribute("href")).toBe("/findings/f-old");
+  });
+
+  test("link a durable live finding to its detail, and not a streamed one", async () => {
+    findings = [
+      {
+        id: "f-1",
+        fingerprint: "fp-1",
+        detectorId: "P-01",
+        name: "Stored finding",
+        severity: "LOW",
+        affectedUrl: "https://a.test/",
+        createdAt: "2026-09-21T10:00:00.000Z",
+      },
+      {
+        id: "fp-2",
+        fingerprint: "fp-2",
+        detectorId: "P-02",
+        name: "Streamed finding",
+        severity: "LOW",
+        affectedUrl: "https://a.test/",
+        createdAt: "2026-09-21T10:00:00.000Z",
+      },
+    ];
+    await showScan();
+
+    const stored = await screen.findByRole("link", { name: "Stored finding" });
+    expect(stored.getAttribute("href")).toBe("/findings/f-1");
+    expect(screen.getByText("Streamed finding").closest("a")).toBeNull();
   });
 });
 
