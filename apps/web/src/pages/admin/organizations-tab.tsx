@@ -145,16 +145,18 @@ function QuotaDialog({
         >
           <Field>
             <FieldLabel htmlFor="quota-concurrent">Concurrent scans</FieldLabel>
+            {/* Required: a blank field reads as 0, which suspends scanning. */}
             <Input
               id="quota-concurrent"
               type="number"
+              required
               min={maxConcurrentScans.min}
               max={maxConcurrentScans.max}
               value={concurrent}
               onChange={(event) => setConcurrent(event.target.value)}
             />
             <FieldDescription>
-              {Number(concurrent) === 0
+              {concurrent.trim() !== "" && Number(concurrent) === 0
                 ? "Zero suspends scanning for this organisation."
                 : `Between ${maxConcurrentScans.min} and ${maxConcurrentScans.max}. Zero suspends scanning.`}
             </FieldDescription>
@@ -164,6 +166,7 @@ function QuotaDialog({
             <Input
               id="quota-rate"
               type="number"
+              required
               min={scanRateLimit.min}
               max={scanRateLimit.max}
               value={rate}

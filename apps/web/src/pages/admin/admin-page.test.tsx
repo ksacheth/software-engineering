@@ -374,6 +374,21 @@ describe("organisations and quotas", () => {
     ]);
   });
 
+  test("a blank field is not saved as zero", async () => {
+    const user = userEvent.setup();
+    renderAdmin("organizations");
+
+    await screen.findByText("Acme");
+    await user.click(screen.getByRole("button", { name: "Edit quota for Acme" }));
+    const dialog = await screen.findByRole("dialog");
+    const concurrent = within(dialog).getByLabelText("Concurrent scans");
+    await user.clear(concurrent);
+    expect((concurrent as HTMLInputElement).checkValidity()).toBe(false);
+    expect(within(dialog).queryByText(/^Zero suspends/)).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Save quota" }));
+
+    expect(called("updateQuota")).toHaveLength(0);
+  });
 });
 
 describe("the network blocklist", () => {
