@@ -163,6 +163,32 @@ describe("triage", () => {
     );
   });
 
+  test("a recorded reason does not carry over to a different state", async () => {
+    const user = userEvent.setup();
+    await showFinding(
+      aFindingDetail({
+        triage: {
+          state: "FALSE_POSITIVE",
+          justification: "Test-only endpoint",
+          updatedAt: "2026-09-21T10:00:00.000Z",
+          updatedBy: null,
+        },
+      }),
+    );
+    const justification = () =>
+      (screen.getByLabelText(/Justification/) as HTMLTextAreaElement).value;
+    expect(justification()).toBe("Test-only endpoint");
+
+    await user.click(screen.getByRole("radio", { name: /Accepted risk/ }));
+    expect(justification()).toBe("");
+    await user.click(screen.getByRole("button", { name: "Record triage" }));
+    expect(await screen.findByText(/A justification is required/)).toBeTruthy();
+    expect(triageCalls).toHaveLength(0);
+
+    await user.click(screen.getByRole("radio", { name: /False positive/ }));
+    expect(justification()).toBe("Test-only endpoint");
+  });
+
   test("shows a refusal from the API", async () => {
     const user = userEvent.setup();
     stub.findings("triageFinding", (async () => {

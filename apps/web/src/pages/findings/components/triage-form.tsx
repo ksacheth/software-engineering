@@ -40,6 +40,21 @@ export function needsJustification(state: TriageState): boolean {
   return JUSTIFIED_TRIAGE_STATES.includes(state);
 }
 
+/**
+ * The recorded reason explains the recorded state, not a new one: it is
+ * cleared when another state is chosen and restored on the way back. Text the
+ * user has typed themselves is left alone.
+ */
+function justificationFor(
+  next: TriageState,
+  current: string,
+  initialState: TriageState,
+  prefill: string,
+): string {
+  if (next === initialState) return current === "" ? prefill : current;
+  return current === prefill ? "" : current;
+}
+
 interface TriageFormProps {
   initialState?: TriageState;
   initialJustification?: string | null;
@@ -60,9 +75,8 @@ export function TriageForm({
 }: TriageFormProps) {
   const id = useId();
   const [state, setState] = useState<TriageState>(initialState);
-  const [justification, setJustification] = useState(
-    initialJustification ?? "",
-  );
+  const prefill = initialJustification ?? "";
+  const [justification, setJustification] = useState(prefill);
   const [touched, setTouched] = useState(false);
 
   const required = needsJustification(state);
@@ -76,14 +90,19 @@ export function TriageForm({
     onSubmit({ state, ...(trimmed ? { justification: trimmed } : {}) });
   };
 
+  const chooseState = (value: string) => {
+    const next = value as TriageState;
+    setState(next);
+    setJustification((current) =>
+      justificationFor(next, current, initialState, prefill),
+    );
+  };
+
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
       <FieldSet>
         <FieldLegend variant="label">Triage state</FieldLegend>
-        <RadioGroup
-          value={state}
-          onValueChange={(value) => setState(value as TriageState)}
-        >
+        <RadioGroup value={state} onValueChange={chooseState}>
           {TRIAGE_STATES.map((option) => (
             <label
               key={option}
