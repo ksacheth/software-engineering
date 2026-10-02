@@ -83,6 +83,30 @@ export async function removeScanJob(scanJobId: string): Promise<boolean> {
   }
 }
 
+/** Admin health (F.8): what the queue holds right now. */
+export async function scanQueueCounts() {
+  const counts = await scanQueue().getJobCounts(
+    "waiting",
+    "active",
+    "delayed",
+    "failed",
+  );
+  return {
+    waiting: counts.waiting ?? 0,
+    active: counts.active ?? 0,
+    delayed: counts.delayed ?? 0,
+    failed: counts.failed ?? 0,
+  };
+}
+
+/**
+ * Admin health (F.8): whether Redis answers on the queue's connection. A real
+ * round trip, since a connection that was ready once says nothing about now.
+ */
+export async function pingScanQueue(): Promise<void> {
+  await scanQueue().getJobCounts("waiting");
+}
+
 /** Test teardown helper: closes the shared connection so the process can exit. */
 export async function closeScanQueue(): Promise<void> {
   if (!queue) return;

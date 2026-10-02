@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../../common/session";
+import { readQuota } from "../admin/organizations";
 
 /**
  * F.1: the caller's resolved identity.
@@ -16,15 +17,23 @@ export function createMeRouter(): Router {
   const router = Router();
   router.use(requireAuth);
 
-  router.get("/", (req: Request, res: Response) => {
-    const auth = req.auth!;
-    res.json({
-      user: {
-        id: auth.userId,
-        organizationId: auth.organizationId,
-        role: auth.role,
-      },
-    });
+  router.get("/", async (req: Request, res: Response, next) => {
+    try {
+      const auth = req.auth!;
+      res.json({
+        user: {
+          id: auth.userId,
+          organizationId: auth.organizationId,
+          role: auth.role,
+        },
+        // F.8 quotas, so a new scan can show the limits it will be held to
+        // (SRS 3.2.1, "New scan: quota display") instead of learning them from
+        // a refusal.
+        quota: await readQuota(auth.organizationId),
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   return router;

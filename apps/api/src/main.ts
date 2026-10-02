@@ -4,6 +4,7 @@ import { config } from "./config/env";
 import { startEmailRetryLoop } from "./lib/email";
 import { attachScanGateway } from "./modules/scans/scan-gateway";
 import { closeScanQueue } from "./modules/scans/scan-queue";
+import { closeScanEventPublisher } from "./modules/scans/scan-bus";
 
 const app = createApp();
 const server = createServer(app);
@@ -35,6 +36,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     console.log(`[wvs-api] ${signal} received, shutting down`);
     void gateway.close();
     void closeScanQueue();
+    void closeScanEventPublisher();
     server.close(() => process.exit(0));
   });
 }

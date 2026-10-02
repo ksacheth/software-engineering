@@ -1,16 +1,8 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { UserButton } from '@/components/auth/user/user-button';
-import { cn } from '@/lib/utils';
 import { ShieldAlert } from 'lucide-react';
-
-const navItems = [
-  { name: 'Targets', href: '/targets' },
-  { name: 'Dashboard', href: '/dashboard' },
-  { name: 'Scans', href: '/scans' },
-  { name: 'Findings', href: '/findings' },
-  { name: 'Reports', href: '/reports' },
-  { name: 'Admin', href: '/admin' },
-];
+import { MainNav } from './main-nav';
+import { KillSwitchBanner } from './kill-switch-banner';
 
 export function DashboardLayout() {
   return (
@@ -21,27 +13,13 @@ export function DashboardLayout() {
             <ShieldAlert className="size-5 text-primary" />
             <span>WVS</span>
           </Link>
-          <nav className="flex items-center gap-4 text-sm font-medium">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.href}
-                to={item.href}
-                className={({ isActive }) =>
-                  cn(
-                    'transition-colors hover:text-foreground',
-                    isActive ? 'text-foreground' : 'text-muted-foreground',
-                  )
-                }
-              >
-                {item.name}
-              </NavLink>
-            ))}
-          </nav>
+          <MainNav />
         </div>
         <div className="flex items-center gap-4">
           <UserButton />
         </div>
       </header>
+      <KillSwitchBanner />
       <main className="flex-1">
         <Outlet />
       </main>

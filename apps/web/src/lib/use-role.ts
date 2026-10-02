@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@better-auth-ui/react";
+import type { OrganizationQuota } from "@wvs/shared";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -21,15 +22,20 @@ export interface Me {
   role: Role;
 }
 
-async function fetchMe(): Promise<Me> {
+interface MeResponse {
+  user: Me;
+  /** F.8: the organisation's quota, so a new scan can show its limits. */
+  quota: OrganizationQuota | null;
+}
+
+async function fetchMe(): Promise<MeResponse> {
   const res = await fetch("/api/me", { credentials: "same-origin" });
   if (!res.ok)
     throw new Error(`Identity lookup failed with status ${res.status}`);
-  const data = (await res.json()) as { user: Me };
-  return data.user;
+  return (await res.json()) as MeResponse;
 }
 
-export function useRole(): Role | null {
+export function useMe(): MeResponse | undefined {
   const { data: session, isPending } = useSession(authClient);
   const { data } = useQuery({
     queryKey: ["me"],
@@ -37,7 +43,15 @@ export function useRole(): Role | null {
     enabled: !isPending && Boolean(session),
     staleTime: Infinity,
   });
-  return data?.role ?? null;
+  return data;
+}
+
+export function useRole(): Role | null {
+  return useMe()?.user.role ?? null;
+}
+
+export function useQuota(): OrganizationQuota | null {
+  return useMe()?.quota ?? null;
 }
 
 export function useCanWrite(): boolean {

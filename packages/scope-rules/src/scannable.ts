@@ -10,13 +10,24 @@
  * turn it off is the requirement.
  */
 
+import { matchBlocklist, type BlocklistEntry } from './blocklist.js';
+
 export type NotScannableReason =
   | 'ARCHIVED'
   | 'NOT_VERIFIED'
   | 'VERIFICATION_FAILED'
   | 'VERIFICATION_EXPIRED'
   | 'NO_VERIFIED_ADDRESSES'
-  | 'AUTHORISATION_NOT_ACKNOWLEDGED';
+  | 'AUTHORISATION_NOT_ACKNOWLEDGED'
+  | 'BLOCKLISTED';
+
+function hostnameOf(origin: string): string | undefined {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface ScannableVerdict {
   scannable: boolean;
@@ -29,6 +40,7 @@ export interface ScannableVerdict {
  * dependency and can be unit-tested with plain objects.
  */
 export interface ScannableTarget {
+  origin: string;
   verificationStatus: string;
   verificationExpiresAt: Date | null;
   verifiedIpRanges: readonly string[];
@@ -44,6 +56,7 @@ export interface ScannableTarget {
  */
 export function isScannable(
   target: ScannableTarget,
+  blocklist: readonly BlocklistEntry[],
   now: Date = new Date(),
 ): ScannableVerdict {
   if (target.isArchived) {
@@ -71,6 +84,18 @@ export function isScannable(
   // docs/adr/0004.
   if (target.verifiedIpRanges.length === 0) {
     return { scannable: false, reason: 'NO_VERIFIED_ADDRESSES' };
+  }
+
+  // F.8: an administrator can list a host or range after its target was
+  // verified. The target stays registered, but it may not be scanned. The
+  // blocklist is a required argument, not an option: a caller that forgot it
+  // would be a caller that silently skipped it.
+  const blocked = matchBlocklist(
+    { hostname: hostnameOf(target.origin), addresses: target.verifiedIpRanges },
+    blocklist,
+  );
+  if (blocked.blocked) {
+    return { scannable: false, reason: 'BLOCKLISTED' };
   }
 
   return { scannable: true };

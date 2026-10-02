@@ -9,6 +9,7 @@
     "email:retry": "bun src/scripts/retry-emails.ts",
     "scans:reconcile": "bun src/scripts/reconcile-scans.ts",
     "seed:findings": "bun src/scripts/seed-dev-findings.ts",
+    "admin:grant": "bun src/scripts/grant-admin.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test --coverage"
   },

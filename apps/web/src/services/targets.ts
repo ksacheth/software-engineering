@@ -13,7 +13,8 @@ export type NotScannableReason =
   | 'VERIFICATION_FAILED'
   | 'VERIFICATION_EXPIRED'
   | 'NO_VERIFIED_ADDRESSES'
-  | 'AUTHORISATION_NOT_ACKNOWLEDGED';
+  | 'AUTHORISATION_NOT_ACKNOWLEDGED'
+  | 'BLOCKLISTED';
 
 export interface ScannableVerdict {
   scannable: boolean;
@@ -81,7 +82,8 @@ export type ResolutionFailure = 'NXDOMAIN' | 'NO_ADDRESSES' | 'DNS_ERROR';
 export type OriginRefusal =
   | { kind: 'ORIGIN'; problem: OriginProblem; detail?: string }
   | { kind: 'RESOLUTION'; failure: ResolutionFailure; detail?: string }
-  | { kind: 'ADDRESS'; reason: string; detail?: string };
+  | { kind: 'ADDRESS'; reason: string; detail?: string }
+  | { kind: 'BLOCKLIST'; entryId: string; patternType: string; pattern: string; matched?: string };
 
 export type ChallengeFailure =
   | 'NO_RECORD'

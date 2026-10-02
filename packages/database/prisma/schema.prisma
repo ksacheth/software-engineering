@@ -30,6 +30,9 @@ model User {
   role             Role      @default(ANALYST)
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime? @db.Timestamptz(3)
+  /// F.8: an administrator's indefinite block on sign-in. Distinct from
+  /// lockedUntil, which follows failed sign-ins and expires on its own.
+  suspendedAt      DateTime? @db.Timestamptz(3)
   twoFactorEnabled Boolean?  @default(false)
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
@@ -626,6 +629,10 @@ enum AuditAction {
   ADMIN_BLOCKLIST_UPDATED
   ADMIN_BLOCKLIST_DELETED
   ADMIN_QUOTA_CHANGED
+  ADMIN_ROLE_GRANTED
+  ADMIN_USER_ROLE_CHANGED
+  ADMIN_USER_SUSPENDED
+  ADMIN_USER_UNSUSPENDED
 }
 
 model AuditLog {

@@ -40,6 +40,13 @@ export interface StartScanRequest {
   targetId: string;
   profile: ScanProfile;
   configuration: ScanConfiguration;
+  /**
+   * Whether the caller chose the request rate, rather than taking the
+   * profile's. An organisation's quota (F.8) refuses a chosen rate above it but
+   * lowers a default one, so a gentler quota does not break every scan started
+   * with the preset.
+   */
+  rateLimitExplicit: boolean;
 }
 
 export type StartScanParse =
@@ -84,6 +91,7 @@ export function parseStartScanRequest(body: unknown): StartScanParse {
       targetId: parsed.data.targetId,
       profile,
       configuration: resolved.configuration,
+      rateLimitExplicit: overrides.rateLimit !== undefined,
     },
   };
 }

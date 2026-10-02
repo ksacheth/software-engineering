@@ -1,7 +1,9 @@
 import { promises as dns } from 'node:dns';
 import {
   classifyResolvedAddresses,
+  matchBlocklist,
   type AddressRefusalReason,
+  type BlocklistEntry,
 } from '@wvs/scope-rules';
 
 /**
@@ -130,7 +132,15 @@ export async function resolveHost(hostname: string): Promise<ResolveResult> {
 export type OriginRefusal =
   | { kind: 'ORIGIN'; problem: OriginProblem; detail?: string }
   | { kind: 'RESOLUTION'; failure: ResolutionFailure; detail?: string }
-  | { kind: 'ADDRESS'; reason: AddressRefusalReason; detail?: string };
+  | { kind: 'ADDRESS'; reason: AddressRefusalReason; detail?: string }
+  | {
+      kind: 'BLOCKLIST';
+      entryId: string;
+      patternType: string;
+      pattern: string;
+      /** The hostname or address that matched, when there is one. */
+      matched?: string;
+    };
 
 export type ClassifyOriginResult =
   | { ok: true; parsed: ParsedOrigin; addresses: string[] }
@@ -142,8 +152,14 @@ export type ClassifyOriginResult =
  * Used at registration (fast feedback, and so a forbidden target never exists)
  * and again at verification (the security boundary, because DNS can change
  * between the two and verification is when addresses are committed).
+ *
+ * The network blocklist (F.8) is checked last, after the fixed address rules,
+ * so a private address is reported as private rather than as listed.
  */
-export async function classifyOrigin(input: string): Promise<ClassifyOriginResult> {
+export async function classifyOrigin(
+  input: string,
+  blocklist: readonly BlocklistEntry[],
+): Promise<ClassifyOriginResult> {
   const parsed = parseOrigin(input);
   if (!parsed.ok) {
     return { ok: false, refusal: { kind: 'ORIGIN', problem: parsed.problem, detail: parsed.detail } };
@@ -165,6 +181,23 @@ export async function classifyOrigin(input: string): Promise<ClassifyOriginResul
         kind: 'ADDRESS',
         reason: verdict.reason ?? 'MALFORMED',
         detail: verdict.normalised,
+      },
+    };
+  }
+
+  const listed = matchBlocklist(
+    { hostname: parsed.value.hostname, addresses: resolved.addresses },
+    blocklist,
+  );
+  if (listed.blocked) {
+    return {
+      ok: false,
+      refusal: {
+        kind: 'BLOCKLIST',
+        entryId: listed.entry.id,
+        patternType: listed.entry.patternType,
+        pattern: listed.entry.pattern,
+        matched: listed.matched,
       },
     };
   }
@@ -194,5 +227,7 @@ export function describeRefusal(refusal: OriginRefusal): string {
       return `Refused: the hostname resolves to a ${refusal.reason.toLowerCase().replace(/_/g, ' ')} address${
         refusal.detail ? ` (${refusal.detail})` : ''
       }.`;
+    case 'BLOCKLIST':
+      return `Refused: ${refusal.matched ?? 'this origin'} is on the network blocklist (${refusal.pattern}). Contact an administrator if you believe this is wrong.`;
   }
 }

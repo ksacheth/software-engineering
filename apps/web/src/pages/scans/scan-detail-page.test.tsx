@@ -237,6 +237,15 @@ describe("the lifecycle controls", () => {
     await waitFor(() => expect(commands).toEqual(["resume:scan-1"]));
   });
 
+  test("resume is unavailable while the kill switch is engaged", async () => {
+    stub.killSwitch("useKillSwitchEngaged", () => true);
+    await showScan(freshScan({ status: "PAUSED" }));
+
+    const resume = screen.getByRole("button", { name: "Resume" });
+    expect(resume.hasAttribute("disabled")).toBe(true);
+    expect(resume.getAttribute("title")).toContain("kill switch");
+  });
+
   test("report a refusal instead of appearing to work", async () => {
     // The API re-checks C.2 on resume, so a refusal here means the target has
     // become unscannable. Silence would leave the user waiting on a scan that

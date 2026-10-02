@@ -246,3 +246,28 @@ export function classifyResolvedAddresses(ips: readonly string[]): AddressVerdic
   }
   return ALLOWED;
 }
+
+/** An address as a number, for range comparison. */
+export interface AddressNumber {
+  family: 4 | 6;
+  value: bigint;
+}
+
+/**
+ * Converts an address to its numeric form after normalisation, so an
+ * IPv4-mapped IPv6 address compares as the IPv4 address it reaches. Not
+ * exported from the package: range matching is the blocklist's job.
+ */
+export function toAddressNumber(ip: string): AddressNumber | null {
+  const normalised = classifyAddress(ip).normalised;
+  if (!normalised) return null;
+
+  const v4 = parseIpv4(normalised);
+  if (v4) {
+    return { family: 4, value: v4.reduce((acc, octet) => (acc << 8n) | BigInt(octet), 0n) };
+  }
+
+  const v6 = parseIpv6(normalised);
+  if (!v6) return null;
+  return { family: 6, value: v6.groups.reduce((acc, group) => (acc << 16n) | BigInt(group), 0n) };
+}

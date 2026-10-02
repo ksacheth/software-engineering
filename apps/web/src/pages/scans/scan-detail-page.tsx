@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
 import { useCanWrite } from "@/lib/use-role";
+import { useKillSwitchEngaged } from "@/lib/use-kill-switch";
 import { useWebSocket } from "@/providers/websocket-provider";
 import { ScanStatusBadge } from "./components/scan-status-badge";
 import { useLiveScan } from "./use-live-scan";
@@ -234,6 +235,7 @@ function ControlButtons({
 }) {
   const queryClient = useQueryClient();
   const canWrite = useCanWrite();
+  const halted = useKillSwitchEngaged();
 
   const settle = (updated: Scan) => {
     queryClient.setQueryData(["scan", scan.id], { scan: updated });
@@ -302,7 +304,12 @@ function ControlButtons({
         <Button
           variant="outline"
           size="sm"
-          disabled={busy}
+          disabled={busy || halted}
+          title={
+            halted
+              ? "Scanning is halted: an administrator has engaged the kill switch"
+              : undefined
+          }
           onClick={() => resume.mutate()}
         >
           {resume.isPending ? (

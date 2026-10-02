@@ -2,6 +2,8 @@ import { prisma } from "@wvs/database";
 import { isScannable } from "@wvs/scope-rules";
 import { writeSystemAudit } from "../../common/audit";
 import { enqueueScan, hasScanJob } from "./scan-queue";
+import { isScanningHalted } from "../scope-guard/kill-switch";
+import { activeBlocklist } from "../scope-guard/blocklist";
 
 /**
  * Reclaim scans the queue lost (#6).
@@ -94,6 +96,7 @@ async function isStillScannable(targetId: string): Promise<boolean> {
   const target = await prisma.target.findUnique({
     where: { id: targetId },
     select: {
+      origin: true,
       isArchived: true,
       authorisationAck: true,
       verificationStatus: true,
@@ -101,7 +104,9 @@ async function isStillScannable(targetId: string): Promise<boolean> {
       verifiedIpRanges: true,
     },
   });
-  return target !== null && isScannable(target).scannable;
+  return (
+    target !== null && isScannable(target, await activeBlocklist()).scannable
+  );
 }
 
 /** What a sweep did with one lost scan. */
@@ -168,6 +173,11 @@ export async function reconcileScans(): Promise<ReconcileSummary> {
     refused: 0,
     abandoned: 0,
   };
+
+  // ADR-0008: while the kill switch is engaged nothing is re-delivered. A row
+  // still queued then is a straggler the Scope Guard will refuse anyway, and
+  // the sweep after the switch is released handles it as it would any other.
+  if (await isScanningHalted()) return summary;
 
   const now = Date.now();
   const candidates = await prisma.scanJob.findMany({

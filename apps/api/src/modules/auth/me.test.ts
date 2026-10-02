@@ -65,6 +65,15 @@ describe("GET /api/me", () => {
     expect(body.user.role).toBe("VIEWER");
   });
 
+  test("returns the organisation's quota, so a new scan can show its limits", async () => {
+    const session = await createSession("ANALYST");
+
+    const body = (await (await request(api, session, "/api/me")).json()) as {
+      quota: { maxConcurrentScans: number; scanRateLimit: number };
+    };
+    expect(body.quota).toEqual({ maxConcurrentScans: 2, scanRateLimit: 10 });
+  });
+
   test("refuses an unauthenticated caller", async () => {
     const res = await fetch(`${api.baseUrl}/api/me`);
     expect(res.status).toBe(401);

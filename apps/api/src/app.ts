@@ -14,6 +14,8 @@ import { createMeRouter } from "./modules/auth/me.routes";
 import { createTargetsRouter } from "./modules/targets/targets.routes";
 import { createScansRouter } from "./modules/scans/scans.routes";
 import { createFindingsRouter } from "./modules/findings/findings.routes";
+import { createAdminRouter } from "./modules/admin/admin.routes";
+import { createSystemStatusRouter } from "./modules/scope-guard/kill-switch.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -34,6 +36,8 @@ export function createApp(): Express {
   app.use("/api/targets", createTargetsRouter());
   app.use("/api/scans", createScansRouter());
   app.use("/api/findings", createFindingsRouter());
+  app.use("/api/system", createSystemStatusRouter());
+  app.use("/api/admin", createAdminRouter());
 
   // 404
   app.use((_req, res) => {

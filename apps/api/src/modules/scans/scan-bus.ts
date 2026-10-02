@@ -18,6 +18,48 @@ export const SCAN_EVENTS_CHANNEL = "wvs:scan-events";
 
 export type ScanEventHandler = (event: ScanEvent) => void;
 
+let publisher: Redis | null = null;
+
+/**
+ * Publish events the API itself caused.
+ *
+ * The orchestrator publishes nearly everything on this channel, but a scan the
+ * kill switch aborts may have no worker to announce it: a queued scan never had
+ * one. Without this, a live view would sit on "queued" until it next polled.
+ * Still side-effect free, per ADR-0006: every instance fans these out and does
+ * nothing else.
+ */
+export async function publishScanEvents(events: ScanEvent[]): Promise<void> {
+  if (events.length === 0) return;
+  publisher ??= new Redis({
+    ...redisConnectionOptions(),
+    maxRetriesPerRequest: 2,
+  });
+  try {
+    await Promise.all(
+      events.map((event) =>
+        publisher!.publish(SCAN_EVENTS_CHANNEL, JSON.stringify(event)),
+      ),
+    );
+  } catch (error) {
+    // The rows already say what happened and the live view polls as a
+    // fallback, so a lost announcement costs latency, not correctness.
+    console.error("[scan-events] publish failed", error);
+  }
+}
+
+/** Shutdown and test teardown: lets the process exit. */
+export async function closeScanEventPublisher(): Promise<void> {
+  if (!publisher) return;
+  const closing = publisher;
+  publisher = null;
+  try {
+    await closing.quit();
+  } catch {
+    closing.disconnect();
+  }
+}
+
 export interface ScanEventSubscription {
   close(): Promise<void>;
 }

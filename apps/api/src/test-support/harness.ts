@@ -63,6 +63,7 @@ const { createApp } = await import("../app");
 const { auth } = await import("../lib/auth");
 const { attachScanGateway } = await import("../modules/scans/scan-gateway");
 const { closeScanQueue } = await import("../modules/scans/scan-queue");
+const { closeScanEventPublisher } = await import("../modules/scans/scan-bus");
 
 export const TEST_PASSWORD = "correct-horse-battery-staple";
 
@@ -214,6 +215,7 @@ export async function startTestApi(): Promise<TestApi> {
       server.closeAllConnections?.();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await closeScanQueue();
+      await closeScanEventPublisher();
     },
   };
 }
@@ -273,6 +275,20 @@ export async function createSession(
     email,
     role,
   };
+}
+
+/**
+ * An administrator who can use the admin API: ADR-0009 puts every
+ * administrative endpoint behind two-factor authentication, so the flag is set
+ * the way enrolment leaves it rather than by stubbing the guard.
+ */
+export async function createAdminSession(): Promise<TestSession> {
+  const session = await createSession("ADMIN");
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: { twoFactorEnabled: true },
+  });
+  return session;
 }
 
 export interface TestTarget {
