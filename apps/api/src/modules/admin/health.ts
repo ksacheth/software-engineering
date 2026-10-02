@@ -14,11 +14,30 @@ import { pingScanQueue, scanQueueCounts } from "../scans/scan-queue";
  * something is down.
  */
 
-async function probe<T>(work: () => Promise<T>): Promise<T | { ok: false; error: string }> {
+/**
+ * Long enough for a healthy store under load, short enough that the view still
+ * answers while one is down. Without it, a Redis that is unreachable keeps
+ * ioredis retrying for seconds and the whole response waits on it.
+ */
+const PROBE_TIMEOUT_MS = 2_000;
+
+export async function probe<T>(
+  work: () => Promise<T>,
+  timeoutMs = PROBE_TIMEOUT_MS,
+): Promise<T | { ok: false; error: string }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Timed out after ${timeoutMs} ms`)),
+      timeoutMs,
+    );
+  });
   try {
-    return await work();
+    return await Promise.race([work(), timeout]);
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
