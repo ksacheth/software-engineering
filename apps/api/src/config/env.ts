@@ -73,10 +73,11 @@ function requiredSecret(name: string, value: string | undefined): void {
 /**
  * Express `trust proxy` setting.
  *
- * Both the Vite dev proxy and the production nginx run on loopback, so trusting
- * loopback reads the real client IP out of X-Forwarded-For while still refusing
- * a spoofed header from a direct caller. Accepts `false`, `true`, a hop count,
- * or an Express trust-proxy expression.
+ * The Vite dev proxy runs on loopback, so trusting loopback reads the real
+ * client IP out of X-Forwarded-For while still refusing a spoofed header from a
+ * direct caller. The container deployment sets `loopback, uniquelocal`, because
+ * its nginx reaches the API over a private bridge network. Accepts `false`,
+ * `true`, a hop count, or an Express trust-proxy expression.
  */
 function trustProxySetting(
   value: string | undefined,

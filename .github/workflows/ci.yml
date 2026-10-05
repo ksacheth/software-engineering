@@ -1,0 +1,130 @@
+# F.8 / NFR-MAINT-1: type-checking and the test suites pass as a condition of
+# merge, and the container stack (DC-7) is built and started on every change.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wvs
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wvs"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # The API suite creates and migrates its own wvs_test database from this
+      # base URL, and uses Redis database 15 (apps/api/src/test-support).
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wvs
+      TEST_REDIS_DB: "15"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wvs?schema=public
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wvs?schema=public
+      REDIS_HOST: localhost
+      BETTER_AUTH_SECRET: ci-only-secret-that-signs-nothing-outside-this-job
+      BETTER_AUTH_URL: http://localhost:4100
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun run db:generate
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+      # NFR-MAINT-1: schema changes ship as migrations. The test run above
+      # migrated wvs_test, so any difference left here is a schema edit with no
+      # migration behind it.
+      - name: Migrations match the schema
+        working-directory: packages/database
+        run: >-
+          bunx prisma migrate diff
+          --from-url "postgresql://postgres:postgres@localhost:5432/wvs_test?schema=public"
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
+
+      - name: Build dashboard
+        run: bun run --filter @wvs/web build
+
+  stack:
+    name: Container stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # No .env in CI: compose reads these from the environment instead.
+      - name: Generate secrets
+        run: |
+          echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "WVS_APP_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      - name: Build and start
+        run: docker compose --profile app up -d --build
+
+      - name: Ready through nginx
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/api/health/ready; then
+              echo
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "stack never became ready" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          curl -fsS -o /dev/null http://localhost:8080/
+          curl -fsSI http://localhost:8080/ | grep -i "^content-security-policy:"
+
+      - name: Migration and scheduler ran
+        run: |
+          test "$(docker compose --profile app ps -a migrate --format '{{.ExitCode}}')" = "0"
+          for attempt in $(seq 1 12); do
+            docker compose --profile app logs scheduler | grep -q "scans:reconcile finished" && exit 0
+            sleep 5
+          done
+          echo "the scheduler never completed a run" >&2
+          exit 1
+
+      - name: Logs
+        if: failure()
+        run: docker compose --profile app logs --no-color
+
+      - name: Stop
+        if: always()
+        run: docker compose --profile app down -v
