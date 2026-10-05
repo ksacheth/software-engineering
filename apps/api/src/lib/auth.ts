@@ -1,16 +1,52 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { organization, twoFactor } from "better-auth/plugins";
+import { emailOTP, organization, twoFactor } from "better-auth/plugins";
 import { APIError } from "better-auth/api";
 import { prisma } from "@wvs/database";
+import { EMAIL_VERIFICATION_CODE } from "@wvs/shared";
 import { config } from "../config/env";
 import { trustedProxyCidrs } from "../config/trusted-proxies";
 import { sendEmail } from "./email";
 import {
   deleteAccountEmail,
   resetPasswordEmail,
-  verificationEmail,
+  verificationCodeEmail,
 } from "./email-templates";
+
+/**
+ * F.1 confirmation codes (ADR-0013). Looked up by address because the OTP
+ * plugin hands over only the email. Not awaited by the caller, for the same
+ * timing reason as the reset email.
+ */
+async function sendVerificationCode(email: string, code: string): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { name: true },
+  });
+  await sendEmail({
+    to: email,
+    ...verificationCodeEmail({ name: user?.name || email, code }),
+  });
+}
+
+/**
+ * The email OTP plugin also brings passwordless sign-in, OTP password reset and
+ * OTP email change. WVS uses it for confirmation only: signing in with a code
+ * would skip the password and the TOTP second factor, and resets stay on the
+ * link flow above. Requesting a code goes through the standard
+ * /send-verification-email route, which the plugin reroutes, so its own send
+ * and check routes are closed too.
+ */
+const UNUSED_EMAIL_OTP_PATHS = [
+  "/email-otp/send-verification-otp",
+  "/email-otp/check-verification-otp",
+  "/sign-in/email-otp",
+  "/forget-password/email-otp",
+  "/email-otp/request-password-reset",
+  "/email-otp/reset-password",
+  "/email-otp/request-email-change",
+  "/email-otp/change-email",
+];
 
 export const auth = betterAuth({
   appName: "Website Vulnerability Scanner",
@@ -40,15 +76,12 @@ export const auth = betterAuth({
       });
     },
   },
+  // The confirmation itself is a code from the emailOTP plugin below, which
+  // replaces the link. Signing in to an unconfirmed account sends a fresh
+  // code, so a user who lost the first one is not stuck.
   emailVerification: {
     sendOnSignUp: true,
-    expiresIn: 60 * 60, // 1 hour
-    sendVerificationEmail: async ({ user, url }) => {
-      void sendEmail({
-        to: user.email,
-        ...verificationEmail({ name: user.name, url }),
-      });
-    },
+    sendOnSignIn: true,
   },
   user: {
     deleteUser: {
@@ -148,7 +181,22 @@ export const auth = betterAuth({
     twoFactor({
       issuer: "Website Vulnerability Scanner",
     }),
+    emailOTP({
+      overrideDefaultEmailVerification: true,
+      otpLength: EMAIL_VERIFICATION_CODE.length,
+      expiresIn: EMAIL_VERIFICATION_CODE.expiresInMinutes * 60,
+      allowedAttempts: EMAIL_VERIFICATION_CODE.allowedAttempts,
+      // A code is a credential: only its hash is stored, as with share links
+      // (ADR-0011), so a read of the verification table yields nothing usable.
+      storeOTP: "hashed",
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        // Defence in depth: the routes for the other types are closed above.
+        if (type !== "email-verification") return;
+        void sendVerificationCode(email, otp);
+      },
+    }),
   ],
+  disabledPaths: UNUSED_EMAIL_OTP_PATHS,
   rateLimit: {
     enabled: true,
   },
