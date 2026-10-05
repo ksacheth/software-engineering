@@ -4,10 +4,12 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "noEmit": true,
-    "declaration": false,
-    "declarationMap": false
+    "paths": {
+      "@wvs/shared": ["../../packages/shared/src/index.ts"],
+      "@wvs/database": ["../../packages/database/src/index.ts"]
+    }
   },
   "include": ["src"]
 }
