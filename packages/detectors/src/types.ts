@@ -1,4 +1,4 @@
-import type { FindingSeverity, RawFindingEvidence } from "@wvs/shared";
+import type { FindingSeverity, RawFindingEvidence, TlsFacts } from "@wvs/shared";
 
 /** One response, as a detector sees it. */
 export interface PageView {
@@ -32,7 +32,13 @@ export interface Observation {
   evidence?: RawFindingEvidence;
 }
 
-export interface PassiveDetector {
+export interface Detector<Input> {
   id: string;
-  inspect(page: PageView): Observation[];
+  inspect(input: Input): Observation[];
 }
+
+/** Judges one crawled response. */
+export type PassiveDetector = Detector<PageView>;
+
+/** Judges what the TLS probe learned about the origin. */
+export type TlsDetector = Detector<TlsFacts>;

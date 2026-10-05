@@ -1,9 +1,9 @@
-import type { CrawlRecord, RawFinding, ScanProfile } from "@wvs/shared";
+import type { CrawlRecord, RawFinding, ScanProfile, TlsFacts } from "@wvs/shared";
 
 import type { DetectorCatalogue, DetectorDefinition } from "./definitions";
 import { toPageView } from "./page-view";
-import { PASSIVE_DETECTORS } from "./passive";
-import type { Observation, PageView, PassiveDetector } from "./types";
+import { PASSIVE_DETECTORS, TLS_DETECTORS } from "./passive";
+import type { Detector, Observation, PassiveDetector, TlsDetector } from "./types";
 
 /** A detector that threw. F.5: record it and carry on with the rest. */
 export interface DetectorFailure {
@@ -28,7 +28,26 @@ export function runPassiveDetectors(
   records: CrawlRecord[],
   detectors: PassiveDetector[] = PASSIVE_DETECTORS,
 ): DetectionResult {
-  const pages = records.map(toPageView);
+  return runDetectors(catalogue, profile, detectors, records.map(toPageView), (page) => page.url);
+}
+
+/** P-11..P-16 over the TLS probe's result; nothing to judge for a plaintext origin. */
+export function runTlsDetectors(
+  catalogue: DetectorCatalogue,
+  profile: ScanProfile,
+  facts: TlsFacts | null,
+  detectors: TlsDetector[] = TLS_DETECTORS,
+): DetectionResult {
+  return runDetectors(catalogue, profile, detectors, facts ? [facts] : [], (input) => `${input.origin}/`);
+}
+
+function runDetectors<Input>(
+  catalogue: DetectorCatalogue,
+  profile: ScanProfile,
+  detectors: Detector<Input>[],
+  inputs: Input[],
+  locate: (input: Input) => string,
+): DetectionResult {
   const findings = new Map<string, RawFinding>();
   const failures: DetectorFailure[] = [];
 
@@ -36,8 +55,8 @@ export function runPassiveDetectors(
     const definition = definitionFor(catalogue, detector.id);
     if (!definition.profiles.includes(profile)) continue;
 
-    for (const page of pages) {
-      const result = inspect(detector, definition, page);
+    for (const input of inputs) {
+      const result = inspect(detector, definition, input, locate);
       if ("message" in result) failures.push(result);
       else result.forEach((finding) => findings.set(findingKey(finding), findings.get(findingKey(finding)) ?? finding));
     }
@@ -46,13 +65,18 @@ export function runPassiveDetectors(
   return { findings: [...findings.values()], failures };
 }
 
-function inspect(detector: PassiveDetector, definition: DetectorDefinition, page: PageView): RawFinding[] | DetectorFailure {
+function inspect<Input>(
+  detector: Detector<Input>,
+  definition: DetectorDefinition,
+  input: Input,
+  locate: (input: Input) => string,
+): RawFinding[] | DetectorFailure {
   try {
-    return detector.inspect(page).map((observation) => toFinding(definition, observation));
+    return detector.inspect(input).map((observation) => toFinding(definition, observation));
   } catch (error) {
     return {
       detectorId: detector.id,
-      affectedUrl: page.url,
+      affectedUrl: locate(input),
       message: error instanceof Error ? error.message : String(error),
     };
   }

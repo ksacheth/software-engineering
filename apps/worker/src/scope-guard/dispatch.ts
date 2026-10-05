@@ -60,14 +60,18 @@ const LEDGER_DECISION: Record<GuardDenyCode, ScopeDecision> = {
   DNS_FAILED: "ERROR",
 };
 
+/** What the guard checks; `ledgerMethod` names a non-HTTP probe (such as TLS) in the ledger. */
+export type GuardRequest = Omit<DispatchRequest, "headers"> & { ledgerMethod?: string };
+
 /**
- * The only path the worker uses to reach a target. Every attempt, allowed or
- * refused, leaves a url_ledger row.
+ * The kernel check every outbound connection passes first: rate limit, fresh
+ * DNS resolution, then evaluate(). A refusal is ledgered here; an allowed
+ * caller ledgers its own outcome and must connect only to the returned IPs.
  */
-export async function dispatch(
+export async function authorize(
   db: LedgerClient,
-  req: DispatchRequest,
-): Promise<DispatchResult> {
+  req: GuardRequest,
+): Promise<{ allowed: true; ips: string[] } | DeniedDecision> {
   const url = new URL(req.url);
 
   if (!req.rateLimiter.tryRemove()) {
@@ -77,7 +81,7 @@ export async function dispatch(
       code: "RATE_LIMIT",
     };
     await recordDenied(db, req, [], decision);
-    return { ok: false, decision };
+    return decision;
   }
 
   const resolvedIps = await resolveHostIps(url.hostname);
@@ -96,10 +100,20 @@ export async function dispatch(
     depth: req.depth,
   });
 
-  if (!decision.allowed) {
-    await recordDenied(db, req, resolvedIps, decision);
-    return { ok: false, decision };
-  }
+  if (!decision.allowed) await recordDenied(db, req, resolvedIps, decision);
+  return decision;
+}
+
+/**
+ * The only path the worker uses to reach a target over HTTP. Every attempt,
+ * allowed or refused, leaves a url_ledger row.
+ */
+export async function dispatch(
+  db: LedgerClient,
+  req: DispatchRequest,
+): Promise<DispatchResult> {
+  const decision = await authorize(db, req);
+  if (!decision.allowed) return { ok: false, decision };
 
   const startedAt = Date.now();
   try {
@@ -154,7 +168,7 @@ export async function dispatch(
 
 async function recordDenied(
   db: LedgerClient,
-  req: DispatchRequest,
+  req: GuardRequest,
   resolvedIps: string[],
   decision: DeniedDecision,
 ): Promise<void> {
@@ -162,7 +176,7 @@ async function recordDenied(
     data: {
       scanJobId: req.scanJobId,
       url: req.url,
-      httpMethod: req.method,
+      httpMethod: req.ledgerMethod ?? req.method,
       resolvedIp: resolvedIps[0] ?? "",
       decision: LEDGER_DECISION[decision.code],
       decisionReason: decision.reason,

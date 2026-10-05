@@ -54,3 +54,31 @@ export interface RawFinding {
   advisoryData?: any;
   evidence?: RawFindingEvidence;
 }
+
+export type LegacyProtocol = "SSLv3" | "TLSv1" | "TLSv1.1";
+
+export interface CertificateFacts {
+  subjectAltNames: string[];
+  /** ISO 8601 UTC. */
+  validFrom: string;
+  validTo: string;
+  hostnameMatches: boolean;
+  selfSigned: boolean;
+  /** Why the chain did not verify, other than expiry or hostname; null when it did. */
+  trustError: string | null;
+  /** e.g. sha256WithRSAEncryption; null when it could not be read. */
+  signatureAlgorithm: string | null;
+  keyType: "RSA" | "EC" | "other";
+  keyBits: number;
+}
+
+/** What the worker's TLS probe learned about one HTTPS origin (P-11..P-16). */
+export interface TlsFacts {
+  origin: string;
+  hostname: string;
+  acceptedLegacyProtocols: LegacyProtocol[];
+  /** A weak suite the server agreed to use, by OpenSSL name; null when it refused them all. */
+  acceptedWeakCipher: string | null;
+  /** Null when no handshake completed. */
+  certificate: CertificateFacts | null;
+}
