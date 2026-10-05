@@ -1,15 +1,21 @@
-declare const process: any;
-
-// @ts-ignore
 import { Worker, type Job } from "bullmq";
-// @ts-ignore
 import Redis from "ioredis";
 import { prisma } from "@wvs/database";
 import { SCAN_QUEUE_NAME, isScanJobPayload, type ScanJobPayload } from "@wvs/shared";
+import { MockDetector } from "./detectors/mock-detector.js";
 import { ScanOrchestrator } from "./orchestrator/scan-orchestrator.js";
 
-const REDIS_HOST = (typeof process !== "undefined" && process.env?.REDIS_HOST) || "localhost";
-const REDIS_PORT = parseInt((typeof process !== "undefined" && process.env?.REDIS_PORT) || "6379", 10);
+// No production detector exists yet. The mock one reports fabricated findings,
+// so it runs only when asked for by name, never by default.
+if (process.env.WVS_SCAN_DETECTOR !== "mock") {
+  console.error(
+    "[Worker] No scan detector is configured. Set WVS_SCAN_DETECTOR=mock to run the offline mock detector for development; it reports findings that do not exist."
+  );
+  process.exit(1);
+}
+
+const REDIS_HOST = process.env.REDIS_HOST || "localhost";
+const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379", 10);
 
 const redisConnection = {
   host: REDIS_HOST,
@@ -25,13 +31,14 @@ const publisher = new Redis({
 const orchestrator = new ScanOrchestrator({
   prisma,
   redis: publisher,
+  detector: MockDetector.analyze,
 });
 
-console.log(`[Worker] Starting WVS Scan Worker on queue '${SCAN_QUEUE_NAME}'...`);
+console.log(`[Worker] Starting WVS Scan Worker on queue '${SCAN_QUEUE_NAME}' with the MOCK detector...`);
 
 export const worker = new Worker(
   SCAN_QUEUE_NAME,
-  async (job: any) => {
+  async (job: Job) => {
     console.log(`[Worker] Received job ${job.id} (name: ${job.name})`);
 
     if (!isScanJobPayload(job.data)) {
@@ -50,10 +57,22 @@ export const worker = new Worker(
   }
 );
 
-worker.on("completed", (job: any) => {
+worker.on("completed", (job: Job) => {
   console.log(`[Worker] Job ${job.id} completed successfully.`);
 });
 
-worker.on("failed", (job: any, err: any) => {
+worker.on("failed", (job: Job | undefined, err: Error) => {
   console.error(`[Worker] Job ${job?.id} failed with error:`, err);
 });
+
+/** Lets the active job finish and releases its lock before exiting. */
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[Worker] ${signal} received, shutting down...`);
+  await worker.close();
+  await publisher.quit();
+  await prisma.$disconnect();
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+process.once("SIGINT", () => void shutdown("SIGINT"));

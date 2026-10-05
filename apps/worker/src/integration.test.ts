@@ -3,95 +3,15 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import { ScanOrchestrator } from "./orchestrator/scan-orchestrator.js";
 import { AdvisoryEnricher } from "./enrichers/advisory-enricher.js";
 import type { RawFinding } from "./detectors/mock-detector.js";
-
-class IntegrationMockPrisma {
-  scanJobs = new Map<string, any>();
-  crawledPages = new Map<string, any>();
-  findings = new Map<string, any>();
-  targetFindingTriage = new Map<string, any>();
-  scanFindingDiffs: any[] = [];
-
-  scanJob = {
-    findUnique: async ({ where }: any) => this.scanJobs.get(where.id) || null,
-    findFirst: async ({ where }: any) => {
-      return (
-        Array.from(this.scanJobs.values()).find(
-          (j) =>
-            j.targetId === where.targetId &&
-            j.status === where.status &&
-            (!where.id || j.id !== where.id.not)
-        ) || null
-      );
-    },
-    update: async ({ where, data }: any) => {
-      const existing = this.scanJobs.get(where.id);
-      if (!existing) throw new Error("ScanJob not found");
-      const updated = { ...existing, ...data };
-      this.scanJobs.set(where.id, updated);
-      return updated;
-    },
-  };
-
-  crawledPage = {
-    findMany: async ({ where }: any) =>
-      Array.from(this.crawledPages.values()).filter(
-        (p) => p.scanJobId === where.scanJobId
-      ),
-    create: async ({ data }: any) => {
-      const id = `page-${Math.random()}`;
-      const page = { id, ...data };
-      this.crawledPages.set(id, page);
-      return page;
-    },
-  };
-
-  finding = {
-    findMany: async ({ where }: any) =>
-      Array.from(this.findings.values()).filter(
-        (f) => f.scanJobId === where.scanJobId
-      ),
-    findFirst: async ({ where }: any) =>
-      Array.from(this.findings.values()).find(
-        (f) =>
-          f.scanJobId === where.scanJobId && f.fingerprint === where.fingerprint
-      ) || null,
-    create: async ({ data }: any) => {
-      const id = `finding-${Math.random()}`;
-      const finding = { id, ...data };
-      this.findings.set(id, finding);
-      return finding;
-    },
-  };
-
-  targetFindingTriageRef = {
-    findMany: async ({ where }: any) =>
-      Array.from(this.targetFindingTriage.values()).filter(
-        (t) => t.targetId === where.targetId
-      ),
-  };
-
-  scanFindingDiff = {
-    createMany: async ({ data }: any) => {
-      this.scanFindingDiffs.push(...data);
-      return { count: data.length };
-    },
-  };
-}
-
-class IntegrationMockRedis {
-  events: any[] = [];
-  async publish(channel: string, message: string) {
-    this.events.push({ channel, event: JSON.parse(message) });
-  }
-}
+import { MockPrisma, MockRedisPublisher } from "./test-support/mock-prisma.js";
 
 describe("Jasmine Worker Pipeline Integration Test", () => {
-  let db: IntegrationMockPrisma;
-  let redis: IntegrationMockRedis;
+  let db: MockPrisma;
+  let redis: MockRedisPublisher;
 
   beforeEach(() => {
-    db = new IntegrationMockPrisma();
-    redis = new IntegrationMockRedis();
+    db = new MockPrisma();
+    redis = new MockRedisPublisher();
 
     db.scanJobs.set("scan-pipeline-1", {
       id: "scan-pipeline-1",
@@ -100,7 +20,8 @@ describe("Jasmine Worker Pipeline Integration Test", () => {
       profile: "STANDARD",
       status: "QUEUED",
       phase: "DISCOVERY",
-      target: { id: "target-juice-shop", origin: "http://localhost:3000" },
+      attempt: 1,
+      startedAt: null,
     });
   });
 
@@ -164,7 +85,7 @@ describe("Jasmine Worker Pipeline Integration Test", () => {
     ];
 
     const orchestrator = new ScanOrchestrator({
-      prisma: db as any,
+      prisma: db.asClient(),
       redis,
       detector: integratedDetector,
       enricher,
@@ -200,12 +121,43 @@ describe("Jasmine Worker Pipeline Integration Test", () => {
     expect(componentFinding.cvssVector).toBe("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H");
 
     // 4. Verify Redis Events
-    const statusEvents = redis.events.filter((e) => e.event.type === "scan.status");
-    const progressEvents = redis.events.filter((e) => e.event.type === "scan.progress");
-    const findingEvents = redis.events.filter((e) => e.event.type === "scan.finding");
+    const statusEvents = redis.events.filter((e) => e.type === "scan.status");
+    const progressEvents = redis.events.filter((e) => e.type === "scan.progress");
+    const findingEvents = redis.events.filter((e) => e.type === "scan.finding");
 
     expect(statusEvents.length).toBeGreaterThanOrEqual(2);
     expect(progressEvents.length).toBeGreaterThanOrEqual(2);
     expect(findingEvents.length).toBe(2);
+
+    // 5. Verify diff records against the (empty) history: both findings are NEW
+    expect(db.scanFindingDiffs.map((d) => d.status)).toEqual(["NEW", "NEW"]);
+    expect(finishedJob.findingsCount).toBe(2);
+  });
+
+  test("a rescan marks repeated findings PERSISTING and missing ones RESOLVED", async () => {
+    const xss = (url: string): RawFinding => ({
+      detectorId: "A-01",
+      name: "Reflected XSS",
+      description: "XSS",
+      remediation: "Encode output",
+      severity: "HIGH",
+      confidence: "FIRM",
+      affectedUrl: url,
+      affectedParameter: "q",
+    });
+    const run = (id: string, findings: RawFinding[]) => {
+      db.scanJobs.set(id, { ...db.scanJobs.get("scan-pipeline-1"), id, status: "QUEUED" });
+      return new ScanOrchestrator({
+        prisma: db.asClient(),
+        detector: () => findings,
+        enricher: new AdvisoryEnricher({ queryPackage: async () => [] } as any, { getScore: async () => null } as any),
+      }).processScanJob({ scanJobId: id, organizationId: "org-1", attempt: 1 });
+    };
+
+    await run("scan-first", [xss("http://localhost:3000/a"), xss("http://localhost:3000/b")]);
+    await run("scan-second", [xss("http://localhost:3000/a")]);
+
+    const second = db.scanFindingDiffs.filter((d) => d.scanJobId === "scan-second");
+    expect(second.map((d) => d.status).sort()).toEqual(["PERSISTING", "RESOLVED"]);
   });
 });
