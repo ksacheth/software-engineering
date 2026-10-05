@@ -3,6 +3,8 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor } from "better-auth/plugins";
 import { APIError } from "better-auth/api";
 import { prisma } from "@wvs/database";
+import { config } from "../config/env";
+import { trustedProxyCidrs } from "../config/trusted-proxies";
 import { sendEmail } from "./email";
 import {
   deleteAccountEmail,
@@ -60,14 +62,15 @@ export const auth = betterAuth({
     },
   },
   advanced: {
-    // nginx (deploy/nginx.conf) and the Vite dev proxy both forward the
-    // original host and protocol in X-Forwarded-* headers.
+    // nginx (deploy/nginx) and the Vite dev proxy both forward the original
+    // host and protocol in X-Forwarded-* headers.
     trustedProxyHeaders: true,
     ipAddress: {
       ipAddressHeaders: ["x-forwarded-for", "x-real-ip"],
-      // Only the loopback proxies are trusted, so a direct caller cannot spoof
-      // X-Forwarded-For to evade the per-IP rate limit (NFR-SEC-1, F.8).
-      trustedProxies: ["127.0.0.1", "::1"],
+      // Only the proxies TRUST_PROXY names are trusted, so a direct caller
+      // cannot spoof X-Forwarded-For to evade the per-IP rate limit
+      // (NFR-SEC-1, F.8). Loopback unless the deployment says otherwise.
+      trustedProxies: trustedProxyCidrs(config.trustProxy),
     },
   },
   databaseHooks: {

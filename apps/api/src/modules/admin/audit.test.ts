@@ -228,4 +228,13 @@ describe("health", () => {
     const res = await fetch(`${api.baseUrl}/api/health`);
     expect(Object.keys(await json(res)).sort()).toEqual(["status", "timestamp"]);
   });
+
+  test("the public readiness probe names its dependencies and nothing more", async () => {
+    const res = await fetch(`${api.baseUrl}/api/health/ready`);
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.status).toBe("ok");
+    expect(body.checks).toEqual({ database: "ok", redis: "ok" });
+  });
 });
