@@ -1,4 +1,4 @@
-import type { CrawledPage, Prisma, PrismaClient } from "@wvs/database";
+import type { CrawledPage, Prisma, PrismaClient, ScanJob, Target } from "@wvs/database";
 import type { ScanEvent, ScanJobPayload, ScanProgressEvent } from "@wvs/shared";
 import type { MockCrawlRecord, RawFinding } from "../detectors/mock-detector.js";
 import { Deduplicator, type DeduplicatedFinding } from "../processors/deduplicator.js";
@@ -11,6 +11,12 @@ export interface RedisPublisher {
 
 export type Detector = (records: MockCrawlRecord[]) => RawFinding[] | Promise<RawFinding[]>;
 
+/** The real engine: crawls and detects in one step, returning findings and counts.
+ *  When supplied it replaces the mock detector and the read-from-DB crawl step. */
+export type ScanEngine = (
+  scanJob: ScanJob & { target: Target },
+) => Promise<{ findings: RawFinding[]; pagesCrawled: number; requestsMade: number }>;
+
 export interface OrchestratorOptions {
   prisma: PrismaClient;
   redis?: RedisPublisher;
@@ -19,6 +25,7 @@ export interface OrchestratorOptions {
    * exist, so the worker entry point has to choose it by name (see README).
    */
   detector: Detector;
+  engine?: ScanEngine;
   enricher?: AdvisoryEnricher;
 }
 
@@ -43,12 +50,14 @@ export class ScanOrchestrator {
   private prisma: PrismaClient;
   private redis?: RedisPublisher;
   private detectFn: Detector;
+  private engine?: ScanEngine;
   private enricher: AdvisoryEnricher;
 
   constructor(options: OrchestratorOptions) {
     this.prisma = options.prisma;
     this.redis = options.redis;
     this.detectFn = options.detector;
+    this.engine = options.engine;
     this.enricher = options.enricher || new AdvisoryEnricher();
   }
 
@@ -132,27 +141,27 @@ export class ScanOrchestrator {
 
     await this.emitProgress(scanJobId, "DISCOVERY", { pagesCrawled: 0, requestsMade: 0, findingsCount: 0 });
 
-    // Step 2: Crawl data. Pages come from the crawler; a scan without any has
-    // nothing to analyse, and no pages are invented in their place.
-    const pages = await this.prisma.crawledPage.findMany({
-      where: { scanJobId },
-    });
-
-    const pagesCrawled = pages.length;
-    const requestsMade = pagesCrawled * 2;
+    // Step 2: Discovery. The engine crawls the live target; without one, the mock
+    // path reads whatever pages are already in the database.
+    const discovery = await this.discover(scanJobId);
 
     const stillRunning = await this.updateWhileRunning(scanJobId, {
       phase: "DETECTION",
-      pagesCrawled,
-      requestsMade,
+      pagesCrawled: discovery.pagesCrawled,
+      requestsMade: discovery.requestsMade,
       progressPercentage: PROGRESS_BY_PHASE.DETECTION,
     });
     if (!stillRunning) return;
 
-    await this.emitProgress(scanJobId, "DETECTION", { pagesCrawled, requestsMade, findingsCount: 0 });
+    await this.emitProgress(scanJobId, "DETECTION", {
+      pagesCrawled: discovery.pagesCrawled,
+      requestsMade: discovery.requestsMade,
+      findingsCount: 0,
+    });
 
-    // Step 3: Run Vulnerability Detection
-    const rawFindings = await Promise.resolve(this.detectFn(pages.map(toCrawlRecord)));
+    // Step 3: Detection, only once the pause/cancel checkpoint above has passed.
+    const rawFindings = await discovery.detect();
+    const { pagesCrawled, requestsMade } = discovery;
 
     // Step 4: Deduplicate Findings (F.6)
     const dedupedFindings = Deduplicator.deduplicate(rawFindings);
@@ -203,6 +212,30 @@ export class ScanOrchestrator {
       requestsMade,
       findingsCount: persisted.length,
     });
+  }
+
+  /**
+   * Discovery, returning the crawl counts and a `detect` thunk the caller runs
+   * only after the pause/cancel checkpoint. The engine crawls and detects
+   * together, so its detection is held in the thunk; the mock path reads the
+   * pages now and defers the detector call.
+   */
+  private async discover(
+    scanJobId: string,
+  ): Promise<{ pagesCrawled: number; requestsMade: number; detect: () => Promise<RawFinding[]> }> {
+    if (this.engine) {
+      const scanJob = await this.prisma.scanJob.findUnique({ where: { id: scanJobId }, include: { target: true } });
+      if (!scanJob) throw new Error(`ScanJob ${scanJobId} vanished mid-scan`);
+      const result = await this.engine(scanJob);
+      return { pagesCrawled: result.pagesCrawled, requestsMade: result.requestsMade, detect: async () => result.findings };
+    }
+
+    const pages = await this.prisma.crawledPage.findMany({ where: { scanJobId } });
+    return {
+      pagesCrawled: pages.length,
+      requestsMade: pages.length * 2,
+      detect: () => Promise.resolve(this.detectFn(pages.map(toCrawlRecord))),
+    };
   }
 
   /**

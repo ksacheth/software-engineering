@@ -1,5 +1,5 @@
 import { inOrigin, pathAllowed, type ScopeSnapshot, type TokenBucket } from "@wvs/scope-guard";
-import { SET_COOKIE_SEPARATOR } from "@wvs/shared";
+import { SET_COOKIE_SEPARATOR, type CrawlRecord } from "@wvs/shared";
 
 import {
   dispatch,
@@ -26,6 +26,8 @@ export interface CrawlOptions {
   limiter: Pick<TokenBucket, "tryRemove" | "msUntilAvailable">;
   /** Renders HTML pages with JavaScript (DC-5); omitted, the crawl is static only. */
   renderer?: PageRenderer;
+  /** Called with each fetched page, body included, for detectors that need it. */
+  onPage?: (record: CrawlRecord) => void;
 }
 
 export interface CrawlSummary {
@@ -173,6 +175,15 @@ class Crawl {
       linksFound: page?.links ?? [],
       isBlocked: blocked,
       reducedConfidence: blocked,
+    });
+    this.options.onPage?.({
+      url,
+      method: "GET",
+      statusCode: res.status,
+      contentType: res.headers.get("content-type") ?? undefined,
+      responseHeaders: headerRecord(res.headers),
+      responseBody: res.body,
+      forms: page?.forms ?? [],
     });
   }
 
