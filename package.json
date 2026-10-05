@@ -17,7 +17,10 @@
     "db:migrate:deploy": "bun --filter @wvs/database migrate:deploy",
     "db:studio": "bun --filter @wvs/database studio",
     "email:retry": "bun --filter @wvs/api email:retry",
+    "scans:reconcile": "bun --filter @wvs/api scans:reconcile",
+    "purge:retention": "bun --filter @wvs/database purge:retention",
     "reports:worker": "bun --filter @wvs/api reports:worker",
+    "scheduler": "bun --filter @wvs/api scheduler",
     "admin:grant": "bun --filter @wvs/api admin:grant"
   }
 }

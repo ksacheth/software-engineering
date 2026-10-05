@@ -1,0 +1,30 @@
+# Build context for the Dockerfile. Dependencies are installed inside the
+# image, and nothing secret or local may be baked into it.
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+
+# Secrets and local state. The API reads a repo-root .env when one exists, so
+# copying it in would ship development secrets inside the image.
+.env
+.env.*
+!.env.example
+storage/
+*.pem
+
+# Not needed to build or run anything.
+.git
+.github
+docs/
+reference/
+output/
+**/.DS_Store
+.agents
+.claude
+.zcode
+.pi
+.commandcode
+AGENTS.md
+CLAUDE.md

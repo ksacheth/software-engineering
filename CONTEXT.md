@@ -165,7 +165,8 @@ software/
 │   ├── scope-guard/      # Framework-agnostic safety-kernel decision logic
 │   └── shared/            # Cross-app types/DTOs/WS event contracts
 ├── bunfig.toml
-├── docker-compose.yml    # Postgres 16 + Redis 7
+├── docker-compose.yml    # infra by default; the full stack under the `app` profile (DC-7)
+├── Dockerfile            # `app` (Bun runtime) and `web` (nginx + dashboard) images
 ├── .env.example
 ├── package.json          # workspaces: ["apps/*", "packages/*"] — lives HERE, not bunfig.toml
 ├── tsconfig.base.json
