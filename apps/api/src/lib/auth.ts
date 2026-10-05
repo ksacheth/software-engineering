@@ -19,10 +19,11 @@ import {
  * timing reason as the reset email.
  */
 async function sendVerificationCode(email: string, code: string): Promise<void> {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { name: true },
-  });
+  // The name only personalises the greeting. A failed lookup must not stop the
+  // code going out, or leave a rejection nothing handles.
+  const user = await prisma.user
+    .findUnique({ where: { email }, select: { name: true } })
+    .catch(() => null);
   await sendEmail({
     to: email,
     ...verificationCodeEmail({ name: user?.name || email, code }),
