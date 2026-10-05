@@ -33,6 +33,8 @@ export interface RawFindingEvidence {
   responseBody?: string | null;
   curlCommand?: string | null;
   extractedSnippet?: string | null;
+  /** npm `name@version` of an identified component, for OSV correlation (P-18/P-19). */
+  component?: string | null;
 }
 
 export interface RawFinding {
