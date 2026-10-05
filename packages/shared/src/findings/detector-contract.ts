@@ -6,6 +6,13 @@
 import type { FindingSeverity } from "../scans/events.js";
 import type { FindingConfidence } from "./index.js";
 
+/**
+ * Multiple Set-Cookie headers cannot be comma-joined like other headers
+ * (Expires dates contain commas), so a crawl record joins them with a newline,
+ * which cannot occur inside a header value.
+ */
+export const SET_COOKIE_SEPARATOR = "\n";
+
 /** One crawled request and response, as the crawler recorded it (F.4). */
 export interface CrawlRecord {
   url: string;

@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 /** A tiny site served from memory; the guard sees a public literal IP and never touches DNS. */
-const SITE: Record<string, { status?: number; type?: string; body?: string; location?: string }> = {
+const SITE: Record<string, { status?: number; type?: string; body?: string; location?: string; cookies?: string[] }> = {
   "/robots.txt": {
     type: "text/plain",
     body: "User-agent: *\nDisallow: /private\nSitemap: http://203.0.113.10/sitemap.xml\n",
@@ -32,7 +32,10 @@ const SITE: Record<string, { status?: number; type?: string; body?: string; loca
   "/about": { body: `<a href="/">Home</a><a href="/members">Members</a>` },
   "/members": { status: 403, body: "Forbidden" },
   "/old": { status: 301, location: "/new" },
-  "/new": { body: "Moved here" },
+  "/new": {
+    body: "Moved here",
+    cookies: ["sid=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Secure", "theme=dark; Path=/"],
+  },
   "/from-sitemap": { body: "Listed in sitemap" },
   "/search": { body: "Results" },
 };
@@ -44,8 +47,9 @@ function serveSite(): string[] {
     requested.push(path);
     const page = SITE[path];
     if (!page) return new Response("Not found", { status: 404, headers: { "content-type": "text/html" } });
-    const headers: Record<string, string> = { "content-type": page.type ?? "text/html" };
-    if (page.location) headers.location = page.location;
+    const headers = new Headers({ "content-type": page.type ?? "text/html" });
+    if (page.location) headers.set("location", page.location);
+    page.cookies?.forEach((cookie) => headers.append("set-cookie", cookie));
     return new Response(page.body ?? "", { status: page.status ?? 200, headers });
   }) as unknown as typeof fetch;
   return requested;
@@ -138,6 +142,18 @@ describe("crawl", () => {
       reducedConfidence: true,
     });
     expect(summary.blockedPages).toBe(1);
+  });
+
+  test("keeps each Set-Cookie header whole", async () => {
+    serveSite();
+    const { db, pages } = fakeDb();
+
+    await crawl(db, options());
+
+    expect(pages.get(`${ORIGIN}/new`).responseHeaders["set-cookie"].split("\n")).toEqual([
+      "sid=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Secure",
+      "theme=dark; Path=/",
+    ]);
   });
 
   test("stops at maxPages", async () => {

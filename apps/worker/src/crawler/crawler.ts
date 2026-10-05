@@ -1,4 +1,5 @@
 import { inOrigin, pathAllowed, type ScopeSnapshot, type TokenBucket } from "@wvs/scope-guard";
+import { SET_COOKIE_SEPARATOR } from "@wvs/shared";
 
 import {
   dispatch,
@@ -263,5 +264,7 @@ function headerRecord(headers: Headers): Record<string, string> {
   headers.forEach((value, key) => {
     record[key] = value;
   });
+  const cookies = headers.getSetCookie();
+  if (cookies.length > 0) record["set-cookie"] = cookies.join(SET_COOKIE_SEPARATOR);
   return record;
 }
