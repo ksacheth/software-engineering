@@ -26,6 +26,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 COPY packages/database/package.json packages/database/
 COPY packages/scope-rules/package.json packages/scope-rules/
+COPY packages/scope-guard/package.json packages/scope-guard/
 COPY packages/shared/package.json packages/shared/
 RUN bun install --frozen-lockfile
 
