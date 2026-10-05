@@ -35,6 +35,7 @@ export interface RawFinding {
   cveId?: string;
   epssScore?: number;
   epssPercentile?: number;
+  advisoryData?: any;
   evidence?: RawFindingEvidence;
 }
 
