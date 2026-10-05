@@ -2,6 +2,9 @@ import type {
   ComparisonStatus as PrismaComparisonStatus,
   FindingConfidence as PrismaFindingConfidence,
   FindingSeverity as PrismaFindingSeverity,
+  ReportFormat as PrismaReportFormat,
+  ReportStatus as PrismaReportStatus,
+  ReportTemplate as PrismaReportTemplate,
   ScanPhase as PrismaScanPhase,
   ScanProfile as PrismaScanProfile,
   ScanStatus as PrismaScanStatus,
@@ -11,6 +14,9 @@ import type {
   ComparisonStatus,
   FindingConfidence,
   FindingSeverity,
+  ReportFormat,
+  ReportStatus,
+  ReportTemplate,
   ScanPhase,
   ScanProfile,
   ScanStatus,
@@ -57,4 +63,13 @@ export type ComparisonStatusMatchesPrisma = Assert<
 >;
 export type TriageStateMatchesPrisma = Assert<
   MutuallyAssignable<PrismaTriageState, TriageState>
+>;
+export type ReportTemplateMatchesPrisma = Assert<
+  MutuallyAssignable<PrismaReportTemplate, ReportTemplate>
+>;
+export type ReportFormatMatchesPrisma = Assert<
+  MutuallyAssignable<PrismaReportFormat, ReportFormat>
+>;
+export type ReportStatusMatchesPrisma = Assert<
+  MutuallyAssignable<PrismaReportStatus, ReportStatus>
 >;

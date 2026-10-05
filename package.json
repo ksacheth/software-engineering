@@ -17,6 +17,7 @@
     "db:migrate:deploy": "bun --filter @wvs/database migrate:deploy",
     "db:studio": "bun --filter @wvs/database studio",
     "email:retry": "bun --filter @wvs/api email:retry",
+    "reports:worker": "bun --filter @wvs/api reports:worker",
     "admin:grant": "bun --filter @wvs/api admin:grant"
   }
 }

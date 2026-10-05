@@ -8,7 +8,8 @@ import {
 } from "./email-outbox";
 
 /**
- * F.1: transactional email delivery (verification, password reset, deletion).
+ * F.1: transactional email delivery (verification, password reset, deletion),
+ * also used for the F.7 report-ready notification.
  *
  * SRS §3.2.3 treats the SMTP relay as a degradable dependency: a delivery
  * failure must never block sign-up or password reset, and the message should
@@ -26,7 +27,11 @@ import {
  */
 
 /** Which flow produced a message. Recorded on the outbox row for triage. */
-export type EmailKind = "verification" | "password-reset" | "account-deletion";
+export type EmailKind =
+  | "verification"
+  | "password-reset"
+  | "account-deletion"
+  | "report-ready";
 
 export interface EmailMessage {
   to: string;

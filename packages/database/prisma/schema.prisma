@@ -623,6 +623,8 @@ enum AuditAction {
   FINDING_TRIAGED
   EVIDENCE_PURGED
   REPORT_EXPORTED
+  REPORT_SHARED
+  REPORT_SHARE_REVOKED
   ADMIN_KILL_SWITCH_ENGAGED
   ADMIN_KILL_SWITCH_DISENGAGED
   ADMIN_BLOCKLIST_CREATED
@@ -709,22 +711,44 @@ enum ReportFormat {
   SARIF
 }
 
+/// F.7 / DC-4: reports are generated off the request path, by a queue worker.
+enum ReportStatus {
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+}
+
 model ScanReport {
   id                  String           @id @default(cuid())
   scanJobId           String
   scanJob             ScanJob          @relation(fields: [scanJobId], references: [id], onDelete: Cascade)
   template            ReportTemplate
   format              ReportFormat
+  status              ReportStatus     @default(QUEUED)
+  failureReason       String?
+  /// Relative to REPORT_STORAGE_PATH. Null until the report is READY.
   filePath            String?
   fileSize            Int?
-  shareToken          String?          @unique
+  /// SHA-256 of the share token. The token itself is a credential and is shown
+  /// once, when the link is created; see ADR-0011.
+  shareTokenHash      String?          @unique
   shareExpiresAt      DateTime?        @db.Timestamptz(3)
   minSeverityFilter   FindingSeverity?
-  triageStatusFilter  TriageState?
-  coverageLimitations String
+  /// Empty means every triage state.
+  triageStateFilter   TriageState[]    @default([])
+  /// The statement the generated report carries, one limitation per line.
+  /// Null until generation has worked it out.
+  coverageLimitations String?
+  /// Whether the file holds raw evidence (ADR-0010, ADR-0011).
+  includesEvidence    Boolean          @default(false)
+  /// C.7: when the earliest evidence in the file reaches its retention expiry.
+  /// The file is not served after this.
+  expiresAt           DateTime?        @db.Timestamptz(3)
   createdById         String?
   createdBy           User?            @relation("CreatedReports", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  completedAt         DateTime?        @db.Timestamptz(3)
 
   @@index([scanJobId])
   @@index([createdById])

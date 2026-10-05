@@ -5,6 +5,8 @@ import { startEmailRetryLoop } from "./lib/email";
 import { attachScanGateway } from "./modules/scans/scan-gateway";
 import { closeScanQueue } from "./modules/scans/scan-queue";
 import { closeScanEventPublisher } from "./modules/scans/scan-bus";
+import { startReportWorker } from "./modules/reports/report-worker";
+import { closeReportQueue } from "./modules/reports/report-queue";
 
 const app = createApp();
 const server = createServer(app);
@@ -30,6 +32,13 @@ if (config.emailRetryIntervalMs > 0) {
   );
 }
 
+// F.7: report generation, in-process for a single-instance deployment. The
+// standalone worker (`bun run reports:worker`) is the scalable alternative.
+const reportWorker = config.reports.workerInApi ? startReportWorker() : null;
+if (reportWorker) {
+  console.log("[wvs-api] report worker running in-process");
+}
+
 // Graceful shutdown — finish in-flight requests, then exit.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -37,6 +46,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     void gateway.close();
     void closeScanQueue();
     void closeScanEventPublisher();
+    void reportWorker?.close();
+    void closeReportQueue();
     server.close(() => process.exit(0));
   });
 }

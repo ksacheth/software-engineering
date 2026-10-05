@@ -209,6 +209,23 @@ send duplicates once more than one instance runs (NFR-SCAL-1).
 
 ---
 
+## Reports (F.7)
+
+Reports are generated off the request path (DC-4): `POST /api/reports` writes a
+QUEUED row and enqueues a job, and a BullMQ worker renders the file into
+`REPORT_STORAGE_PATH`. The author is emailed when it is ready, and the
+dashboard updates the list as reports finish. Run the worker on its own:
+
+```bash
+bun run reports:worker
+```
+
+or set `REPORT_WORKER_IN_API=true` to run it inside the API, which is the
+`.env.example` default for local development. What a file may contain, who may
+download it, and how share links work are recorded in ADR-0011.
+
+---
+
 ## Available Scripts
 
 From the repository root:
@@ -224,6 +241,7 @@ From the repository root:
 | `bun run db:migrate:deploy` | Apply pending migrations in production                 |
 | `bun run db:studio`         | Launch Prisma Studio web GUI to browse data stores     |
 | `bun run email:retry`       | Drain queued transactional email from `email_outbox`   |
+| `bun run reports:worker`    | Generate queued reports (F.7); see Reports (F.7)       |
 
 ---
 
