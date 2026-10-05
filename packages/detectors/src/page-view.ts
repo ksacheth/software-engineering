@@ -1,3 +1,4 @@
+import { load, type CheerioAPI } from "cheerio";
 import { SET_COOKIE_SEPARATOR, type CrawlRecord } from "@wvs/shared";
 import type { PageView } from "./types";
 
@@ -8,6 +9,8 @@ export function toPageView(record: CrawlRecord): PageView {
   const headers = lowerCaseKeys(record.responseHeaders ?? {});
   const contentType = headers["content-type"] ?? record.contentType ?? "";
   const statusCode = record.statusCode ?? 0;
+  const body = record.responseBody ?? null;
+  let document: CheerioAPI | null | undefined;
 
   return {
     url: record.url,
@@ -19,7 +22,8 @@ export function toPageView(record: CrawlRecord): PageView {
     header: (name) => headers[name.toLowerCase()],
     setCookies: (headers["set-cookie"] ?? "").split(SET_COOKIE_SEPARATOR).filter(Boolean),
     responseHeaders: headers,
-    body: record.responseBody ?? null,
+    body,
+    html: () => (document ??= body && HTML.test(contentType) ? load(body) : null),
   };
 }
 

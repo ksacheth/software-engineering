@@ -5,6 +5,10 @@ import { loadDefinitions, PASSIVE_DETECTORS, runPassiveDetectors, type PassiveDe
 
 const catalogue = await loadDefinitions();
 
+/** P-01..P-10, the detectors this file covers. */
+const HEADERS_AND_COOKIES = PASSIVE_DETECTORS.filter((d) => /^P-(0\d|10)$/.test(d.id));
+const run = (records: CrawlRecord[]) => runPassiveDetectors(catalogue, "STANDARD", records, { page: HEADERS_AND_COOKIES, site: [] });
+
 /** Headers a well-configured HTTPS site sends; each test removes or weakens one. */
 const SECURE_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
@@ -32,7 +36,7 @@ function findingsFor(id: string, ...records: CrawlRecord[]) {
 describe("a well-configured site", () => {
   test("produces no header or cookie findings", () => {
     const cookie = "sid=abc; Secure; HttpOnly; SameSite=Lax; Path=/";
-    expect(runPassiveDetectors(catalogue, "STANDARD", [page({ "set-cookie": cookie })]).findings).toEqual([]);
+    expect(run([page({ "set-cookie": cookie })]).findings).toEqual([]);
   });
 });
 
@@ -111,7 +115,7 @@ describe("cookie detectors", () => {
   });
 
   test("ignores a Set-Cookie that only deletes the cookie", () => {
-    expect(runPassiveDetectors(catalogue, "STANDARD", [withCookies("sid=; Max-Age=0")]).findings).toEqual([]);
+    expect(run([withCookies("sid=; Max-Age=0")]).findings).toEqual([]);
   });
 });
 
@@ -123,10 +127,10 @@ describe("runPassiveDetectors", () => {
         throw new Error("parser exploded");
       },
     };
-    const result = runPassiveDetectors(catalogue, "STANDARD", [page({ "x-content-type-options": undefined })], [
-      broken,
-      ...PASSIVE_DETECTORS.filter((d) => d.id === "P-03"),
-    ]);
+    const result = runPassiveDetectors(catalogue, "STANDARD", [page({ "x-content-type-options": undefined })], {
+      page: [broken, ...PASSIVE_DETECTORS.filter((d) => d.id === "P-03")],
+      site: [],
+    });
 
     expect(result.failures).toEqual([
       { detectorId: "P-01", affectedUrl: "https://app.example.com/account", message: "parser exploded" },

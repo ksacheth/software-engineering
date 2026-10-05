@@ -2,8 +2,8 @@ import type { CrawlRecord, RawFinding, ScanProfile, TlsFacts } from "@wvs/shared
 
 import type { DetectorCatalogue, DetectorDefinition } from "./definitions";
 import { toPageView } from "./page-view";
-import { PASSIVE_DETECTORS, TLS_DETECTORS } from "./passive";
-import type { Detector, Observation, PassiveDetector, TlsDetector } from "./types";
+import { PASSIVE_DETECTORS, SITE_DETECTORS, TLS_DETECTORS } from "./passive";
+import type { Detector, Observation, PageView, PassiveDetector, SiteDetector, SiteView, TlsDetector } from "./types";
 
 /** A detector that threw. F.5: record it and carry on with the rest. */
 export interface DetectorFailure {
@@ -19,16 +19,29 @@ export interface DetectionResult {
 
 /**
  * Runs every passive detector the profile enables over the crawled pages,
- * without sending a request. Findings are collapsed on (detector, URL,
- * parameter), so a site-wide issue seen on every page is reported once.
+ * then the site-wide ones over each origin, without sending a request.
+ * Findings are collapsed on (detector, URL, parameter), so a site-wide issue
+ * seen on every page is reported once.
  */
 export function runPassiveDetectors(
   catalogue: DetectorCatalogue,
   profile: ScanProfile,
   records: CrawlRecord[],
-  detectors: PassiveDetector[] = PASSIVE_DETECTORS,
+  detectors: { page?: PassiveDetector[]; site?: SiteDetector[] } = {},
 ): DetectionResult {
-  return runDetectors(catalogue, profile, detectors, records.map(toPageView), (page) => page.url);
+  const pages = records.map(toPageView);
+  const perPage = runDetectors(catalogue, profile, detectors.page ?? PASSIVE_DETECTORS, pages, (page) => page.url);
+  const perSite = runDetectors(catalogue, profile, detectors.site ?? SITE_DETECTORS, sites(pages), (site) => `${site.origin}/`);
+  return {
+    findings: [...perPage.findings, ...perSite.findings],
+    failures: [...perPage.failures, ...perSite.failures],
+  };
+}
+
+function sites(pages: PageView[]): SiteView[] {
+  const byOrigin = new Map<string, PageView[]>();
+  for (const page of pages) byOrigin.set(page.origin, [...(byOrigin.get(page.origin) ?? []), page]);
+  return [...byOrigin].map(([origin, sitePages]) => ({ origin, pages: sitePages }));
 }
 
 /** P-11..P-16 over the TLS probe's result; nothing to judge for a plaintext origin. */

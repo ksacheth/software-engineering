@@ -107,6 +107,7 @@ describe("crawl", () => {
     expect([...pages.keys()].sort()).toEqual(
       [
         `${ORIGIN}/`,
+        `${ORIGIN}/.well-known/security.txt`,
         `${ORIGIN}/about`,
         `${ORIGIN}/from-sitemap`,
         `${ORIGIN}/members`,
@@ -114,7 +115,7 @@ describe("crawl", () => {
         `${ORIGIN}/old`,
       ].sort(),
     );
-    expect(summary.pagesCrawled).toBe(6);
+    expect(summary.pagesCrawled).toBe(7);
   });
 
   test("honours robots.txt and never leaves the origin", async () => {

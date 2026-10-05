@@ -71,6 +71,8 @@ class Crawl {
   async run(): Promise<CrawlSummary> {
     this.robots = await this.readRobots();
     for (const path of entryPaths(this.options.scope)) this.enqueue(this.url(path), 0);
+    // RFC 9116 contact file, which P-30 judges; never linked, so asked for by name.
+    this.enqueue(this.url("/.well-known/security.txt"), 0);
     await this.readSitemaps();
 
     do {

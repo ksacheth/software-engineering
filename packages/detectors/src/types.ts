@@ -1,3 +1,4 @@
+import type { CheerioAPI } from "cheerio";
 import type { FindingSeverity, RawFindingEvidence, TlsFacts } from "@wvs/shared";
 
 /** One response, as a detector sees it. */
@@ -15,6 +16,14 @@ export interface PageView {
   setCookies: string[];
   responseHeaders: Record<string, string>;
   body: string | null;
+  /** The parsed document for an HTML response with a body, parsed once on first use. */
+  html(): CheerioAPI | null;
+}
+
+/** Every page crawled on one origin, for checks about the site rather than a response. */
+export interface SiteView {
+  origin: string;
+  pages: PageView[];
 }
 
 /**
@@ -42,3 +51,6 @@ export type PassiveDetector = Detector<PageView>;
 
 /** Judges what the TLS probe learned about the origin. */
 export type TlsDetector = Detector<TlsFacts>;
+
+/** Judges the crawled site as a whole. */
+export type SiteDetector = Detector<SiteView>;
