@@ -149,7 +149,9 @@ _Avoid_: disclaimer, caveats
 **Confirmation code**:
 The 6-digit, 10-minute code emailed at sign-up and typed into the dashboard to
 prove control of the address (F.1, ADR-0013). Confirms the address only; it
-never signs anyone in. Stored only as a hash.
+never signs anyone in. The verification record keeps only its hash; a message
+that fails delivery keeps the rendered code in `email_outbox` until it is
+retried or purged.
 _Avoid_: OTP login, magic code, verification link
 
 **Share link**:
