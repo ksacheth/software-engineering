@@ -13,6 +13,16 @@ class MockPrisma {
     findUnique: async ({ where }: any) => {
       return this.scanJobs.get(where.id) || null;
     },
+    findFirst: async ({ where }: any) => {
+      return (
+        Array.from(this.scanJobs.values()).find(
+          (j) =>
+            j.targetId === where.targetId &&
+            j.status === where.status &&
+            (!where.id || j.id !== where.id.not)
+        ) || null
+      );
+    },
     update: async ({ where, data }: any) => {
       const existing = this.scanJobs.get(where.id);
       if (!existing) throw new Error("ScanJob not found");
@@ -37,6 +47,11 @@ class MockPrisma {
   };
 
   finding = {
+    findMany: async ({ where }: any) => {
+      return Array.from(this.findings.values()).filter(
+        (f) => f.scanJobId === where.scanJobId
+      );
+    },
     findFirst: async ({ where }: any) => {
       return (
         Array.from(this.findings.values()).find(

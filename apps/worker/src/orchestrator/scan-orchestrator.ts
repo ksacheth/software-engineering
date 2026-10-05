@@ -1,4 +1,7 @@
 import { MockDetector, type MockCrawlRecord, type RawFinding } from "../detectors/mock-detector.js";
+import { Deduplicator } from "../processors/deduplicator.js";
+import { AdvisoryEnricher } from "../enrichers/advisory-enricher.js";
+import { TriageCarrier } from "../processors/triage-carrier.js";
 import {
   type ScanJobPayload,
   type ScanEvent,
@@ -12,17 +15,20 @@ export interface OrchestratorOptions {
   prisma: any;
   redis?: RedisPublisher;
   detector?: (records: MockCrawlRecord[]) => RawFinding[] | Promise<RawFinding[]>;
+  enricher?: AdvisoryEnricher;
 }
 
 export class ScanOrchestrator {
   private prisma: any;
   private redis?: RedisPublisher;
   private detectFn: (records: MockCrawlRecord[]) => RawFinding[] | Promise<RawFinding[]>;
+  private enricher: AdvisoryEnricher;
 
   constructor(options: OrchestratorOptions) {
     this.prisma = options.prisma;
     this.redis = options.redis;
     this.detectFn = options.detector || MockDetector.analyze;
+    this.enricher = options.enricher || new AdvisoryEnricher();
   }
 
   private async emitEvent(event: ScanEvent): Promise<void> {
@@ -37,7 +43,6 @@ export class ScanOrchestrator {
 
   async processScanJob(payload: ScanJobPayload): Promise<void> {
     const { scanJobId } = payload;
-    const now = new Date().toISOString();
 
     const scanJob = await this.prisma.scanJob.findUnique({
       where: { id: scanJobId },
@@ -48,7 +53,6 @@ export class ScanOrchestrator {
       throw new Error(`ScanJob with ID ${scanJobId} not found`);
     }
 
-    // Check if job is already in terminal state
     if (["COMPLETED", "FAILED", "CANCELLED", "ABORTED_SAFETY"].includes(scanJob.status)) {
       console.log(`[Orchestrator] ScanJob ${scanJobId} is already in terminal status: ${scanJob.status}`);
       return;
@@ -85,7 +89,7 @@ export class ScanOrchestrator {
         at: new Date().toISOString(),
       });
 
-      // Step 2: Crawling phase (Fetch existing or populate crawl records)
+      // Step 2: Crawling Phase
       let pages = await this.prisma.crawledPage.findMany({
         where: { scanJobId },
       });
@@ -154,14 +158,57 @@ export class ScanOrchestrator {
 
       const rawFindings = await Promise.resolve(this.detectFn(crawlRecords));
 
-      // Step 4: Persist Findings
-      let createdFindingsCount = 0;
-      for (const rf of rawFindings) {
-        const param = rf.affectedParameter || "global";
-        const fingerprint = `${rf.detectorId}|${rf.affectedUrl}|${param}`;
+      // Step 4: Deduplicate Findings (F.6)
+      const dedupedFindings = Deduplicator.deduplicate(rawFindings);
 
+      // Step 5: Enrich Findings with Threat Intelligence (F.5 OSV/EPSS)
+      const enrichedFindings = await this.enricher.enrichFindings(dedupedFindings);
+
+      // Step 6: Triage & Historical Scan Comparison (F.6 Triage Carry-Forward)
+      let priorTriageRecords: any[] = [];
+      let previousScanFingerprints: string[] = [];
+
+      try {
+        if (this.prisma.targetFindingTriage?.findMany) {
+          priorTriageRecords = await this.prisma.targetFindingTriage.findMany({
+            where: { targetId: scanJob.targetId },
+          });
+        }
+
+        const prevScan = await this.prisma.scanJob.findFirst({
+          where: {
+            targetId: scanJob.targetId,
+            status: "COMPLETED",
+            id: { not: scanJobId },
+          },
+          orderBy: { completedAt: "desc" },
+        });
+
+        if (prevScan) {
+          const prevFindings = await this.prisma.finding.findMany({
+            where: { scanJobId: prevScan.id },
+            select: { fingerprint: true },
+          });
+          previousScanFingerprints = prevFindings.map((f: any) => f.fingerprint);
+        }
+      } catch (err) {
+        console.warn("[Orchestrator] Warning: could not fetch prior triage/scan history:", err);
+      }
+
+      const currentFingerprints = enrichedFindings.map((f: any) => f.fingerprint);
+      const triageResult = TriageCarrier.processScanTriage(
+        scanJob.targetId,
+        scanJobId,
+        currentFingerprints,
+        priorTriageRecords,
+        previousScanFingerprints
+      );
+
+      // Step 7: Persist Processed Findings & Diff Records
+      let createdFindingsCount = 0;
+      for (const ef of enrichedFindings as any[]) {
         const existingFinding = await this.prisma.finding.findFirst({
-          where: { scanJobId, fingerprint },
+          where: { scanJobId, fingerprint: ef.fingerprint },
         });
 
         if (!existingFinding) {
@@ -169,32 +216,35 @@ export class ScanOrchestrator {
             data: {
               scanJobId,
               targetId: scanJob.targetId,
-              fingerprint,
-              detectorId: rf.detectorId,
-              name: rf.name,
-              description: rf.description,
-              remediation: rf.remediation,
-              severity: rf.severity,
-              confidence: rf.confidence,
-              cwe: rf.cwe || null,
-              owaspCategory: rf.owaspCategory || null,
-              affectedUrl: rf.affectedUrl,
-              affectedParameter: rf.affectedParameter || null,
-              cvssScore: rf.cvssScore || null,
-              cvssVector: rf.cvssVector || null,
-              cveId: rf.cveId || null,
-              epssScore: rf.epssScore || null,
-              epssPercentile: rf.epssPercentile || null,
-              evidence: rf.evidence
+              fingerprint: ef.fingerprint,
+              detectorId: ef.detectorId,
+              name: ef.name,
+              description: ef.description,
+              remediation: ef.remediation,
+              severity: ef.severity,
+              confidence: ef.confidence,
+              cwe: ef.cwe || null,
+              owaspCategory: ef.owaspCategory || null,
+              affectedUrl: ef.affectedUrl,
+              affectedParameter: ef.affectedParameter || null,
+              cvssScore: ef.cvssScore || null,
+              cvssVector: ef.cvssVector || null,
+              cveId: ef.cveId || null,
+              epssScore: ef.epssScore || null,
+              epssPercentile: ef.epssPercentile || null,
+              advisoryData: ef.advisoryData || null,
+              occurrenceCount: ef.occurrenceCount || 1,
+              occurrences: ef.occurrences || null,
+              evidence: ef.evidence
                 ? {
                     create: {
-                      requestHeaders: rf.evidence.requestHeaders || undefined,
-                      requestBody: rf.evidence.requestBody || undefined,
-                      responseHeaders: rf.evidence.responseHeaders || undefined,
-                      responseBody: rf.evidence.responseBody || undefined,
-                      curlCommand: rf.evidence.curlCommand || undefined,
-                      extractedSnippet: rf.evidence.extractedSnippet || undefined,
-                      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days retention
+                      requestHeaders: ef.evidence.requestHeaders || undefined,
+                      requestBody: ef.evidence.requestBody || undefined,
+                      responseHeaders: ef.evidence.responseHeaders || undefined,
+                      responseBody: ef.evidence.responseBody || undefined,
+                      curlCommand: ef.evidence.curlCommand || undefined,
+                      extractedSnippet: ef.evidence.extractedSnippet || undefined,
+                      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
                     },
                   }
                 : undefined,
@@ -216,7 +266,18 @@ export class ScanOrchestrator {
         }
       }
 
-      // Step 5: Mark COMPLETED
+      // Persist diff records if DB supports scanFindingDiff
+      if (this.prisma.scanFindingDiff?.createMany) {
+        try {
+          await this.prisma.scanFindingDiff.createMany({
+            data: triageResult.diffRecords,
+          });
+        } catch (err) {
+          console.warn("[Orchestrator] Could not persist scan finding diffs:", err);
+        }
+      }
+
+      // Step 8: Mark COMPLETED
       await this.prisma.scanJob.update({
         where: { id: scanJobId },
         data: {
