@@ -61,6 +61,7 @@ const realRole = await import("@/lib/use-role");
 const realToast = await import("sonner");
 const realAdmin = await import("@/services/admin");
 const realKillSwitch = await import("@/lib/use-kill-switch");
+const realReports = await import("@/services/reports");
 
 const scansMock = overridable(realScans);
 const targetsMock = overridable(realTargets);
@@ -70,6 +71,7 @@ const roleMock = overridable(realRole);
 const toastMock = overridable(realToast.toast as unknown as Record<string, unknown>);
 const adminMock = overridable(realAdmin);
 const killSwitchMock = overridable(realKillSwitch);
+const reportsMock = overridable(realReports);
 
 mock.module("@/services/scans", () => scansMock.exports);
 mock.module("@/services/targets", () => targetsMock.exports);
@@ -79,6 +81,7 @@ mock.module("@/lib/use-role", () => roleMock.exports);
 mock.module("sonner", () => ({ ...realToast, toast: toastMock.exports }));
 mock.module("@/services/admin", () => adminMock.exports);
 mock.module("@/lib/use-kill-switch", () => killSwitchMock.exports);
+mock.module("@/services/reports", () => reportsMock.exports);
 
 /** Redirect one export of a module, for the duration of a test. */
 export const stub = {
@@ -96,6 +99,8 @@ export const stub = {
     adminMock.set(key, implementation),
   killSwitch: (key: keyof typeof realKillSwitch, implementation: Fn) =>
     killSwitchMock.set(key, implementation),
+  reports: (key: keyof typeof realReports, implementation: Fn) =>
+    reportsMock.set(key, implementation),
 };
 
 /** Toasts raised during a test, newest last. */
@@ -110,6 +115,7 @@ export function resetMocks(): void {
   toastMock.clear();
   adminMock.clear();
   killSwitchMock.clear();
+  reportsMock.clear();
   toasts.length = 0;
 
   // Hooks that would otherwise poll the API or read a session. A test about
@@ -117,6 +123,8 @@ export function resetMocks(): void {
   // is running normally under the default quota.
   killSwitchMock.set("useKillSwitchEngaged", (() => false) as Fn);
   roleMock.set("useQuota", (() => null) as Fn);
+  // A completed scan's page lists its reports; a test about reports sets them.
+  reportsMock.set("fetchReports", (async () => ({ reports: [] })) as Fn);
 
   for (const kind of ["success", "error", "info", "warning", "message"]) {
     toastMock.set(kind, ((message: string) => {
@@ -133,3 +141,4 @@ export const { ScanApiError } = realScans;
 export const { TargetApiError } = realTargets;
 export const { FindingApiError } = realFindings;
 export const { AdminApiError } = realAdmin;
+export const { ReportApiError } = realReports;

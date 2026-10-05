@@ -54,6 +54,7 @@ import {
   TriageBadge,
 } from "../findings/components/finding-badges";
 import { FindingsTable } from "../findings/components/findings-table";
+import { ScanReportsCard } from "../reports/scan-reports-card";
 
 function ConnectionBadge({
   socketStatus,
@@ -573,6 +574,7 @@ export function ScanDetailPage() {
             </CardContent>
           </Card>
           <ResolvedSinceCard scanId={scan.id} />
+          <ScanReportsCard scanId={scan.id} />
         </>
       ) : (
         <Card>
