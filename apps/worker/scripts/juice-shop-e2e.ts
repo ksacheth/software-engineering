@@ -52,4 +52,5 @@ async function runJuiceShopE2ETest() {
 
 runJuiceShopE2ETest().catch((err) => {
   console.error("[JuiceShop E2E] Test failed:", err);
+  process.exitCode = 1;
 });

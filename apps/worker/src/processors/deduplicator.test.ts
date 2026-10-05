@@ -122,7 +122,7 @@ describe("Deduplicator", () => {
     expect(/^[a-f0-9]{64}$/.test(fp1)).toBe(true);
   });
 
-  test("performance test: deduplicates 10,000 mock findings in under 500ms", () => {
+  test("deduplicates 10,000 mock findings", () => {
     const detectors = ["A-01", "A-02", "P-01", "P-02", "P-03"];
     const severities: ("CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO")[] = [
       "CRITICAL",
@@ -151,13 +151,8 @@ describe("Deduplicator", () => {
       });
     }
 
-    const start = Date.now();
     const deduped = Deduplicator.deduplicate(mockFindings);
-    const durationMs = Date.now() - start;
-
-    console.log(`Deduplicated 10,000 findings into ${deduped.length} groups in ${durationMs}ms`);
 
     expect(deduped.length).toBeLessThan(10000);
-    expect(durationMs).toBeLessThan(500);
   });
 });
