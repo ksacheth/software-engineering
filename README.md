@@ -176,7 +176,9 @@ bun run db:studio
 
 ### 6. Email Delivery (optional)
 
-Verification, password-reset, and account-deletion mail is delivered over SMTP.
+Confirmation-code, password-reset, and account-deletion mail is delivered over
+SMTP. Sign-up confirms the address with a 6-digit code typed into the
+dashboard, not a link (ADR-0013).
 Step 2 starts **Mailpit**, a local sink that captures every message and forwards
 none. Read captured mail at <http://localhost:8025>.
 
