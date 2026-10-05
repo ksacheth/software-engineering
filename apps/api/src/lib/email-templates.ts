@@ -1,4 +1,5 @@
-import { escapeHtml, renderHtml, type EmailMessage } from "./email";
+import { EMAIL_VERIFICATION_CODE } from "@wvs/shared";
+import { escapeHtml, renderHtml, type EmailMessage } from "./email-html";
 
 /**
  * F.1: the three transactional emails the auth module sends. Each builder
@@ -9,31 +10,44 @@ const APP_NAME = "Website Vulnerability Scanner";
 
 type TemplateInput = { name: string; url: string };
 
-export function verificationEmail({
+/**
+ * F.1 email confirmation (ADR-0013): a one-time code typed into the dashboard,
+ * not a link. The code is the credential, so it is shown once, plainly, with
+ * its lifetime and nothing to click.
+ */
+export function verificationCodeEmail({
   name,
-  url,
-}: TemplateInput): Omit<EmailMessage, "to"> {
-  const subject = `Confirm your email address (${APP_NAME})`;
+  code,
+}: {
+  name: string;
+  code: string;
+}): Omit<EmailMessage, "to"> {
+  const minutes = EMAIL_VERIFICATION_CODE.expiresInMinutes;
+  // Not in the subject: subjects show on lock screens and in notification
+  // previews, where a code would be readable without opening the mailbox.
+  const subject = `Your verification code (${APP_NAME})`;
   const text = [
     `Hello ${name},`,
     "",
-    "Confirm this email address to activate your account:",
-    url,
+    "Enter this code to confirm your email address and activate your account:",
     "",
-    "The link expires in one hour.",
+    `    ${code}`,
+    "",
+    `The code expires in ${minutes} minutes. If you did not create an account, ignore this email.`,
   ].join("\n");
 
   const body =
-    `<p>Hello ${escapeHtml(name)}, confirm this email address to activate your account. ` +
-    "The link expires in one hour.</p>";
+    `<p>Hello ${escapeHtml(name)}, enter this code to confirm your email address ` +
+    "and activate your account:</p>" +
+    '<p style="font-size:28px;font-weight:600;letter-spacing:6px;margin:24px 0">' +
+    `${escapeHtml(code)}</p>` +
+    `<p>The code expires in ${minutes} minutes. ` +
+    "If you did not create an account, ignore this email.</p>";
 
   return {
     subject,
     text,
-    html: renderHtml("Confirm your email address", body, {
-      label: "Confirm email",
-      url,
-    }),
+    html: renderHtml("Confirm your email address", body),
     kind: "verification",
   };
 }

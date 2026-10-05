@@ -29,11 +29,18 @@ import { WS_PING_INTERVAL_MS } from "@wvs/shared";
 
 let session: { user: { id: string } } | null = null;
 
+// `mock.module` is global and outlives this file, so every real export stays
+// and only the session is replaced; a partial mock left other files (the
+// verify-email view) importing a module with no AuthProvider in it.
+const realAuthUi = await import("@better-auth-ui/react");
+const realAuthClient = await import("@/lib/auth-client");
+
 mock.module("@better-auth-ui/react", () => ({
+  ...realAuthUi,
   useSession: () => ({ data: session, isPending: false }),
 }));
 
-mock.module("@/lib/auth-client", () => ({ authClient: {} }));
+mock.module("@/lib/auth-client", () => ({ ...realAuthClient, authClient: {} }));
 
 // ---------------------------------------------------------------- sockets ---
 

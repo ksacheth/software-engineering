@@ -18,15 +18,16 @@ This document defines data retention, privileged purge operations, and audit tra
 ### `email_outbox` retention and sensitivity
 
 `email_outbox` holds transactional mail that failed delivery, so it can be
-retried. Rows embed the rendered body, which contains the verification, reset,
-or account-deletion URL. Each of those URLs is a live single-use credential,
-which is why the table is treated as short-lived operational data rather than
-an audit record.
+retried. Rows embed the rendered body, which contains the confirmation code
+(ADR-0013) or the reset or account-deletion URL. Each of those is a live
+single-use credential, which is why the table is treated as short-lived
+operational data rather than an audit record.
 
 - Only failures are stored. A message delivered on its first attempt leaves no
   row, so the table is empty in normal operation.
 - Rows in `SENT` or `DEAD_LETTER` are terminal. Purge them after 30 days,
-  comfortably past the one-hour verification and 30-minute reset link lifetimes.
+  comfortably past the 10-minute confirmation code and 30-minute reset link
+  lifetimes.
 - `wvs_app` holds ordinary `SELECT`/`INSERT`/`UPDATE`/`DELETE` here. The table is
   mutable by design, because a retry moves a row through
   `FAILED` -> `SENT` or `FAILED` -> `DEAD_LETTER`, so it deliberately carries no

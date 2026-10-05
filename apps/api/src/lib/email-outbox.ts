@@ -18,8 +18,8 @@ import type { EmailMessage } from "./email";
  *     callers invoke it from a `void`-ed promise where a rejection would
  *     surface as an unhandled rejection.
  *   - Never store credentials. The message body is stored because a retry needs
- *     it, and it contains a verification or reset URL. That URL is a live
- *     credential, so rows are purged on the retention schedule in
+ *     it, and it contains a verification code or a reset URL. Both are live
+ *     credentials, so rows are purged on the retention schedule in
  *     `packages/database/docs/retention-and-maintenance.md`.
  */
 
@@ -32,7 +32,9 @@ const BACKOFF_BASE_MS = 60_000;
 /**
  * Delay before the next attempt, as `base * 2^(attempts - 1)`:
  * 1 min, 2 min, 4 min, 8 min. Capped attempts keep the total under 15 minutes,
- * which is well inside the one-hour verification link lifetime.
+ * inside the 30-minute reset link lifetime. A verification code lives 10
+ * minutes, so only the early retries of one arrive usable; after that the
+ * dashboard's resend issues a fresh code.
  */
 export function backoffMs(attempts: number): number {
   return BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1);

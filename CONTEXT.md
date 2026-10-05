@@ -146,6 +146,14 @@ names this scan's scope, crawl limits, blocking, detector errors and the
 report's own filters.
 _Avoid_: disclaimer, caveats
 
+**Confirmation code**:
+The 6-digit, 10-minute code emailed at sign-up and typed into the dashboard to
+prove control of the address (F.1, ADR-0013). Confirms the address only; it
+never signs anyone in. The verification record keeps only its hash; a message
+that fails delivery keeps the rendered code in `email_outbox` until it is
+retried or purged.
+_Avoid_: OTP login, magic code, verification link
+
 **Share link**:
 A time-limited URL that lets anyone holding it download one report without
 signing in. Stored only as a hash and shown once.
