@@ -86,6 +86,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@wvs/database": "workspace:*",
+        "@wvs/scope-guard": "workspace:*",
         "@wvs/shared": "workspace:*",
         "bullmq": "^6.3.4",
         "ioredis": "^5.4.2",
