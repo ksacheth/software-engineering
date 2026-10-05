@@ -2,7 +2,7 @@
   "name": "@wvs/worker",
   "version": "1.0.0",
   "private": true,
-  "description": "WVS Scan Engine Worker \u2014 BullMQ job processor",
+  "description": "WVS Scan Engine Worker — BullMQ job processor",
   "scripts": {
     "start": "bun src/worker.ts",
     "dev": "bun --hot src/worker.ts",
@@ -14,6 +14,7 @@
     "@wvs/scope-guard": "workspace:*",
     "@wvs/shared": "workspace:*",
     "bullmq": "^6.3.4",
+    "cheerio": "^1.2.0",
     "ioredis": "^5.4.2"
   },
   "devDependencies": {
