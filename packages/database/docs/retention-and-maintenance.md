@@ -53,6 +53,11 @@ Routine automated pruning is executed through the privileged maintenance script:
 bun run --cwd packages/database purge:retention -- --retention-days 90
 ```
 
+In the container deployment the `scheduler` service runs it once at start and
+then every `PURGE_RETENTION_EVERY_MINUTES` (default 1440, daily), with the
+owner database URL. Which retention setting it reads is still being settled in
+#8.
+
 ### Safety & Audit Invariants:
 
 1. **Cluster Administrator Required:** The script connects via `MIGRATION_DATABASE_URL` as `postgres` / `wvs_owner`. The runtime `wvs_app` role cannot perform this operation.
