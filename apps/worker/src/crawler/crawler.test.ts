@@ -1,7 +1,8 @@
 // @ts-ignore
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ScopeSnapshot } from "@wvs/scope-guard";
-import { crawlStatic, type CrawlerDb, type CrawlOptions } from "./static-crawler.js";
+import { crawl, type CrawlerDb, type CrawlOptions } from "./crawler.js";
+import type { PageRenderer } from "./renderer.js";
 
 const ORIGIN = "http://203.0.113.10";
 const realFetch = globalThis.fetch;
@@ -57,6 +58,10 @@ function fakeDb() {
     urlLedger: { create: async ({ data }: any) => ledger.push(data) },
     crawledPage: {
       upsert: async ({ create }: any) => pages.set(create.normalizedUrl, create),
+      update: async ({ where, data }: any) => {
+        const key = where.scanJobId_normalizedUrl_method.normalizedUrl;
+        pages.set(key, { ...pages.get(key), ...data });
+      },
     },
   } as unknown as CrawlerDb;
   return { db, pages, ledger };
@@ -88,12 +93,12 @@ function options(overrides: Partial<CrawlOptions> = {}): CrawlOptions {
   };
 }
 
-describe("crawlStatic", () => {
+describe("crawl", () => {
   test("crawls the fixture origin once per canonical URL", async () => {
     serveSite();
     const { db, pages } = fakeDb();
 
-    const summary = await crawlStatic(db, options());
+    const summary = await crawl(db, options());
 
     expect([...pages.keys()].sort()).toEqual(
       [
@@ -112,7 +117,7 @@ describe("crawlStatic", () => {
     const requested = serveSite();
     const { db } = fakeDb();
 
-    await crawlStatic(db, options());
+    await crawl(db, options());
 
     expect(requested).not.toContain("/private/admin");
     expect(requested.every((path) => path.startsWith("/"))).toBe(true);
@@ -122,7 +127,7 @@ describe("crawlStatic", () => {
     serveSite();
     const { db, pages } = fakeDb();
 
-    const summary = await crawlStatic(db, options());
+    const summary = await crawl(db, options());
 
     expect(pages.get(`${ORIGIN}/`).forms).toEqual([
       { action: `${ORIGIN}/search`, method: "GET", inputs: [{ name: "q", type: "text" }] },
@@ -139,7 +144,7 @@ describe("crawlStatic", () => {
     serveSite();
     const { db, pages } = fakeDb();
 
-    const summary = await crawlStatic(db, options({ scope: scope({ maxPages: 2 }) }));
+    const summary = await crawl(db, options({ scope: scope({ maxPages: 2 }) }));
 
     expect(pages.size).toBe(2);
     expect(summary.pagesCrawled).toBe(2);
@@ -149,11 +154,42 @@ describe("crawlStatic", () => {
     const requested = serveSite();
     const { db, pages, ledger } = fakeDb();
 
-    const summary = await crawlStatic(db, options({ isKillSwitchEngaged: async () => true }));
+    const summary = await crawl(db, options({ isKillSwitchEngaged: async () => true }));
 
     expect(requested).toEqual([]);
     expect(pages.size).toBe(0);
     expect(summary.stoppedBy).toBe("KILL_SWITCH");
     expect(ledger[0]).toMatchObject({ decision: "BLOCKED_KILL_SWITCH" });
+  });
+
+  test("crawls what rendering revealed, through the same guard and budget", async () => {
+    const requested = serveSite();
+    const { db, pages, ledger } = fakeDb();
+    const rendered: string[] = [];
+    const renderer: PageRenderer = {
+      render: async (url, fetch) => {
+        rendered.push(url);
+        if (url !== `${ORIGIN}/`) return { links: [], forms: [], requestedUrls: [] };
+        await fetch(`${ORIGIN}/bundle.js`, "GET", {});
+        return {
+          links: [`${ORIGIN}/javascript-page`],
+          forms: [{ action: `${ORIGIN}/subscribe`, method: "POST", inputs: [] }],
+          requestedUrls: [`${ORIGIN}/api/items`],
+        };
+      },
+      close: async () => {},
+    };
+
+    const summary = await crawl(db, options({ renderer }));
+
+    expect(pages.has(`${ORIGIN}/javascript-page`)).toBe(true);
+    expect(pages.has(`${ORIGIN}/api/items`)).toBe(true);
+    expect(pages.get(`${ORIGIN}/`).forms).toEqual([
+      { action: `${ORIGIN}/subscribe`, method: "POST", inputs: [] },
+    ]);
+    expect(requested).toContain("/bundle.js");
+    expect(ledger.some((row) => row.url === `${ORIGIN}/bundle.js`)).toBe(true);
+    expect(rendered.filter((url) => url === `${ORIGIN}/`)).toHaveLength(1);
+    expect(summary.requestsMade).toBe(requested.length);
   });
 });

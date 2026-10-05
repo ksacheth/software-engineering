@@ -15,7 +15,8 @@
     "@wvs/shared": "workspace:*",
     "bullmq": "^6.3.4",
     "cheerio": "^1.2.0",
-    "ioredis": "^5.4.2"
+    "ioredis": "^5.4.2",
+    "playwright": "^1.63.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

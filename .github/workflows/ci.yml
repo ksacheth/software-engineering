@@ -59,6 +59,12 @@ jobs:
       - name: Generate Prisma client
         run: bun run db:generate
 
+      # The renderer tests prove the browser cannot bypass the Scope Guard; they
+      # skip without Chromium, so CI installs it rather than skipping them.
+      - name: Install Chromium for the crawler
+        working-directory: apps/worker
+        run: bunx playwright install --with-deps --only-shell chromium
+
       - name: Typecheck
         run: bun run typecheck
 

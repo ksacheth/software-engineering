@@ -1,10 +1,16 @@
 import { inOrigin, pathAllowed, type ScopeSnapshot, type TokenBucket } from "@wvs/scope-guard";
 
-import { dispatch, type DispatchResult, type LedgerClient } from "../scope-guard/dispatch.js";
+import {
+  dispatch,
+  type DispatchRequest,
+  type DispatchResult,
+  type LedgerClient,
+} from "../scope-guard/dispatch.js";
 import { canonicalUrl } from "./canonical-url.js";
 import { isBlockedStatus } from "./confidence.js";
 import { extractPage, extractSitemapUrls, type ExtractedPage } from "./extract.js";
 import { persistCrawledPage, type CrawledPageClient } from "./persist.js";
+import type { PageRenderer } from "./renderer.js";
 import { NO_ROBOTS, parseRobots, robotsAllows, type RobotsRules } from "./robots.js";
 
 export type CrawlerDb = LedgerClient & CrawledPageClient;
@@ -17,6 +23,8 @@ export interface CrawlOptions {
   isKillSwitchEngaged: () => Promise<boolean>;
   userAgent: string;
   limiter: Pick<TokenBucket, "tryRemove" | "msUntilAvailable">;
+  /** Renders HTML pages with JavaScript (DC-5); omitted, the crawl is static only. */
+  renderer?: PageRenderer;
 }
 
 export interface CrawlSummary {
@@ -35,16 +43,21 @@ const HTML_TYPES = /^(text\/html|application\/xhtml\+xml)/i;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * F.4 static pass: breadth-first over same-origin links from the scope's entry
- * points and sitemaps, honouring robots.txt. Every request goes through the
- * scope-guard dispatch, and every fetched page lands in crawled_page.
+ * F.4 crawl: breadth-first over same-origin links from the scope's entry points
+ * and sitemaps, honouring robots.txt. When the static frontier runs dry, each
+ * HTML page is rendered once and whatever the scripts revealed is crawled in
+ * turn. Every request, the browser's included, goes through the scope-guard
+ * dispatch, and every fetched page lands in crawled_page.
  */
-export async function crawlStatic(db: CrawlerDb, options: CrawlOptions): Promise<CrawlSummary> {
-  return new StaticCrawl(db, options).run();
+export async function crawl(db: CrawlerDb, options: CrawlOptions): Promise<CrawlSummary> {
+  return new Crawl(db, options).run();
 }
 
-class StaticCrawl {
-  private queue: Array<{ url: string; depth: number }> = [];
+type QueuedUrl = { url: string; depth: number };
+
+class Crawl {
+  private queue: QueuedUrl[] = [];
+  private toRender: QueuedUrl[] = [];
   private seen = new Set<string>();
   private robots: RobotsRules = NO_ROBOTS;
   private summary: CrawlSummary = { pagesCrawled: 0, requestsMade: 0, blockedPages: 0, stoppedBy: null };
@@ -59,11 +72,33 @@ class StaticCrawl {
     for (const path of entryPaths(this.options.scope)) this.enqueue(this.url(path), 0);
     await this.readSitemaps();
 
-    while (this.queue.length > 0 && this.withinBudget()) {
-      const next = this.queue.shift()!;
-      await this.visit(next.url, next.depth);
-    }
+    do {
+      while (this.queue.length > 0 && this.withinBudget()) {
+        const next = this.queue.shift()!;
+        await this.visit(next.url, next.depth);
+      }
+      await this.renderPending();
+    } while (this.queue.length > 0 && this.withinBudget());
+
     return this.summary;
+  }
+
+  /** Renders every HTML page not yet rendered, queueing what the scripts revealed. */
+  private async renderPending(): Promise<void> {
+    const renderer = this.options.renderer;
+    if (!renderer) return;
+
+    while (this.toRender.length > 0 && this.withinBudget()) {
+      const { url, depth } = this.toRender.shift()!;
+      const rendered = await renderer.render(url, (target, method, headers) =>
+        this.request(target, depth, method, headers),
+      );
+      [...rendered.links, ...rendered.requestedUrls].forEach((link) => this.enqueue(link, depth + 1));
+      await this.db.crawledPage.update({
+        where: { scanJobId_normalizedUrl_method: { scanJobId: this.options.scanJobId, normalizedUrl: canonicalUrl(url), method: "GET" } },
+        data: { forms: rendered.forms, linksFound: rendered.links },
+      });
+    }
   }
 
   private async readRobots(): Promise<RobotsRules> {
@@ -105,6 +140,7 @@ class StaticCrawl {
     const contentType = res.headers.get("content-type");
     const page = contentType && HTML_TYPES.test(contentType) ? extractPage(res.body, url) : null;
     page?.links.forEach((link) => this.enqueue(link, depth + 1));
+    if (page && res.status === 200) this.toRender.push({ url, depth });
 
     await this.persist(url, depth, res, page);
   }
@@ -138,14 +174,20 @@ class StaticCrawl {
   }
 
   /** One paced request through the guard; null when it never reached the target. */
-  private async request(url: string, depth: number): Promise<DispatchResult | null> {
+  private async request(
+    url: string,
+    depth: number,
+    method: DispatchRequest["method"] = "GET",
+    headers?: Record<string, string>,
+  ): Promise<DispatchResult | null> {
     await sleep(this.options.limiter.msUntilAvailable());
     const killSwitchEngaged = await this.options.isKillSwitchEngaged();
 
     try {
       const result = await dispatch(this.db, {
         url,
-        method: "GET",
+        method,
+        headers,
         scanJobId: this.options.scanJobId,
         scope: this.options.scope,
         adminBlocklist: this.options.adminBlocklist,
