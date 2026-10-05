@@ -30,7 +30,9 @@ import {
   recordTriage,
   type FindingInput,
 } from "../../dev-data/findings";
+import { UnrecoverableError } from "bullmq";
 import { generateReport, markReportFailed } from "./report-generator";
+import { handleFailedReportJob } from "./report-worker";
 import { UNAUTHENTICATED_LIMITATION } from "./coverage";
 
 /**
@@ -437,6 +439,60 @@ describe("generation", () => {
     expect(body.failureReason).toBeString();
     // A failed report cannot be generated later by a stray delivery.
     expect(await generateReport(report.id)).toBe("SKIPPED");
+  });
+});
+
+// ----------------------------------------------------------- queue failures ---
+
+describe("when the queue gives up", () => {
+  async function queuedReport(): Promise<string> {
+    const { session, scan } = await world();
+    const res = await requestReport(session, {
+      scanId: scan.id,
+      template: "EXECUTIVE_SUMMARY",
+      format: "PDF",
+    });
+    return ((await res.json()) as { report: ReportBody }).report.id;
+  }
+
+  /** A failed job as BullMQ hands it to the `failed` event: attempt already counted. */
+  function failedJob(reportId: string, attemptsMade: number, attempts = 2) {
+    return { data: { reportId }, attemptsMade, opts: { attempts } };
+  }
+
+  async function statusOf(reportId: string): Promise<string> {
+    const row = await prisma.scanReport.findUniqueOrThrow({ where: { id: reportId } });
+    return row.status;
+  }
+
+  test("a failure with a retry left keeps the report pending", async () => {
+    const id = await queuedReport();
+    await handleFailedReportJob(failedJob(id, 1), new Error("connection reset"));
+    expect(await statusOf(id)).toBe("QUEUED");
+  });
+
+  test("the final attempt marks it failed", async () => {
+    const id = await queuedReport();
+    await handleFailedReportJob(failedJob(id, 2), new Error("connection reset"));
+    expect(await statusOf(id)).toBe("FAILED");
+  });
+
+  test("a job that stalled past the limit is marked failed, whatever its attempt count", async () => {
+    // BullMQ fails an over-stalled job with an UnrecoverableError the next time
+    // a worker picks it up, without running the processor, and the attempt
+    // count can still be below the limit. A crashed worker leaves exactly this.
+    const id = await queuedReport();
+    await prisma.scanReport.update({ where: { id }, data: { status: "GENERATING" } });
+    await handleFailedReportJob(
+      failedJob(id, 0),
+      new UnrecoverableError("job stalled more than allowable limit"),
+    );
+    expect(await statusOf(id)).toBe("FAILED");
+  });
+
+  test("a job that is not a report job is ignored", async () => {
+    await handleFailedReportJob({ data: {}, attemptsMade: 2, opts: { attempts: 2 } }, new Error("x"));
+    await handleFailedReportJob(undefined, new Error("x"));
   });
 });
 
