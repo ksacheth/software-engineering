@@ -1,9 +1,15 @@
 // @ts-ignore
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { OSVClient } from "./osv-client.js";
 import { EPSSClient } from "./epss-client.js";
 import { AdvisoryEnricher } from "./advisory-enricher.js";
 import type { RawFinding } from "../detectors/mock-detector.js";
+
+// The tests below stub fetch; bun runs every test file in one process, so put it back.
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe("OSVClient & EPSSClient", () => {
   test("OSVClient handles empty / no vulnerability response gracefully", async () => {
@@ -109,6 +115,30 @@ describe("AdvisoryEnricher", () => {
     expect(enriched.epssPercentile).toBe(0.991);
     expect(enriched.cvssVector).toBe("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N");
     expect(enriched.advisoryData).toBeDefined();
+  });
+
+  test("looks up scoped npm packages by their full name", async () => {
+    const queried: string[] = [];
+    const mockOsv = {
+      queryPackage: async (pkg: string, ver: string) => {
+        queried.push(`${pkg} ${ver}`);
+        return [];
+      },
+    };
+    const enricher = new AdvisoryEnricher(mockOsv as any, { getScore: async () => null } as any);
+
+    await enricher.enrichFinding({
+      detectorId: "P-18",
+      name: "Vulnerable Library",
+      description: "Outdated dependency",
+      remediation: "Upgrade",
+      severity: "HIGH",
+      confidence: "CONFIRMED",
+      affectedUrl: "https://example.com/package.json",
+      evidence: { component: "@babel/core@7.0.0" } as any,
+    });
+
+    expect(queried).toEqual(["@babel/core 7.0.0"]);
   });
 
   test("handles finding without vulnerability gracefully without mutation", async () => {

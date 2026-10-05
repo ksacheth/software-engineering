@@ -11,16 +11,18 @@ export class AdvisoryEnricher {
     this.epssClient = epssClient;
   }
 
-  async enrichFinding(finding: RawFinding): Promise<RawFinding> {
+  async enrichFinding<T extends RawFinding>(finding: T): Promise<T> {
     const enriched = { ...finding };
 
     let cveId = enriched.cveId;
     const componentInfo = (finding as any).component || (finding.evidence as any)?.component;
 
     if (!cveId && componentInfo && typeof componentInfo === "string") {
-      const parts = componentInfo.split("@");
-      if (parts.length === 2) {
-        const [pkg, ver] = parts;
+      // Split on the last "@" so scoped packages ("@scope/name@1.0.0") keep their name.
+      const at = componentInfo.lastIndexOf("@");
+      const pkg = at > 0 ? componentInfo.slice(0, at) : "";
+      const ver = at > 0 ? componentInfo.slice(at + 1) : "";
+      if (pkg && ver) {
         const vulns = await this.osvClient.queryPackage(pkg, ver);
         if (vulns.length > 0) {
           const primaryVuln = vulns[0];
@@ -50,7 +52,7 @@ export class AdvisoryEnricher {
     return enriched;
   }
 
-  async enrichFindings(findings: RawFinding[]): Promise<RawFinding[]> {
+  async enrichFindings<T extends RawFinding>(findings: T[]): Promise<T[]> {
     if (!findings || findings.length === 0) return [];
     return Promise.all(findings.map((f) => this.enrichFinding(f)));
   }
