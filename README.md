@@ -27,8 +27,11 @@ software/
 │   ├── detectors/       # Declarative YAML vulnerability detector catalogue (passive + safe-active)
 │   ├── scope-guard/     # Framework-agnostic safety kernel and target boundary enforcement
 │   └── shared/          # Shared TypeScript types, DTOs, and WebSocket contracts
+├── deploy/              # nginx configs: the web container (nginx/) and a host TLS front
 ├── docs/                # Canonical requirements (SRS v1.2), DFD specifications, and reports
-├── docker-compose.yml   # PostgreSQL 16 Alpine and Redis 7 Alpine infrastructure
+├── .github/workflows/   # CI: typecheck, tests, migration drift, container stack smoke test
+├── Dockerfile           # The `app` (Bun runtime) and `web` (nginx + dashboard) images
+├── docker-compose.yml   # The one orchestration definition: infrastructure, plus the full stack (`app` profile)
 └── package.json         # Workspace root scripts and orchestration
 ```
 
@@ -226,6 +229,57 @@ download it, and how share links work are recorded in ADR-0011.
 
 ---
 
+## Deployment (F.8)
+
+`docker-compose.yml` is the single orchestration definition (DC-7). Without a
+profile it starts only Postgres, Redis and Mailpit, which is what `bun run dev`
+needs. The `app` profile adds the rest of the system:
+
+```bash
+# .env needs BETTER_AUTH_SECRET and a URL-safe WVS_APP_PASSWORD (openssl rand -hex 24)
+docker compose --profile app up -d --build
+```
+
+The dashboard is then at <http://localhost:8080> (`PUBLIC_URL`).
+
+| Service         | Image     | Role                                                                     |
+| --------------- | --------- | ------------------------------------------------------------------------ |
+| `migrate`       | `wvs-app` | Applies migrations and provisions the `wvs_app` role, then exits         |
+| `api`           | `wvs-app` | REST API and WebSocket gateway, as `wvs_app`; healthy when `/api/health/ready` passes |
+| `report-worker` | `wvs-app` | F.7 report generation; scale with `--scale report-worker=N`              |
+| `scheduler`     | `wvs-app` | `email:retry` and `scans:reconcile` every 5 min, `purge:retention` daily |
+| `web`           | `wvs-web` | nginx: the dashboard, `/api` and `/ws` proxying, browser security headers |
+
+The API and the report worker share the `report_files` volume. Only `migrate`
+and `scheduler` receive the owner database URL; the retention purge needs it.
+Run exactly one scheduler. Intervals are set with `EMAIL_RETRY_EVERY_MINUTES`,
+`SCANS_RECONCILE_EVERY_MINUTES` and `PURGE_RETENTION_EVERY_MINUTES` (0 turns a
+job off).
+
+The `web` port is bound to loopback. To serve it publicly, put a TLS front in
+front of it (`deploy/nginx.conf` is one), set `PUBLIC_URL` to the `https://`
+address, and keep the port on loopback: the API trusts the `X-Forwarded-For`
+the stack hands it.
+
+**Memory (C.4, 8 GB).** Every service has a limit:
+
+| Service | Limit | Service | Limit |
+| --- | --- | --- | --- |
+| postgres | 1 GB | report-worker | 768 MB |
+| redis | 256 MB | scheduler | 512 MB |
+| mailpit | 128 MB | web | 128 MB |
+| api | 1 GB | migrate (exits) | 512 MB |
+
+The running total is about 3.8 GB, leaving roughly 4 GB for the scan workers
+and the host. Idle, the stack uses about 350 MB.
+
+**CI.** `.github/workflows/ci.yml` runs on every pull request and on `main`:
+typecheck, every workspace's tests against real Postgres and Redis, a check
+that the migrations match `schema.prisma`, the dashboard build, and the
+container stack built, started and probed through nginx.
+
+---
+
 ## Available Scripts
 
 From the repository root:
@@ -241,7 +295,10 @@ From the repository root:
 | `bun run db:migrate:deploy` | Apply pending migrations in production                 |
 | `bun run db:studio`         | Launch Prisma Studio web GUI to browse data stores     |
 | `bun run email:retry`       | Drain queued transactional email from `email_outbox`   |
+| `bun run scans:reconcile`   | Re-deliver or end scans whose queue job was lost (#6)  |
+| `bun run purge:retention`   | Purge evidence and URL ledger past retention (owner DB)|
 | `bun run reports:worker`    | Generate queued reports (F.7); see Reports (F.7)       |
+| `bun run scheduler`         | Run the three maintenance jobs above on a timer (F.8)  |
 
 ---
 
