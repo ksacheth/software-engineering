@@ -1,0 +1,11 @@
+id: P-16
+name: "Weak certificate signature algorithm or key size"
+type: passive
+cwe: CWE-327
+owaspCategory: "A02:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The certificate uses a weak signature algorithm (such as SHA-1) or a short key (RSA under 2048 bits, EC under 256 bits)."
+remediation: "Reissue the certificate with SHA-256 or stronger and an RSA 2048+ or EC P-256+ key."

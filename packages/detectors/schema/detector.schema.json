@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wvs.local/schemas/detector.schema.json",
+  "title": "WVS detector definition (DC-8)",
+  "description": "Metadata for one Appendix B detector. The detector's code decides when it fires; everything a finding says about the issue comes from here.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "type",
+    "cwe",
+    "owaspCategory",
+    "severity",
+    "confidence",
+    "priority",
+    "profiles",
+    "description",
+    "remediation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "description": "Appendix B identifier. P- detectors are passive, A- detectors are safe-active.",
+      "type": "string",
+      "pattern": "^[PA]-\\d{2}$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "type": { "enum": ["passive", "active"] },
+    "cwe": {
+      "type": ["string", "null"],
+      "pattern": "^CWE-\\d+$"
+    },
+    "owaspCategory": {
+      "description": "OWASP Top 10 2021 category, e.g. A05:2021.",
+      "type": ["string", "null"],
+      "pattern": "^A\\d{2}:2021$"
+    },
+    "severity": {
+      "description": "Default severity. VARIES means the detector sets it per finding (for example from a CVE score).",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "VARIES"]
+    },
+    "confidence": { "enum": ["CONFIRMED", "FIRM", "TENTATIVE"] },
+    "priority": {
+      "description": "MoSCoW priority from Appendix B: Must, Should, Could.",
+      "enum": ["M", "S", "C"]
+    },
+    "profiles": {
+      "description": "Scan profiles the detector runs in.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["PASSIVE", "STANDARD", "THOROUGH"] }
+    },
+    "description": { "type": "string", "minLength": 1 },
+    "remediation": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "active" } } },
+      "then": {
+        "properties": {
+          "id": { "type": "string", "pattern": "^A-" },
+          "profiles": { "type": "array", "not": { "type": "array", "contains": { "const": "PASSIVE" } } }
+        }
+      },
+      "else": { "properties": { "id": { "type": "string", "pattern": "^P-" } } }
+    }
+  ]
+}

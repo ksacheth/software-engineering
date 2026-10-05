@@ -1,0 +1,11 @@
+id: P-27
+name: "Secret or credential pattern in response body"
+type: passive
+cwe: CWE-540
+owaspCategory: "A05:2021"
+severity: CRITICAL
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The response body contains a string that matches a secret or credential pattern, such as an API key or private key."
+remediation: "Remove the secret from the response, rotate it, and keep secrets server-side."

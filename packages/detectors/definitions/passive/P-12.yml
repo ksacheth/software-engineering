@@ -1,0 +1,11 @@
+id: P-12
+name: "Weak cipher suite offered"
+type: passive
+cwe: CWE-327
+owaspCategory: "A02:2021"
+severity: HIGH
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The server negotiated a weak cipher suite (for example RC4, 3DES, NULL, export-grade or non-forward-secret key exchange)."
+remediation: "Restrict the server to AEAD cipher suites with ECDHE key exchange."

@@ -1,0 +1,11 @@
+id: P-02
+name: "Missing HTTP Strict-Transport-Security"
+type: passive
+cwe: CWE-319
+owaspCategory: "A02:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The HTTPS response has no Strict-Transport-Security header, so a browser may still be downgraded to plaintext HTTP on a later visit."
+remediation: "Send Strict-Transport-Security with a max-age of at least one year (31536000) on every HTTPS response."

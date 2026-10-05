@@ -1,0 +1,11 @@
+id: A-06
+name: "Clickjacking"
+type: active
+cwe: CWE-1021
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "The page was confirmed to load inside a frame from another origin, so it can be used for clickjacking."
+remediation: "Send Content-Security-Policy: frame-ancestors 'self' (or 'none') and X-Frame-Options: DENY."

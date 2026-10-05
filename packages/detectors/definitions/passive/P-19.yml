@@ -1,0 +1,11 @@
+id: P-19
+name: "Known-vulnerable component version (OSV/CVE correlation)"
+type: passive
+cwe: CWE-1104
+owaspCategory: "A06:2021"
+severity: VARIES
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "An identified component version matches a published vulnerability advisory."
+remediation: "Upgrade the component to a version the advisory lists as fixed, or apply the vendor's mitigation."

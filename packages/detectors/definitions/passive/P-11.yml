@@ -1,0 +1,11 @@
+id: P-11
+name: "Deprecated TLS protocol offered (TLS 1.0 / 1.1 / SSLv3)"
+type: passive
+cwe: CWE-327
+owaspCategory: "A02:2021"
+severity: HIGH
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The server accepts a deprecated protocol (SSLv3, TLS 1.0 or TLS 1.1) with known cryptographic weaknesses."
+remediation: "Disable SSLv3, TLS 1.0 and TLS 1.1; offer TLS 1.2 and TLS 1.3 only."

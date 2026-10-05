@@ -1,0 +1,11 @@
+id: P-30
+name: "Missing or malformed security.txt (RFC 9116)"
+type: passive
+cwe: null
+owaspCategory: null
+severity: INFO
+confidence: CONFIRMED
+priority: C
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The site has no valid /.well-known/security.txt, so researchers have no published way to report vulnerabilities (RFC 9116)."
+remediation: "Publish /.well-known/security.txt with at least Contact and Expires fields."

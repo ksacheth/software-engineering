@@ -45,3 +45,5 @@ export type ComparisonStatus = (typeof COMPARISON_STATUSES)[number];
 export const FINDING_CONFIDENCES = ["CONFIRMED", "FIRM", "TENTATIVE"] as const;
 
 export type FindingConfidence = (typeof FINDING_CONFIDENCES)[number];
+
+export * from "./detector-contract.js";

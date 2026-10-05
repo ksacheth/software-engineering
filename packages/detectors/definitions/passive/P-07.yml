@@ -1,0 +1,11 @@
+id: P-07
+name: "Cookie without Secure attribute"
+type: passive
+cwe: CWE-614
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A cookie is set without the Secure attribute, so the browser will also send it over plaintext HTTP."
+remediation: "Add the Secure attribute to every cookie set by an HTTPS site."

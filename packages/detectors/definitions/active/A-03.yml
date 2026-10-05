@@ -1,0 +1,11 @@
+id: A-03
+name: "SQL Injection (boolean-based)"
+type: active
+cwe: CWE-89
+owaspCategory: "A03:2021"
+severity: CRITICAL
+confidence: TENTATIVE
+priority: S
+profiles: [STANDARD, THOROUGH]
+description: "Logically true and false versions of a parameter produced consistently different responses, indicating the value changes a SQL query."
+remediation: "Use parameterised queries or prepared statements for every database call."

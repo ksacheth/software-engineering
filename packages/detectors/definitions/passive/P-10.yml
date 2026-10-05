@@ -1,0 +1,11 @@
+id: P-10
+name: "Cookie scoped too broadly (parent domain)"
+type: passive
+cwe: CWE-565
+owaspCategory: "A01:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A cookie's Domain attribute covers a parent domain, so every sibling subdomain receives it and can overwrite it."
+remediation: "Omit the Domain attribute so the cookie stays host-only, or scope it to the narrowest domain that needs it."

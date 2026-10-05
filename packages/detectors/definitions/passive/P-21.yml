@@ -1,0 +1,11 @@
+id: P-21
+name: "Exposed version control directory (.git, .svn, .hg)"
+type: passive
+cwe: CWE-527
+owaspCategory: "A05:2021"
+severity: CRITICAL
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A version control directory (.git, .svn or .hg) is publicly reachable, which can expose the full source history and any secrets in it."
+remediation: "Block access to version control directories at the web server and remove them from the deployed site."

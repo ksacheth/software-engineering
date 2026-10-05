@@ -1,0 +1,11 @@
+id: A-09
+name: "Sensitive file and directory enumeration"
+type: active
+cwe: CWE-538
+owaspCategory: "A05:2021"
+severity: VARIES
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "A bounded check of common administrative and backup paths found one that is publicly reachable."
+remediation: "Remove the resource or restrict it to authenticated, authorised users."

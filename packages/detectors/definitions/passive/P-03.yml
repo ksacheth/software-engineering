@@ -1,0 +1,11 @@
+id: P-03
+name: "Missing X-Content-Type-Options: nosniff"
+type: passive
+cwe: CWE-693
+owaspCategory: "A05:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The response lacks X-Content-Type-Options: nosniff, so a browser may guess the content type and run uploaded or mislabelled content as script."
+remediation: "Send X-Content-Type-Options: nosniff on every response."

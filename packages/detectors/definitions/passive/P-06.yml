@@ -1,0 +1,11 @@
+id: P-06
+name: "Missing Permissions-Policy"
+type: passive
+cwe: CWE-693
+owaspCategory: "A05:2021"
+severity: INFO
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "No Permissions-Policy limits which browser features (camera, geolocation, payment) the page and its frames may use."
+remediation: "Send a Permissions-Policy that disables the features the site does not use."

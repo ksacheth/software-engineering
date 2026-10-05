@@ -1,0 +1,11 @@
+id: P-29
+name: "Sensitive page cacheable by intermediaries"
+type: passive
+cwe: CWE-525
+owaspCategory: "A04:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A response that looks sensitive can be stored by shared caches because it does not send Cache-Control: no-store or private."
+remediation: "Send Cache-Control: no-store (or private) on responses that contain user-specific or sensitive data."

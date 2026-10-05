@@ -1,0 +1,11 @@
+id: P-23
+name: "Directory listing enabled"
+type: passive
+cwe: CWE-548
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The server returns an automatic directory listing, exposing every file in that directory."
+remediation: "Disable directory listing (autoindex) on the web server."

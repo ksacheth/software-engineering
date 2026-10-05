@@ -1,0 +1,11 @@
+id: P-04
+name: "Missing or permissive frame-ancestors / X-Frame-Options"
+type: passive
+cwe: CWE-1021
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "Neither a frame-ancestors directive nor X-Frame-Options restricts who may frame the page, so it can be overlaid for clickjacking."
+remediation: "Send Content-Security-Policy: frame-ancestors 'self' (or 'none'), and X-Frame-Options: DENY for older browsers."

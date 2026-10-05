@@ -1,0 +1,11 @@
+id: P-25
+name: "Mixed active content on HTTPS page"
+type: passive
+cwe: CWE-311
+owaspCategory: "A02:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "An HTTPS page loads scripts, stylesheets or frames over plaintext HTTP, which a network attacker can modify."
+remediation: "Load every active resource over HTTPS, and consider Content-Security-Policy: upgrade-insecure-requests."

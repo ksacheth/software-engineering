@@ -1,0 +1,11 @@
+id: A-13
+name: "Unauthenticated access to administrative interface"
+type: active
+cwe: CWE-306
+owaspCategory: "A01:2021"
+severity: HIGH
+confidence: TENTATIVE
+priority: S
+profiles: [STANDARD, THOROUGH]
+description: "A known administrative path responded without requiring authentication."
+remediation: "Require authentication and authorisation for administrative interfaces, and restrict them by network where possible."

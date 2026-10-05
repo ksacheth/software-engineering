@@ -1,0 +1,11 @@
+id: P-01
+name: "Missing or weak Content-Security-Policy"
+type: passive
+cwe: CWE-693
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The page has no Content-Security-Policy, or one that allows inline or wildcard script sources, so an injected script would run."
+remediation: "Send a Content-Security-Policy that lists trusted script sources explicitly and avoids 'unsafe-inline', 'unsafe-eval' and wildcards."

@@ -1,43 +1,7 @@
-export interface MockCrawlRecord {
-  url: string;
-  method?: string;
-  statusCode?: number;
-  contentType?: string;
-  requestHeaders?: Record<string, string> | null;
-  responseHeaders?: Record<string, string> | null;
-  forms?: any;
-  parameters?: any;
-  responseBody?: string | null;
-}
+import type { CrawlRecord, RawFinding, RawFindingEvidence } from "@wvs/shared";
 
-export interface RawFindingEvidence {
-  requestHeaders?: Record<string, string> | null;
-  requestBody?: string | null;
-  responseHeaders?: Record<string, string> | null;
-  responseBody?: string | null;
-  curlCommand?: string | null;
-  extractedSnippet?: string | null;
-}
-
-export interface RawFinding {
-  detectorId: string;
-  name: string;
-  description: string;
-  remediation: string;
-  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
-  confidence: "CONFIRMED" | "FIRM" | "TENTATIVE";
-  cwe?: string;
-  owaspCategory?: string;
-  affectedUrl: string;
-  affectedParameter?: string | null;
-  cvssScore?: number;
-  cvssVector?: string;
-  cveId?: string;
-  epssScore?: number;
-  epssPercentile?: number;
-  advisoryData?: any;
-  evidence?: RawFindingEvidence;
-}
+export type { RawFinding, RawFindingEvidence };
+export type MockCrawlRecord = CrawlRecord;
 
 export class MockDetector {
   /**

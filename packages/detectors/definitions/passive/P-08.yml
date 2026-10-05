@@ -1,0 +1,11 @@
+id: P-08
+name: "Cookie without HttpOnly attribute"
+type: passive
+cwe: CWE-1004
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A cookie is set without HttpOnly, so any script running in the page, including an injected one, can read it."
+remediation: "Add HttpOnly to session and authentication cookies that scripts do not need to read."
