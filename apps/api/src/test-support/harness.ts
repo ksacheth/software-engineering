@@ -2,12 +2,13 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 import { SQL } from "bun";
 import type { Role } from "@wvs/database";
-import { SCAN_QUEUE_NAME } from "@wvs/shared";
+import { REPORT_QUEUE_NAME, SCAN_QUEUE_NAME } from "@wvs/shared";
 
 /**
  * Seam 2 test harness: the running API process against real Postgres and Redis.
@@ -56,6 +57,10 @@ process.env.MIGRATION_DATABASE_URL = SOURCE_DATABASE_URL;
 const TEST_REDIS_DB = process.env.TEST_REDIS_DB ?? "15";
 process.env.REDIS_DB = TEST_REDIS_DB;
 
+/** Generated report files go to a scratch directory, never the dev one. */
+export const TEST_REPORT_STORAGE = join(tmpdir(), `wvs-test-reports-${process.pid}`);
+process.env.REPORT_STORAGE_PATH = TEST_REPORT_STORAGE;
+
 const database = await import("@wvs/database");
 export const prisma = database.prisma;
 
@@ -64,6 +69,7 @@ const { auth } = await import("../lib/auth");
 const { attachScanGateway } = await import("../modules/scans/scan-gateway");
 const { closeScanQueue } = await import("../modules/scans/scan-queue");
 const { closeScanEventPublisher } = await import("../modules/scans/scan-bus");
+const { closeReportQueue } = await import("../modules/reports/report-queue");
 
 export const TEST_PASSWORD = "correct-horse-battery-staple";
 
@@ -216,6 +222,7 @@ export async function startTestApi(): Promise<TestApi> {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await closeScanQueue();
       await closeScanEventPublisher();
+      await closeReportQueue();
     },
   };
 }
@@ -336,7 +343,15 @@ export function request(
 }
 
 export function scanQueue(): Queue {
-  return new Queue(SCAN_QUEUE_NAME, {
+  return testQueue(SCAN_QUEUE_NAME);
+}
+
+export function reportQueue(): Queue {
+  return testQueue(REPORT_QUEUE_NAME);
+}
+
+function testQueue(name: string): Queue {
+  return new Queue(name, {
     connection: {
       host: process.env.REDIS_HOST ?? "localhost",
       port: Number(process.env.REDIS_PORT ?? 6379),

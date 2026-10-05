@@ -11,6 +11,7 @@ This document defines data retention, privileged purge operations, and audit tra
 | `url_ledger`             | **90 Days** (default)       | Privileged batch purge script (`scripts/purge-retention.ts`) | SRS C.4, C.7      |
 | `finding_evidence`       | **90 Days** (default)       | Soft-purge / payload nullification (`isPurged = true`)       | SRS F.6           |
 | `email_outbox`           | **30 Days** (terminal rows) | Privileged `DELETE` (no append-only trigger)                 | SRS C.7           |
+| `scan_report` files      | Until `expiresAt`, if set   | Not served after expiry; file deletion not yet scheduled (#8) | SRS C.7           |
 | `audit_log`              | **Indefinite**              | Never purged via routine maintenance                         | SRS DC-9          |
 | `finding_triage_history` | **Indefinite**              | Never purged; retained as immutable compliance record        | SRS DC-9          |
 
@@ -31,6 +32,14 @@ an audit record.
   `FAILED` -> `SENT` or `FAILED` -> `DEAD_LETTER`, so it deliberately carries no
   append-only trigger (contrast ADR-0002, which applies to `audit_log`,
   `url_ledger`, and `finding_triage_history`).
+
+### `scan_report` files
+
+A Technical Report copies raw evidence into a file under `REPORT_STORAGE_PATH`.
+`scan_report.expiresAt` is the earliest retention expiry of the evidence in
+that file, and the API refuses to serve the file, directly or by share link,
+once it has passed (ADR-0011). Deleting the expired files is not yet done by
+any job; it belongs with the retention work tracked in #8.
 
 ---
 

@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Bun auto-loads .env from the directory it considers the project root, which
@@ -123,7 +125,26 @@ export const config = {
   // it here contradicts NFR-SCAL-1, because every API instance would drain the
   // same queue and send duplicates.
   emailRetryIntervalMs: num(process.env.EMAIL_RETRY_INTERVAL_MS, 0),
+  reports: {
+    // Relative paths resolve against the repo root, where .env lives, so the
+    // API and the report worker agree on the directory whatever their CWD.
+    storagePath: resolvePath(
+      fileURLToPath(new URL("../../../../", import.meta.url)),
+      process.env.REPORT_STORAGE_PATH ?? "./storage/reports",
+    ),
+    // DC-4: a BullMQ worker is not a request handler, and BullMQ hands each job
+    // to one consumer, so running it inside the API is safe with any number of
+    // instances. It is still off by default: rendering a large PDF holds the
+    // event loop, which the API's request latency target (NFR-PERF-1) feels.
+    workerInApi: bool(process.env.REPORT_WORKER_IN_API, false),
+    workerConcurrency: num(process.env.REPORT_WORKER_CONCURRENCY, 2),
+  },
 } as const;
+
+/** The dashboard's origin, for links in notifications. */
+export function webOrigin(): string {
+  return config.corsOrigins[0] ?? "http://localhost:3000";
+}
 
 /**
  * Connection options for ioredis and BullMQ. One definition, so the queue, the
