@@ -1,3 +1,52 @@
+# F.8 / DC-7: the single orchestration definition for local development and the
+# demonstration deployment.
+#
+#   docker compose up -d                      infrastructure only, for `bun run dev`
+#   docker compose --profile app up -d --build  the whole system on PUBLIC_URL
+#
+# Values come from .env (interpolated here, never copied into an image). Every
+# service has a memory limit; the budget table in README.md shows the stack
+# fits the 8 GB machine of C.4 with room for the scan workers.
+
+x-app: &app
+  build:
+    context: .
+    target: app
+  image: wvs-app:local
+  profiles: ["app"]
+  restart: unless-stopped
+  init: true
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+
+# What every runtime service needs to reach the stores. The owner database URL
+# is deliberately not here: only `migrate` and `scheduler` get it.
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://wvs_app:${WVS_APP_PASSWORD:-}@postgres:5432/wvs?schema=public
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_DB: ${REDIS_DB:-0}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+  BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost:8080}
+  WEB_ORIGIN: ${PUBLIC_URL:-http://localhost:8080}
+  # Inside the network the mail sink is `mailpit`, not localhost. Point these
+  # at a real relay to deliver mail from the stack; the other SMTP_* values
+  # come from .env as they are.
+  SMTP_HOST: ${STACK_SMTP_HOST:-mailpit}
+  SMTP_PORT: ${STACK_SMTP_PORT:-1025}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-noreply@wvs.local}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  REPORT_STORAGE_PATH: /app/storage/reports
+
+x-owner-database-url: &owner-database-url postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/wvs?schema=public
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,7 +54,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: wvs
     ports:
       - "5432:5432"
@@ -16,6 +65,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    mem_limit: 1g
 
   redis:
     image: redis:7-alpine
@@ -30,6 +80,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    mem_limit: 256m
 
   # F.1 — local SMTP sink. Verification, password-reset, and account-deletion
   # mail is delivered here instead of the internet; read it at :8025.
@@ -40,7 +91,89 @@ services:
     ports:
       - "1025:1025" # SMTP (SMTP_HOST/SMTP_PORT in .env)
       - "8025:8025" # web UI
+    mem_limit: 128m
+
+  # Applies pending migrations and provisions the least-privilege wvs_app role
+  # (DC-9), then exits. Everything else waits for it to succeed.
+  migrate:
+    <<: *app
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["bun", "run", "db:migrate:deploy"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: *owner-database-url
+      MIGRATION_DATABASE_URL: *owner-database-url
+      WVS_APP_PASSWORD: ${WVS_APP_PASSWORD:-}
+    mem_limit: 512m
+
+  api:
+    <<: *app
+    environment:
+      <<: *app-env
+      PORT: "4100"
+      # nginx reaches the API from the bridge network, not loopback.
+      TRUST_PROXY: loopback, uniquelocal
+      # Both belong to their own services below (NFR-SCAL-1).
+      EMAIL_RETRY_INTERVAL_MS: "0"
+      REPORT_WORKER_IN_API: "false"
+    volumes:
+      - report_files:/app/storage/reports
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:4100/api/health/ready'); process.exit(r.ok ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    mem_limit: 1g
+
+  # F.7 report generation (DC-4). Scale with `--scale report-worker=N`.
+  report-worker:
+    <<: *app
+    command: ["bun", "apps/api/src/scripts/report-worker.ts"]
+    environment:
+      <<: *app-env
+      REPORT_WORKER_CONCURRENCY: ${REPORT_WORKER_CONCURRENCY:-2}
+    volumes:
+      - report_files:/app/storage/reports
+    mem_limit: 768m
+
+  # Maintenance on a timer: email retry, scan reconciliation, retention purge.
+  # Exactly one; it does not coordinate with a second copy.
+  scheduler:
+    <<: *app
+    command: ["bun", "apps/api/src/scripts/scheduler.ts"]
+    environment:
+      <<: *app-env
+      # The retention purge runs as the owner role (retention-and-maintenance.md).
+      MIGRATION_DATABASE_URL: *owner-database-url
+      EMAIL_RETRY_EVERY_MINUTES: ${EMAIL_RETRY_EVERY_MINUTES:-5}
+      SCANS_RECONCILE_EVERY_MINUTES: ${SCANS_RECONCILE_EVERY_MINUTES:-5}
+      PURGE_RETENTION_EVERY_MINUTES: ${PURGE_RETENTION_EVERY_MINUTES:-1440}
+    # A purge is one transaction; give a run in progress time to commit.
+    stop_grace_period: 60s
+    mem_limit: 512m
+
+  # The dashboard, and the only published port of the stack. Bound to loopback
+  # by default: a TLS front (deploy/nginx.conf) or your own browser reaches it
+  # there, and the API trusts the X-Forwarded-For it is handed.
+  web:
+    build:
+      context: .
+      target: web
+    image: wvs-web:local
+    profiles: ["app"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${DEPLOY_HTTP_BIND:-127.0.0.1}:${DEPLOY_HTTP_PORT:-8080}:8080"
+    mem_limit: 128m
 
 volumes:
   postgres_data:
   redis_data:
+  report_files:
