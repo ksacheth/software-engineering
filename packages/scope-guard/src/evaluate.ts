@@ -7,6 +7,7 @@
  * Rate limiting is TokenBucket.tryRemove() in the HTTP interceptor, before
  * this function, so a refused request never consumes a network round-trip.
  */
+import { matchBlocklist } from "@wvs/scope-rules";
 import { isBlockedAddress, isBlockedHostname } from "./blocked-networks";
 import { ipsMatchVerified, inOrigin, pathAllowed } from "./scope";
 import type { EvaluateInput, GuardDecision } from "./types";
@@ -29,7 +30,8 @@ export function evaluate(input: EvaluateInput): GuardDecision {
   } catch {
     return { allowed: false, reason: "Invalid URL", code: "OUT_OF_SCOPE" };
   }
-  if (!inOrigin(url, input.scope.origin) || !pathAllowed(input.pathname, input.scope)) {
+  const origin = { allowPlaintextTwin: input.allowPlaintextTwin, method: input.method };
+  if (!inOrigin(url, input.scope.origin, origin) || !pathAllowed(url.pathname, input.scope)) {
     return { allowed: false, reason: "Outside target scope", code: "OUT_OF_SCOPE" };
   }
   if (input.requestsMade >= input.scope.maxRequests || input.pagesCrawled >= input.scope.maxPages) {
@@ -47,7 +49,12 @@ export function evaluate(input: EvaluateInput): GuardDecision {
   if (input.resolvedIps.some(isBlockedAddress)) {
     return { allowed: false, reason: "Resolved to a blocked address", code: "PRIVATE_OR_METADATA" };
   }
-  if (input.adminBlocklist.some((entry) => input.resolvedIps.includes(entry) || input.hostname === entry)) {
+  // Fails closed on malformed or unsupported (e.g. REGEX) entries.
+  const listed = matchBlocklist(
+    { hostname: input.hostname, addresses: input.resolvedIps },
+    input.adminBlocklist,
+  );
+  if (listed.blocked) {
     return { allowed: false, reason: "Administrator blocklist", code: "BLOCKLIST" };
   }
   if (!ipsMatchVerified(input.resolvedIps, input.scope.verifiedIpSet)) {

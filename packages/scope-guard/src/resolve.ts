@@ -5,7 +5,6 @@ import { isIP } from "node:net";
 export async function resolveHostIps(hostname: string): Promise<string[]> {
   if (isIP(hostname)) return [hostname];
   const resolver = new Resolver();
-  resolver.setServers(resolver.getServers());
   const [v4, v6] = await Promise.allSettled([
     resolver.resolve4(hostname),
     resolver.resolve6(hostname),

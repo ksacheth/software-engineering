@@ -1,4 +1,5 @@
-import { isIPv4, isIPv6 } from "node:net";
+import { isIPv4 } from "node:net";
+import { classifyAddress } from "@wvs/scope-rules";
 
 /** Fixed refusals (F.8). Admin NetworkBlocklist is applied on top of these. */
 export const BLOCKED_CIDRS_V4 = [
@@ -8,14 +9,20 @@ export const BLOCKED_CIDRS_V4 = [
   "169.254.0.0/16",
   "172.16.0.0/12",
   "192.168.0.0/16",
+  "100.64.0.0/10",
+  "192.0.0.0/24",
+  "198.18.0.0/15",
   "224.0.0.0/4",
   "240.0.0.0/4",
 ] as const;
 
 export const BLOCKED_CIDRS_V6 = [
+  "::/128",
   "::1/128",
   "fc00::/7",
   "fe80::/10",
+  "ff00::/8",
+  "64:ff9b::/96",
   "::ffff:127.0.0.0/104",
   "::ffff:10.0.0.0/104",
   "::ffff:169.254.0.0/112",
@@ -63,17 +70,33 @@ export function isBlockedHostname(hostname: string): boolean {
   return BLOCKED_HOSTNAMES.has(hostname.toLowerCase());
 }
 
+/** Expands canonical IPv6 text (as produced by classifyAddress) to 8 groups. */
+function expandGroups(text: string): number[] {
+  const [head = "", tail] = text.split("::");
+  const parse = (part: string) => (part === "" ? [] : part.split(":").map((g) => Number.parseInt(g, 16)));
+  const front = parse(head);
+  if (tail === undefined) return front;
+  const back = parse(tail);
+  return [...front, ...Array<number>(8 - front.length - back.length).fill(0), ...back];
+}
+
+/** The IPv4 address a 6to4 (2002::/16) address routes to, or null. */
+function sixToFourTarget(normalised: string): string | null {
+  const [g0, g1 = 0, g2 = 0] = expandGroups(normalised);
+  if (g0 !== 0x2002) return null;
+  return `${g1 >> 8}.${g1 & 0xff}.${g2 >> 8}.${g2 & 0xff}`;
+}
+
+/**
+ * True when the address must never be connected to. Built on scope-rules'
+ * classifyAddress (ADR-0005) so public IPv6 is allowed while private,
+ * link-local, metadata and IPv4-embedded forms are refused. Fails closed on
+ * unparseable input. 6to4 addresses are refused when they embed a forbidden
+ * IPv4 address.
+ */
 export function isBlockedAddress(ip: string): boolean {
-  if (isIPv4(ip)) {
-    return BLOCKED_CIDRS_V4.some((cidr) => ipv4InCidr(ip, cidr));
-  }
-  if (isIPv6(ip)) {
-    const lower = ip.toLowerCase();
-    if (lower === "::1") return true;
-    if (lower.startsWith("fe80:")) return true;
-    if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isBlockedAddress(mapped[1]!);
-  }
-  return true;
+  const verdict = classifyAddress(ip);
+  if (!verdict.allowed) return true;
+  const embedded = verdict.normalised ? sixToFourTarget(verdict.normalised) : null;
+  return embedded !== null && !classifyAddress(embedded).allowed;
 }
