@@ -1,6 +1,14 @@
 // @ts-ignore
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { dispatch, type DispatchRequest, type LedgerClient } from "./dispatch.js";
+import {
+  authorize,
+  dispatch,
+  MAX_BODY_BYTES,
+  type DispatchRequest,
+  type LedgerClient,
+  type Transport,
+  type TransportRequest,
+} from "./dispatch.js";
 
 const realFetch = globalThis.fetch;
 
@@ -79,5 +87,148 @@ describe("dispatch safety", () => {
     expect(result.ok).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(rows[0]).toMatchObject({ decision: "BLOCKED_RATE_LIMIT", resolvedIp: "" });
+  });
+});
+
+/** A scope on a real hostname, with DNS and the network replaced. */
+function namedRequest(overrides: Partial<DispatchRequest> = {}): DispatchRequest {
+  const base = request();
+  return {
+    ...base,
+    url: "https://shop.example/cart?x=1",
+    scope: { ...base.scope, origin: "https://shop.example", verifiedIpSet: ["93.184.216.34/32", "2606:2800::1/128"] },
+    resolver: async () => ["93.184.216.34"],
+    ...overrides,
+  };
+}
+
+function recordingTransport(response: () => Response = () => new Response("ok")) {
+  const sent: TransportRequest[] = [];
+  const transport: Transport = async (sentRequest) => {
+    sent.push(sentRequest);
+    return response();
+  };
+  return { transport, sent };
+}
+
+describe("dispatch pins the connection to the approved IP", () => {
+  test("connects to the verified IP and keeps the real name for Host and TLS", async () => {
+    const { db, rows } = fakeLedger();
+    const { transport, sent } = recordingTransport();
+
+    const result = await dispatch(db, namedRequest({ transport }));
+
+    expect(result.ok).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      url: "https://93.184.216.34/cart?x=1",
+      serverName: "shop.example",
+      headers: { host: "shop.example", "user-agent": "test-agent" },
+    });
+    expect(rows[0]).toMatchObject({ decision: "ALLOWED", resolvedIp: "93.184.216.34" });
+  });
+
+  test("keeps a non-default port in the Host header and brackets an IPv6 address in the URL", async () => {
+    const { db } = fakeLedger();
+    const { transport, sent } = recordingTransport();
+    const base = namedRequest();
+
+    await dispatch(db, {
+      ...base,
+      url: "http://shop.example:8080/",
+      scope: { ...base.scope, origin: "http://shop.example:8080" },
+      resolver: async () => ["2606:2800::1"],
+      transport,
+    });
+
+    expect(sent[0]!.url).toBe("http://[2606:2800::1]:8080/");
+    expect(sent[0]!.headers.host).toBe("shop.example:8080");
+    expect(sent[0]!.serverName).toBeUndefined();
+  });
+
+  test("lets a probe override the Host header without changing where it connects", async () => {
+    const { db } = fakeLedger();
+    const { transport, sent } = recordingTransport();
+
+    await dispatch(db, namedRequest({ transport, headers: { host: "evil.example" } }));
+
+    expect(sent[0]!.headers.host).toBe("evil.example");
+    expect(sent[0]!.url).toContain("93.184.216.34");
+  });
+
+  test("never contacts an IP outside the verified set, whatever the name resolves to", async () => {
+    const { db, rows } = fakeLedger();
+    const { transport, sent } = recordingTransport();
+
+    const result = await dispatch(db, namedRequest({ transport, resolver: async () => ["93.184.216.99"] }));
+
+    expect(result.ok).toBe(false);
+    expect(sent).toHaveLength(0);
+    expect(rows[0]).toMatchObject({ decision: "BLOCKED_DNS_REBINDING" });
+  });
+});
+
+describe("dispatch response bodies", () => {
+  test("stops reading at the cap and reports truncation", async () => {
+    const { db, rows } = fakeLedger();
+    const chunk = new Uint8Array(1024 * 1024).fill(97);
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    const { transport } = recordingTransport(() => new Response(body));
+
+    const result = await dispatch(db, namedRequest({ transport }));
+
+    expect(result.ok && result.truncated).toBe(true);
+    expect(result.ok && result.body.length).toBe(MAX_BODY_BYTES);
+    expect(rows[0]!.bytesReceived).toBe(MAX_BODY_BYTES);
+    expect(pulled).toBeLessThan(10);
+  });
+
+  test("returns a small body whole and an empty body for HEAD", async () => {
+    const { db } = fakeLedger();
+    const { transport } = recordingTransport(() => new Response("hello"));
+
+    const get = await dispatch(db, namedRequest({ transport }));
+    const head = await dispatch(db, namedRequest({ transport, method: "HEAD" }));
+
+    expect(get.ok && [get.body, get.truncated]).toEqual(["hello", false]);
+    expect(head.ok && head.body).toBe("");
+  });
+});
+
+describe("authorize", () => {
+  test("refuses and ledgers a malformed URL instead of throwing", async () => {
+    const { db, rows } = fakeLedger();
+
+    const decision = await authorize(db, request({ url: "not a url" }));
+
+    expect(decision.allowed).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ url: "not a url", decision: "BLOCKED_SCOPE", resolvedIp: "" });
+  });
+
+  test("admits the plaintext twin only when asked", async () => {
+    const { db } = fakeLedger();
+    const twin = { url: "http://shop.example/" };
+
+    const without = await authorize(db, namedRequest(twin));
+    const withTwin = await authorize(db, namedRequest({ ...twin, allowPlaintextTwin: true }));
+
+    expect(without.allowed).toBe(false);
+    expect(withTwin.allowed).toBe(true);
+  });
+
+  test("the plaintext twin allowance covers only the root on the default port", async () => {
+    const { db } = fakeLedger();
+
+    for (const url of ["http://shop.example/admin", "http://shop.example:8080/", "http://other.example/"]) {
+      const decision = await authorize(db, namedRequest({ url, allowPlaintextTwin: true }));
+      expect(decision.allowed).toBe(false);
+    }
   });
 });

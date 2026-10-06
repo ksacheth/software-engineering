@@ -4,9 +4,10 @@ import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { fileURLToPath } from "node:url";
 
-import { signatureAlgorithm } from "./certificate.js";
+import { certificateFacts, signatureAlgorithm } from "./certificate.js";
 import { buildClientHello, PROTOCOLS, readServerReply } from "./client-hello.js";
-import { exchangeHello } from "./tls-probe.js";
+import { exchangeHello, probeTls, type TlsProbeOptions } from "./tls-probe.js";
+import type { LedgerClient } from "../scope-guard/dispatch.js";
 
 function der(fixture: string): Buffer {
   const pem = readFileSync(fileURLToPath(new URL(`fixtures/${fixture}`, import.meta.url)), "utf8");
@@ -94,5 +95,72 @@ describe("signatureAlgorithm", () => {
 
   test("returns null for bytes that are not a certificate", () => {
     expect(signatureAlgorithm(Buffer.from([0x30]))).toBeNull();
+  });
+});
+
+describe("certificateFacts", () => {
+  const cert = (overrides: Record<string, unknown>) =>
+    ({ subjectaltname: "DNS:a.example", valid_from: "Jan  1 00:00:00 2024 GMT", valid_to: "Jan  1 00:00:00 2030 GMT", ...overrides }) as never;
+
+  test("reports nothing for a certificate whose dates do not parse, instead of throwing", () => {
+    expect(certificateFacts(cert({ valid_from: "not a date" }), "a.example", null)).toBeNull();
+    expect(certificateFacts(cert({ valid_to: undefined }), "a.example", null)).toBeNull();
+  });
+
+  test("reads a certificate with readable dates", () => {
+    expect(certificateFacts(cert({}), "a.example", null)?.validFrom).toBe("2024-01-01T00:00:00.000Z");
+  });
+});
+
+describe("probeTls", () => {
+  function setup(scopeOverrides: Partial<TlsProbeOptions["scope"]> = {}, requestsMade = 0) {
+    const ledger: any[] = [];
+    const db = { urlLedger: { create: async ({ data }: any) => void ledger.push(data) } } as unknown as LedgerClient;
+    const budget = { requestsMade };
+    const options: TlsProbeOptions = {
+      scanJobId: "tls-scan",
+      scope: {
+        origin: "https://93.184.216.34",
+        includedPaths: [],
+        excludedPaths: [],
+        verifiedIpSet: ["93.184.216.34"],
+        rateLimit: 1000,
+        maxPages: 50,
+        maxRequests: 100,
+        maxDepth: 3,
+        ...scopeOverrides,
+      },
+      adminBlocklist: [],
+      isKillSwitchEngaged: async () => false,
+      limiter: { tryRemove: () => true, msUntilAvailable: () => 0 },
+      budget,
+      connectors: { certificate: async () => null, hello: async () => ({ kind: "incomplete" }) },
+    };
+    return { db, ledger, budget, options };
+  }
+
+  test("probes a path-scoped target, authorising its first included path rather than /", async () => {
+    const { db, ledger, options } = setup({ includedPaths: ["/app"] });
+
+    const facts = await probeTls(db, options);
+
+    expect(facts).not.toBeNull();
+    expect(ledger.every((row) => row.decision === "ALLOWED" && row.url === "https://93.184.216.34/app")).toBe(true);
+  });
+
+  test("counts every connection against the shared request ceiling", async () => {
+    const { db, budget, options } = setup();
+
+    await probeTls(db, options);
+
+    expect(budget.requestsMade).toBe(5);
+  });
+
+  test("stops, ledgering a refusal, once the ceiling is reached", async () => {
+    const { db, ledger, budget, options } = setup({ maxRequests: 10 }, 8);
+
+    expect(await probeTls(db, options)).toBeNull();
+    expect(budget.requestsMade).toBe(10);
+    expect(ledger.at(-1)).toMatchObject({ decision: "BLOCKED_CEILING" });
   });
 });

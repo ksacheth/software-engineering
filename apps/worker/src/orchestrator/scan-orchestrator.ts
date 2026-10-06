@@ -1,5 +1,5 @@
 import type { CrawledPage, Prisma, PrismaClient, ScanJob, Target } from "@wvs/database";
-import type { ScanEvent, ScanJobPayload, ScanProgressEvent } from "@wvs/shared";
+import type { ScanEvent, ScanJobPayload, ScanProgressEvent, ScanWarningCode } from "@wvs/shared";
 import type { MockCrawlRecord, RawFinding } from "../detectors/mock-detector.js";
 import { Deduplicator, type DeduplicatedFinding } from "../processors/deduplicator.js";
 import { AdvisoryEnricher } from "../enrichers/advisory-enricher.js";
@@ -11,11 +11,23 @@ export interface RedisPublisher {
 
 export type Detector = (records: MockCrawlRecord[]) => RawFinding[] | Promise<RawFinding[]>;
 
+/** What the engine reports about a run. */
+export interface EngineOutcome {
+  findings: RawFinding[];
+  pagesCrawled: number;
+  requestsMade: number;
+  /**
+   * Set when the engine stopped early because the kill switch tripped or the
+   * scan was paused or cancelled. The findings are then partial and unused.
+   */
+  aborted?: "KILL_SWITCH" | "STOPPED" | null;
+  /** Degradations worth telling the user about, published as scan.warning events. */
+  warnings?: Array<{ code: ScanWarningCode; message: string }>;
+}
+
 /** The real engine: crawls and detects in one step, returning findings and counts.
  *  When supplied it replaces the mock detector and the read-from-DB crawl step. */
-export type ScanEngine = (
-  scanJob: ScanJob & { target: Target },
-) => Promise<{ findings: RawFinding[]; pagesCrawled: number; requestsMade: number }>;
+export type ScanEngine = (scanJob: ScanJob & { target: Target }) => Promise<EngineOutcome>;
 
 export interface OrchestratorOptions {
   prisma: PrismaClient;
@@ -42,6 +54,14 @@ const PROGRESS_BY_PHASE: Record<ScanProgressEvent["phase"], number> = {
 
 /** Interactive transactions default to 5 s, too short for a large finding set. */
 const PERSIST_TIMEOUT_MS = 60_000;
+
+interface DiscoveryResult {
+  pagesCrawled: number;
+  requestsMade: number;
+  detect: () => Promise<RawFinding[]>;
+  aborted: EngineOutcome["aborted"];
+  warnings: NonNullable<EngineOutcome["warnings"]>;
+}
 
 /** Thrown inside the persistence transaction to roll it back when the scan was paused or cancelled. */
 class ScanNoLongerRunning extends Error {}
@@ -144,6 +164,15 @@ export class ScanOrchestrator {
     // Step 2: Discovery. The engine crawls the live target; without one, the mock
     // path reads whatever pages are already in the database.
     const discovery = await this.discover(scanJobId);
+    await this.emitWarnings(scanJobId, discovery.warnings);
+
+    // An engine that was stopped midway is neither complete nor failed. A pause,
+    // cancel or kill switch already moved the row (ADR-0007, ADR-0008), so the
+    // scan is left as that flow set it and nothing is persisted.
+    if (discovery.aborted) {
+      console.log(`[Orchestrator] ScanJob ${scanJobId} stopped by ${discovery.aborted}; not completing it.`);
+      return;
+    }
 
     const stillRunning = await this.updateWhileRunning(scanJobId, {
       phase: "DETECTION",
@@ -159,7 +188,8 @@ export class ScanOrchestrator {
       findingsCount: 0,
     });
 
-    // Step 3: Detection, only once the pause/cancel checkpoint above has passed.
+    // Step 3: Detection. The mock path runs its detector here; the engine has
+    // already detected, and watched for pause and cancel itself, while it ran.
     const rawFindings = await discovery.detect();
     const { pagesCrawled, requestsMade } = discovery;
 
@@ -215,19 +245,23 @@ export class ScanOrchestrator {
   }
 
   /**
-   * Discovery, returning the crawl counts and a `detect` thunk the caller runs
-   * only after the pause/cancel checkpoint. The engine crawls and detects
-   * together, so its detection is held in the thunk; the mock path reads the
-   * pages now and defers the detector call.
+   * Discovery, returning the crawl counts and a `detect` thunk. The engine
+   * crawls and detects together (checking for pause and cancel as it goes), so
+   * its findings are simply held in the thunk; the mock path reads the pages
+   * now and defers the detector call until after the checkpoint.
    */
-  private async discover(
-    scanJobId: string,
-  ): Promise<{ pagesCrawled: number; requestsMade: number; detect: () => Promise<RawFinding[]> }> {
+  private async discover(scanJobId: string): Promise<DiscoveryResult> {
     if (this.engine) {
       const scanJob = await this.prisma.scanJob.findUnique({ where: { id: scanJobId }, include: { target: true } });
       if (!scanJob) throw new Error(`ScanJob ${scanJobId} vanished mid-scan`);
       const result = await this.engine(scanJob);
-      return { pagesCrawled: result.pagesCrawled, requestsMade: result.requestsMade, detect: async () => result.findings };
+      return {
+        pagesCrawled: result.pagesCrawled,
+        requestsMade: result.requestsMade,
+        detect: async () => result.findings,
+        aborted: result.aborted ?? null,
+        warnings: result.warnings ?? [],
+      };
     }
 
     const pages = await this.prisma.crawledPage.findMany({ where: { scanJobId } });
@@ -235,7 +269,15 @@ export class ScanOrchestrator {
       pagesCrawled: pages.length,
       requestsMade: pages.length * 2,
       detect: () => Promise.resolve(this.detectFn(pages.map(toCrawlRecord))),
+      aborted: null,
+      warnings: [],
     };
+  }
+
+  private async emitWarnings(scanJobId: string, warnings: NonNullable<EngineOutcome["warnings"]>): Promise<void> {
+    for (const { code, message } of warnings) {
+      await this.emitEvent({ type: "scan.warning", scanJobId, code, message, at: new Date().toISOString() });
+    }
   }
 
   /**

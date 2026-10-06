@@ -1,18 +1,25 @@
 import { connect as connectTcp } from "node:net";
 import { connect as connectTls } from "node:tls";
-import type { ScopeSnapshot, TokenBucket } from "@wvs/scope-guard";
+import type { BlocklistEntry, ScopeSnapshot, TokenBucket } from "@wvs/scope-guard";
 import type { CertificateFacts, LegacyProtocol, TlsFacts } from "@wvs/shared";
 
-import { authorize, type LedgerClient } from "../scope-guard/dispatch.js";
+import { authorize, type LedgerClient, type RequestBudget } from "../scope-guard/dispatch.js";
 import { certificateFacts } from "./certificate.js";
 import { buildClientHello, COMMON_SUITES, PROTOCOLS, readServerReply, WEAK_SUITES, type ServerReply } from "./client-hello.js";
 
 export interface TlsProbeOptions {
   scanJobId: string;
   scope: ScopeSnapshot;
-  adminBlocklist: string[];
+  adminBlocklist: readonly BlocklistEntry[];
   isKillSwitchEngaged: () => Promise<boolean>;
   limiter: Pick<TokenBucket, "tryRemove" | "msUntilAvailable">;
+  /** The scan's shared counters; each connection counts as one request against the ceiling. */
+  budget: RequestBudget;
+  /** Replace the sockets, for tests. */
+  connectors?: {
+    certificate?: (ip: string, port: number, hostname: string) => Promise<CertificateFacts | null>;
+    hello?: (ip: string, port: number, hello: Buffer) => Promise<ServerReply>;
+  };
 }
 
 const LEGACY_PROTOCOLS: LegacyProtocol[] = ["SSLv3", "TLSv1", "TLSv1.1"];
@@ -55,7 +62,8 @@ class Probe {
   ) {}
 
   async certificate(): Promise<CertificateFacts | null> {
-    return this.guarded("certificate handshake", (ip) => readCertificate(ip, this.port, this.hostname));
+    const connect = this.options.connectors?.certificate ?? readCertificate;
+    return this.guarded("certificate handshake", (ip) => connect(ip, this.port, this.hostname));
   }
 
   /** The legacy protocols the server answers with a ServerHello in that same version. */
@@ -76,14 +84,25 @@ class Probe {
 
   private async hello(label: string, version: number, suites: number[]): Promise<ServerReply> {
     const hello = buildClientHello(version, suites, this.hostname);
-    return this.guarded(`${label} ClientHello`, (ip) => exchangeHello(ip, this.port, hello));
+    const exchange = this.options.connectors?.hello ?? exchangeHello;
+    return this.guarded(`${label} ClientHello`, (ip) => exchange(ip, this.port, hello));
   }
 
-  /** One connection, approved by the guard and ledgered as TLS. */
+  /**
+   * A handshake is a host-level action, so the guard is asked about the scope's
+   * first entry path (its first included path, else the root), which is in
+   * scope whenever anything is.
+   */
+  private get entryUrl(): string {
+    return new URL(this.options.scope.includedPaths[0] ?? "/", this.options.scope.origin).toString();
+  }
+
+  /** One connection, approved by the guard, counted against the ceiling and ledgered as TLS. */
   private async guarded<T>(label: string, connect: (ip: string) => Promise<T>): Promise<T> {
     await sleep(this.options.limiter.msUntilAvailable());
+    const url = this.entryUrl;
     const decision = await authorize(this.db, {
-      url: `${this.options.scope.origin}/`,
+      url,
       method: "GET",
       ledgerMethod: "TLS",
       scanJobId: this.options.scanJobId,
@@ -91,7 +110,7 @@ class Probe {
       adminBlocklist: this.options.adminBlocklist,
       killSwitchEngaged: await this.options.isKillSwitchEngaged(),
       pagesCrawled: 0,
-      requestsMade: 0,
+      requestsMade: this.options.budget.requestsMade,
       depth: 0,
       userAgent: "",
       rateLimiter: this.options.limiter,
@@ -100,11 +119,12 @@ class Probe {
 
     const ip = decision.ips[0]!;
     const startedAt = Date.now();
+    this.options.budget.requestsMade += 1;
     const result = await connect(ip);
     await this.db.urlLedger.create({
       data: {
         scanJobId: this.options.scanJobId,
-        url: `${this.options.scope.origin}/`,
+        url,
         httpMethod: "TLS",
         resolvedIp: ip,
         decision: "ALLOWED",
@@ -136,13 +156,19 @@ export function exchangeHello(ip: string, port: number, hello: Buffer): Promise<
   });
 }
 
-function readCertificate(ip: string, port: number, hostname: string): Promise<CertificateFacts | null> {
+export function readCertificate(ip: string, port: number, hostname: string): Promise<CertificateFacts | null> {
   return new Promise((resolve) => {
     const socket = connectTls({ host: ip, port, servername: hostname, rejectUnauthorized: false }, () => {
-      const cert = socket.getPeerCertificate(true);
-      const error = socket.authorizationError ? String(socket.authorizationError) : null;
-      socket.end();
-      resolve(cert && Object.keys(cert).length > 0 ? certificateFacts(cert, hostname, error) : null);
+      // The certificate is the target's data; a throw here would be an uncaught exception.
+      try {
+        const cert = socket.getPeerCertificate(true);
+        const error = socket.authorizationError ? String(socket.authorizationError) : null;
+        socket.end();
+        resolve(cert && Object.keys(cert).length > 0 ? certificateFacts(cert, hostname, error) : null);
+      } catch {
+        socket.destroy();
+        resolve(null);
+      }
     });
     socket.setTimeout(PROBE_TIMEOUT_MS, () => {
       socket.destroy();

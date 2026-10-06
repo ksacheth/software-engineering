@@ -2,6 +2,7 @@ import type { PrismaClient, ScopeDecision } from "@wvs/database";
 import {
   evaluate,
   resolveHostIps,
+  type BlocklistEntry,
   type GuardDecision,
   type GuardDenyCode,
   type ScopeSnapshot,
@@ -15,7 +16,7 @@ export interface DispatchRequest {
   scanJobId: string;
 
   scope: ScopeSnapshot;
-  adminBlocklist: string[];
+  adminBlocklist: readonly BlocklistEntry[];
   killSwitchEngaged: boolean;
 
   pagesCrawled: number;
@@ -27,7 +28,34 @@ export interface DispatchRequest {
   rateLimiter: {
     tryRemove(): boolean;
   };
+
+  /** Admits `http://<scope host>/` for an https scope; only A-14 sets this. */
+  allowPlaintextTwin?: boolean;
+  /** Replace DNS and the network, for tests. */
+  resolver?: (hostname: string) => Promise<string[]>;
+  transport?: Transport;
 }
+
+/** The live request count shared by the crawl, the TLS probe and the active probes, so one scan has one ceiling. */
+export interface RequestBudget {
+  requestsMade: number;
+}
+
+/** The request as sent: `url` already points at the approved IP. */
+export interface TransportRequest {
+  url: string;
+  method: DispatchRequest["method"];
+  headers: Record<string, string>;
+  /** The TLS name to verify the certificate against; unset for plaintext or an IP-literal host. */
+  serverName?: string;
+  signal: AbortSignal;
+}
+
+export type Transport = (request: TransportRequest) => Promise<Response>;
+
+/** Response bodies are cut off here; a hostile target cannot exhaust worker memory. */
+export const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export type DeniedDecision = Extract<GuardDecision, { allowed: false }>;
 
@@ -37,6 +65,8 @@ export type DispatchResult =
       status: number;
       headers: Headers;
       body: string;
+      /** True when the body was cut off at MAX_BODY_BYTES. */
+      truncated: boolean;
       ips: string[];
     }
   | {
@@ -61,7 +91,7 @@ const LEDGER_DECISION: Record<GuardDenyCode, ScopeDecision> = {
 };
 
 /** What the guard checks; `ledgerMethod` names a non-HTTP probe (such as TLS) in the ledger. */
-export type GuardRequest = Omit<DispatchRequest, "headers"> & { ledgerMethod?: string };
+export type GuardRequest = Omit<DispatchRequest, "headers" | "transport"> & { ledgerMethod?: string };
 
 /**
  * The kernel check every outbound connection passes first: rate limit, fresh
@@ -72,7 +102,12 @@ export async function authorize(
   db: LedgerClient,
   req: GuardRequest,
 ): Promise<{ allowed: true; ips: string[] } | DeniedDecision> {
-  const url = new URL(req.url);
+  const url = parseUrl(req.url);
+  if (!url) {
+    const decision: DeniedDecision = { allowed: false, reason: "Invalid URL", code: "OUT_OF_SCOPE" };
+    await recordDenied(db, req, [], decision);
+    return decision;
+  }
 
   if (!req.rateLimiter.tryRemove()) {
     const decision: DeniedDecision = {
@@ -84,7 +119,7 @@ export async function authorize(
     return decision;
   }
 
-  const resolvedIps = await resolveHostIps(url.hostname);
+  const resolvedIps = await (req.resolver ?? resolveHostIps)(url.hostname);
 
   const decision = evaluate({
     url: req.url,
@@ -98,6 +133,7 @@ export async function authorize(
     pagesCrawled: req.pagesCrawled,
     requestsMade: req.requestsMade,
     depth: req.depth,
+    allowPlaintextTwin: req.allowPlaintextTwin,
   });
 
   if (!decision.allowed) await recordDenied(db, req, resolvedIps, decision);
@@ -116,18 +152,19 @@ export async function dispatch(
   if (!decision.allowed) return { ok: false, decision };
 
   const startedAt = Date.now();
+  const pinned = pinTo(req.url, decision.ips[0]!);
   try {
-    const res = await fetch(req.url, {
+    const transport = req.transport ?? fetchTransport;
+    const res = await transport({
+      url: pinned.url,
       method: req.method,
-      redirect: "manual",
-      headers: {
-        "user-agent": req.userAgent,
-        ...req.headers,
-      },
-      signal: AbortSignal.timeout(30_000),
+      headers: { host: pinned.host, "user-agent": req.userAgent, ...req.headers },
+      serverName: pinned.serverName,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
-    const body = req.method === "HEAD" ? "" : await res.text();
+    const { body, bytes, truncated } =
+      req.method === "HEAD" ? { body: "", bytes: 0, truncated: false } : await readCapped(res);
 
     await db.urlLedger.create({
       data: {
@@ -138,7 +175,7 @@ export async function dispatch(
         decision: "ALLOWED",
         statusCode: res.status,
         responseTimeMs: Date.now() - startedAt,
-        bytesReceived: Buffer.byteLength(body),
+        bytesReceived: bytes,
       },
     });
 
@@ -147,6 +184,7 @@ export async function dispatch(
       status: res.status,
       headers: res.headers,
       body,
+      truncated,
       ips: decision.ips,
     };
   } catch (error) {
@@ -164,6 +202,65 @@ export async function dispatch(
 
     throw error;
   }
+}
+
+function parseUrl(raw: string): URL | null {
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rewrites the URL to the approved IP, so the connection cannot be steered by
+ * a second DNS lookup (ADR-0004), and keeps the real name for the Host header
+ * and for certificate verification.
+ */
+function pinTo(raw: string, ip: string): { url: string; host: string; serverName?: string } {
+  const original = new URL(raw);
+  const pinned = new URL(raw);
+  pinned.hostname = ip.includes(":") ? `[${ip}]` : ip;
+  const isIpLiteral = pinned.hostname === original.hostname;
+  return {
+    url: pinned.toString(),
+    host: original.host,
+    serverName: original.protocol === "https:" && !isIpLiteral ? original.hostname : undefined,
+  };
+}
+
+/** Bun's fetch connects to the URL's IP and verifies the certificate against `tls.serverName`. */
+const fetchTransport: Transport = ({ url, method, headers, serverName, signal }) =>
+  fetch(url, {
+    method,
+    redirect: "manual",
+    headers,
+    signal,
+    ...(serverName ? { tls: { serverName } } : {}),
+  } as RequestInit);
+
+/** Reads the body up to MAX_BODY_BYTES and cancels the stream past that. */
+async function readCapped(res: Response): Promise<{ body: string; bytes: number; truncated: boolean }> {
+  if (!res.body) return { body: "", bytes: 0, truncated: false };
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let body = "";
+  let bytes = 0;
+  let truncated = false;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = value.subarray(0, Math.min(value.byteLength, MAX_BODY_BYTES - bytes));
+    body += decoder.decode(chunk, { stream: true });
+    bytes += chunk.byteLength;
+    if (chunk.byteLength < value.byteLength) {
+      truncated = true;
+      await reader.cancel();
+      break;
+    }
+  }
+  return { body: body + decoder.decode(), bytes, truncated };
 }
 
 async function recordDenied(

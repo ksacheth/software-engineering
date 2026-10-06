@@ -1,6 +1,6 @@
 // @ts-ignore
 import { describe, expect, test, beforeEach } from "bun:test";
-import { ScanOrchestrator, type Detector } from "./scan-orchestrator.js";
+import { ScanOrchestrator, type Detector, type EngineOutcome } from "./scan-orchestrator.js";
 import { MockDetector, type RawFinding } from "../detectors/mock-detector.js";
 import { MockPrisma, MockRedisPublisher } from "../test-support/mock-prisma.js";
 
@@ -177,5 +177,65 @@ describe("ScanOrchestrator", () => {
 
     expect(scan().status).toBe("CANCELLED");
     expect(statuses()).toEqual(["RUNNING"]);
+  });
+
+  describe("with the scan engine", () => {
+    const outcome = (overrides: Partial<EngineOutcome> = {}): EngineOutcome => ({
+      findings: [customFinding],
+      pagesCrawled: 3,
+      requestsMade: 7,
+      ...overrides,
+    });
+
+    function withEngine(result: EngineOutcome) {
+      return new ScanOrchestrator({
+        prisma: mockPrisma.asClient(),
+        redis: mockRedis,
+        detector: () => [],
+        engine: async () => result,
+      });
+    }
+
+    test("completes a scan whose engine ran to the end", async () => {
+      await withEngine(outcome({ aborted: null })).processScanJob(PAYLOAD);
+
+      expect(scan().status).toBe("COMPLETED");
+      expect(mockPrisma.findings.size).toBe(1);
+    });
+
+    test("does not complete or persist a run the engine aborted", async () => {
+      await withEngine(outcome({ aborted: "KILL_SWITCH" })).processScanJob(PAYLOAD);
+
+      expect(scan().status).toBe("RUNNING");
+      expect(mockPrisma.findings.size).toBe(0);
+      expect(statuses()).toEqual(["RUNNING"]);
+    });
+
+    test("leaves a paused scan paused when the engine stopped for it", async () => {
+      const paused = new ScanOrchestrator({
+        prisma: mockPrisma.asClient(),
+        redis: mockRedis,
+        detector: () => [],
+        engine: async () => {
+          mockPrisma.scanJobs.set(SCAN_ID, { ...scan(), status: "PAUSED" });
+          return outcome({ aborted: "STOPPED" });
+        },
+      });
+
+      await paused.processScanJob(PAYLOAD);
+
+      expect(scan().status).toBe("PAUSED");
+      expect(mockPrisma.findings.size).toBe(0);
+    });
+
+    test("publishes the engine's warnings as scan.warning events", async () => {
+      const warnings = [{ code: "RENDERING_UNAVAILABLE" as const, message: "static only" }];
+
+      await withEngine(outcome({ warnings })).processScanJob(PAYLOAD);
+
+      expect(mockRedis.events.filter((e) => e.type === "scan.warning")).toMatchObject([
+        { scanJobId: SCAN_ID, code: "RENDERING_UNAVAILABLE", message: "static only" },
+      ]);
+    });
   });
 });

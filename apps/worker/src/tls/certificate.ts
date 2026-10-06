@@ -22,26 +22,45 @@ const SIGNATURE_OIDS: Record<string, string> = {
   "2b6570": "Ed25519",
 };
 
+/** Null when the certificate's validity dates are unreadable: there is nothing honest to report. */
 export function certificateFacts(
   cert: DetailedPeerCertificate,
   hostname: string,
   authorizationError: string | null,
-): CertificateFacts {
+): CertificateFacts | null {
+  const validFrom = isoDate(cert.valid_from);
+  const validTo = isoDate(cert.valid_to);
+  if (validFrom === null || validTo === null) return null;
   const isEc = Boolean((cert as { asn1Curve?: string }).asn1Curve || (cert as { nistCurve?: string }).nistCurve);
   return {
     subjectAltNames: (cert.subjectaltname ?? "")
       .split(",")
       .map((name) => name.trim().replace(/^DNS:/, ""))
       .filter(Boolean),
-    validFrom: new Date(cert.valid_from).toISOString(),
-    validTo: new Date(cert.valid_to).toISOString(),
-    hostnameMatches: checkServerIdentity(hostname, cert) === undefined,
+    validFrom,
+    validTo,
+    hostnameMatches: hostnameMatches(hostname, cert),
     selfSigned: authorizationError !== null && SELF_SIGNED.has(authorizationError),
     trustError: authorizationError && !NOT_TRUST_ERRORS.has(authorizationError) ? authorizationError : null,
     signatureAlgorithm: cert.raw ? signatureAlgorithm(cert.raw) : null,
     keyType: isEc ? "EC" : cert.modulus ? "RSA" : "other",
-    keyBits: cert.bits ?? 0,
+    keyBits: cert.bits ?? null,
   };
+}
+
+/** The target controls these strings; null for one that does not parse, never a made-up date. */
+function isoDate(raw: string): string | null {
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/** checkServerIdentity can throw on unusual certificates; those do not match. */
+function hostnameMatches(hostname: string, cert: DetailedPeerCertificate): boolean {
+  try {
+    return checkServerIdentity(hostname, cert) === undefined;
+  } catch {
+    return false;
+  }
 }
 
 /**
