@@ -50,6 +50,16 @@ function num(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * How email leaves the API: "smtp" talks to SMTP_HOST; "json" is nodemailer's
+ * in-memory transport, which delivers nowhere. Tests default to "json" so they
+ * need no relay and do not fill the outbox with undeliverable messages.
+ */
+function smtpTransport(value: string | undefined): "smtp" | "json" {
+  if (value === "smtp" || value === "json") return value;
+  return process.env.NODE_ENV === "test" ? "json" : "smtp";
+}
+
 function bool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value.trim() === "") return fallback;
   return value === "true" || value === "1";
@@ -115,6 +125,7 @@ export const config = {
     db: num(process.env.REDIS_DB, 0),
   },
   smtp: {
+    transport: smtpTransport(process.env.SMTP_TRANSPORT),
     host: process.env.SMTP_HOST ?? "localhost",
     port: num(process.env.SMTP_PORT, 1025),
     user: process.env.SMTP_USER || undefined,
