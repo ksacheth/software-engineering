@@ -1,0 +1,11 @@
+id: A-14
+name: "Improper HTTPS redirection"
+type: active
+cwe: CWE-319
+owaspCategory: "A02:2021"
+severity: MEDIUM
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "The plaintext HTTP origin does not redirect to HTTPS, so users who type the address are served over an unencrypted connection."
+remediation: "Redirect every HTTP request to its HTTPS equivalent with a 301, and send Strict-Transport-Security."

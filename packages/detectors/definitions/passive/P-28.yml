@@ -1,0 +1,11 @@
+id: P-28
+name: "Email or personal data disclosure in response"
+type: passive
+cwe: CWE-200
+owaspCategory: "A01:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The response discloses email addresses or similar personal data that may not need to be public."
+remediation: "Remove personal data that does not need to be published, or obfuscate contact addresses."

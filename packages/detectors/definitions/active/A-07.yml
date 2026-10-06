@@ -1,0 +1,11 @@
+id: A-07
+name: "Dangerous HTTP methods enabled"
+type: active
+cwe: CWE-650
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "OPTIONS advertises methods such as TRACE, PUT or DELETE that the site may not need."
+remediation: "Disable HTTP methods the application does not use, especially TRACE, at the web server."

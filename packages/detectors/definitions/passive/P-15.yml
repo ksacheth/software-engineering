@@ -1,0 +1,11 @@
+id: P-15
+name: "Self-signed or untrusted certificate chain"
+type: passive
+cwe: CWE-295
+owaspCategory: "A07:2021"
+severity: HIGH
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The certificate chain is self-signed or does not lead to a trusted root, so clients cannot verify the server's identity."
+remediation: "Serve a certificate from a publicly trusted CA together with its full intermediate chain."

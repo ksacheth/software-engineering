@@ -1,0 +1,11 @@
+id: A-11
+name: "Path traversal (read-only probe)"
+type: active
+cwe: CWE-22
+owaspCategory: "A01:2021"
+severity: HIGH
+confidence: TENTATIVE
+priority: S
+profiles: [STANDARD, THOROUGH]
+description: "Traversal sequences in a parameter returned the signature of a known system file, indicating file paths are built from user input."
+remediation: "Resolve file paths against an allowlist or a fixed base directory and reject traversal sequences."

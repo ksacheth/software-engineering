@@ -1,0 +1,11 @@
+id: P-26
+name: "External script without Subresource Integrity"
+type: passive
+cwe: CWE-353
+owaspCategory: "A08:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A script from another origin is loaded without a Subresource Integrity hash, so a compromised third party could change it."
+remediation: "Add an integrity attribute (and crossorigin) to third-party script tags, or self-host the script."

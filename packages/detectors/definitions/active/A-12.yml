@@ -1,0 +1,11 @@
+id: A-12
+name: "Server-side template injection (detection only)"
+type: active
+cwe: CWE-1336
+owaspCategory: "A03:2021"
+severity: HIGH
+confidence: TENTATIVE
+priority: C
+profiles: [STANDARD, THOROUGH]
+description: "An arithmetic marker expression in a parameter was evaluated by the server, indicating server-side template injection."
+remediation: "Never build templates from user input; pass input to templates as data only, and use a sandboxed template engine."

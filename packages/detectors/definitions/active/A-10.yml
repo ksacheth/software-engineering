@@ -1,0 +1,11 @@
+id: A-10
+name: "Missing anti-CSRF token on state-changing form"
+type: active
+cwe: CWE-352
+owaspCategory: "A01:2021"
+severity: MEDIUM
+confidence: TENTATIVE
+priority: S
+profiles: [STANDARD, THOROUGH]
+description: "A form that changes state has no anti-CSRF token, or its token is predictable, so another site could submit it on a user's behalf."
+remediation: "Add an unpredictable per-session anti-CSRF token to every state-changing form and verify it server-side."

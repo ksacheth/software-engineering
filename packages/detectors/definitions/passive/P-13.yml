@@ -1,0 +1,11 @@
+id: P-13
+name: "Certificate expired, not yet valid, or expiring within 30 days"
+type: passive
+cwe: CWE-324
+owaspCategory: "A02:2021"
+severity: HIGH
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The certificate is expired, not yet valid, or expires within 30 days, so browsers will reject it or soon will."
+remediation: "Renew the certificate and automate renewal well ahead of expiry."

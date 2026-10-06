@@ -1,0 +1,11 @@
+id: P-17
+name: "Server / framework version disclosure in headers"
+type: passive
+cwe: CWE-200
+owaspCategory: "A05:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "Response headers such as Server or X-Powered-By reveal the software and version in use, which helps an attacker pick known exploits."
+remediation: "Remove version details from Server, X-Powered-By and similar headers."

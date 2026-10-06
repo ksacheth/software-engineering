@@ -1,5 +1,6 @@
-import type { CrawledPage, Prisma, PrismaClient } from "@wvs/database";
-import type { ScanEvent, ScanJobPayload, ScanProgressEvent } from "@wvs/shared";
+import type { CrawledPage, Prisma, PrismaClient, ScanJob, Target } from "@wvs/database";
+import type { ScanEvent, ScanJobPayload, ScanProgressEvent, ScanWarningCode } from "@wvs/shared";
+import { isKillSwitchEngaged, KILL_SWITCH_SETTING_KEY } from "@wvs/shared";
 import type { MockCrawlRecord, RawFinding } from "../detectors/mock-detector.js";
 import { Deduplicator, type DeduplicatedFinding } from "../processors/deduplicator.js";
 import { AdvisoryEnricher } from "../enrichers/advisory-enricher.js";
@@ -11,6 +12,24 @@ export interface RedisPublisher {
 
 export type Detector = (records: MockCrawlRecord[]) => RawFinding[] | Promise<RawFinding[]>;
 
+/** What the engine reports about a run. */
+export interface EngineOutcome {
+  findings: RawFinding[];
+  pagesCrawled: number;
+  requestsMade: number;
+  /**
+   * Set when the engine stopped early because the kill switch tripped or the
+   * scan was paused or cancelled. The findings are then partial and unused.
+   */
+  aborted?: "KILL_SWITCH" | "STOPPED" | null;
+  /** Degradations worth telling the user about, published as scan.warning events. */
+  warnings?: Array<{ code: ScanWarningCode; message: string }>;
+}
+
+/** The real engine: crawls and detects in one step, returning findings and counts.
+ *  When supplied it replaces the mock detector and the read-from-DB crawl step. */
+export type ScanEngine = (scanJob: ScanJob & { target: Target }) => Promise<EngineOutcome>;
+
 export interface OrchestratorOptions {
   prisma: PrismaClient;
   redis?: RedisPublisher;
@@ -19,6 +38,7 @@ export interface OrchestratorOptions {
    * exist, so the worker entry point has to choose it by name (see README).
    */
   detector: Detector;
+  engine?: ScanEngine;
   enricher?: AdvisoryEnricher;
 }
 
@@ -36,6 +56,14 @@ const PROGRESS_BY_PHASE: Record<ScanProgressEvent["phase"], number> = {
 /** Interactive transactions default to 5 s, too short for a large finding set. */
 const PERSIST_TIMEOUT_MS = 60_000;
 
+interface DiscoveryResult {
+  pagesCrawled: number;
+  requestsMade: number;
+  detect: () => Promise<RawFinding[]>;
+  aborted: EngineOutcome["aborted"];
+  warnings: NonNullable<EngineOutcome["warnings"]>;
+}
+
 /** Thrown inside the persistence transaction to roll it back when the scan was paused or cancelled. */
 class ScanNoLongerRunning extends Error {}
 
@@ -43,12 +71,14 @@ export class ScanOrchestrator {
   private prisma: PrismaClient;
   private redis?: RedisPublisher;
   private detectFn: Detector;
+  private engine?: ScanEngine;
   private enricher: AdvisoryEnricher;
 
   constructor(options: OrchestratorOptions) {
     this.prisma = options.prisma;
     this.redis = options.redis;
     this.detectFn = options.detector;
+    this.engine = options.engine;
     this.enricher = options.enricher || new AdvisoryEnricher();
   }
 
@@ -132,27 +162,43 @@ export class ScanOrchestrator {
 
     await this.emitProgress(scanJobId, "DISCOVERY", { pagesCrawled: 0, requestsMade: 0, findingsCount: 0 });
 
-    // Step 2: Crawl data. Pages come from the crawler; a scan without any has
-    // nothing to analyse, and no pages are invented in their place.
-    const pages = await this.prisma.crawledPage.findMany({
-      where: { scanJobId },
-    });
+    // Step 2: Discovery. The engine crawls the live target; without one, the mock
+    // path reads whatever pages are already in the database.
+    const discovery = await this.discover(scanJobId);
+    await this.emitWarnings(scanJobId, discovery.warnings);
 
-    const pagesCrawled = pages.length;
-    const requestsMade = pagesCrawled * 2;
+    // An engine that was stopped midway is neither complete nor failed. A pause,
+    // cancel or kill switch already moved the row (ADR-0007, ADR-0008), so the
+    // scan is left as that flow set it and nothing is persisted.
+    if (discovery.aborted) {
+      console.log(`[Orchestrator] ScanJob ${scanJobId} stopped by ${discovery.aborted}; not completing it.`);
+      // The engine's kill-switch read fails closed, so a database blip also
+      // looks like the switch. Nothing else moves the row then (the job is not
+      // retried and the reconciler only handles QUEUED), so fail it here.
+      if (discovery.aborted === "KILL_SWITCH" && !(await this.killSwitchConfirmed())) {
+        await this.markFailed(scanJobId, new Error("Scan stopped because the kill switch could not be read"));
+      }
+      return;
+    }
 
     const stillRunning = await this.updateWhileRunning(scanJobId, {
       phase: "DETECTION",
-      pagesCrawled,
-      requestsMade,
+      pagesCrawled: discovery.pagesCrawled,
+      requestsMade: discovery.requestsMade,
       progressPercentage: PROGRESS_BY_PHASE.DETECTION,
     });
     if (!stillRunning) return;
 
-    await this.emitProgress(scanJobId, "DETECTION", { pagesCrawled, requestsMade, findingsCount: 0 });
+    await this.emitProgress(scanJobId, "DETECTION", {
+      pagesCrawled: discovery.pagesCrawled,
+      requestsMade: discovery.requestsMade,
+      findingsCount: 0,
+    });
 
-    // Step 3: Run Vulnerability Detection
-    const rawFindings = await Promise.resolve(this.detectFn(pages.map(toCrawlRecord)));
+    // Step 3: Detection. The mock path runs its detector here; the engine has
+    // already detected, and watched for pause and cancel itself, while it ran.
+    const rawFindings = await discovery.detect();
+    const { pagesCrawled, requestsMade } = discovery;
 
     // Step 4: Deduplicate Findings (F.6)
     const dedupedFindings = Deduplicator.deduplicate(rawFindings);
@@ -203,6 +249,42 @@ export class ScanOrchestrator {
       requestsMade,
       findingsCount: persisted.length,
     });
+  }
+
+  /**
+   * Discovery, returning the crawl counts and a `detect` thunk. The engine
+   * crawls and detects together (checking for pause and cancel as it goes), so
+   * its findings are simply held in the thunk; the mock path reads the pages
+   * now and defers the detector call until after the checkpoint.
+   */
+  private async discover(scanJobId: string): Promise<DiscoveryResult> {
+    if (this.engine) {
+      const scanJob = await this.prisma.scanJob.findUnique({ where: { id: scanJobId }, include: { target: true } });
+      if (!scanJob) throw new Error(`ScanJob ${scanJobId} vanished mid-scan`);
+      const result = await this.engine(scanJob);
+      return {
+        pagesCrawled: result.pagesCrawled,
+        requestsMade: result.requestsMade,
+        detect: async () => result.findings,
+        aborted: result.aborted ?? null,
+        warnings: result.warnings ?? [],
+      };
+    }
+
+    const pages = await this.prisma.crawledPage.findMany({ where: { scanJobId } });
+    return {
+      pagesCrawled: pages.length,
+      requestsMade: pages.length * 2,
+      detect: () => Promise.resolve(this.detectFn(pages.map(toCrawlRecord))),
+      aborted: null,
+      warnings: [],
+    };
+  }
+
+  private async emitWarnings(scanJobId: string, warnings: NonNullable<EngineOutcome["warnings"]>): Promise<void> {
+    for (const { code, message } of warnings) {
+      await this.emitEvent({ type: "scan.warning", scanJobId, code, message, at: new Date().toISOString() });
+    }
   }
 
   /**
@@ -288,6 +370,16 @@ export class ScanOrchestrator {
         return null;
       }
       throw err;
+    }
+  }
+
+  /** True only when the kill-switch row is readable and engaged. */
+  private async killSwitchConfirmed(): Promise<boolean> {
+    try {
+      const setting = await this.prisma.systemSetting.findUnique({ where: { key: KILL_SWITCH_SETTING_KEY } });
+      return isKillSwitchEngaged(setting?.value);
+    } catch {
+      return false;
     }
   }
 

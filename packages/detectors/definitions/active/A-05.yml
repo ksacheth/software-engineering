@@ -1,0 +1,11 @@
+id: A-05
+name: "CORS misconfiguration"
+type: active
+cwe: CWE-942
+owaspCategory: "A05:2021"
+severity: HIGH
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "The CORS policy reflects arbitrary origins, trusts the null origin, or combines a wildcard with credentials, letting other sites read responses."
+remediation: "Return Access-Control-Allow-Origin only for an explicit allowlist, never reflect the request Origin, and never trust null."

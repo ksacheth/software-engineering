@@ -1,0 +1,11 @@
+id: A-08
+name: "Host header injection"
+type: active
+cwe: CWE-644
+owaspCategory: "A03:2021"
+severity: MEDIUM
+confidence: TENTATIVE
+priority: S
+profiles: [STANDARD, THOROUGH]
+description: "An alternate Host header value was reflected into links or redirects, which can poison caches or password-reset links."
+remediation: "Build absolute URLs from a configured canonical host, and reject requests whose Host header is not expected."

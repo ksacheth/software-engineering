@@ -1,0 +1,11 @@
+id: P-20
+name: "Verbose error page or stack trace disclosure"
+type: passive
+cwe: CWE-209
+owaspCategory: "A05:2021"
+severity: MEDIUM
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A response contains a verbose error page or stack trace that reveals internal paths, code or configuration."
+remediation: "Show a generic error page in production and log the details server-side only."

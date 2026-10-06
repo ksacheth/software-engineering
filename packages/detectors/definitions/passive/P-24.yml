@@ -1,0 +1,11 @@
+id: P-24
+name: "Backup or temporary file exposure (.bak, ~, .old)"
+type: passive
+cwe: CWE-530
+owaspCategory: "A05:2021"
+severity: HIGH
+confidence: CONFIRMED
+priority: S
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A backup or temporary copy of a file (.bak, ~, .old) is publicly reachable and may disclose source code or data."
+remediation: "Remove backup and temporary files from the web root and stop deploying them."

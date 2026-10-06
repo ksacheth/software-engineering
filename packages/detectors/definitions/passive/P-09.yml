@@ -1,0 +1,11 @@
+id: P-09
+name: "Cookie without or with weak SameSite"
+type: passive
+cwe: CWE-1275
+owaspCategory: "A01:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A cookie has no SameSite attribute or uses SameSite=None, so it is sent on cross-site requests and can support CSRF."
+remediation: "Set SameSite=Lax or SameSite=Strict on cookies; use None only with Secure when a cross-site flow requires it."

@@ -1,0 +1,11 @@
+id: P-05
+name: "Missing or overly permissive Referrer-Policy"
+type: passive
+cwe: CWE-200
+owaspCategory: "A01:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "No Referrer-Policy is set, or the policy sends full URLs to other origins, which can leak paths and query parameters."
+remediation: "Send Referrer-Policy: strict-origin-when-cross-origin or a stricter value."

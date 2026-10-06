@@ -1,0 +1,11 @@
+id: P-22
+name: "Exposed environment or configuration file (.env, web.config)"
+type: passive
+cwe: CWE-538
+owaspCategory: "A05:2021"
+severity: CRITICAL
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "An environment or configuration file (such as .env or web.config) is publicly reachable and may contain credentials."
+remediation: "Remove the file from the web root or deny access to it, and rotate any secrets it held."

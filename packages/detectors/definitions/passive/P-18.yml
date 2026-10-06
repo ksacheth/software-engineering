@@ -1,0 +1,11 @@
+id: P-18
+name: "Technology and component fingerprinting"
+type: passive
+cwe: null
+owaspCategory: null
+severity: INFO
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The site's technologies and component versions could be identified from its responses. This is an inventory note, not a vulnerability."
+remediation: "No action is required; keep identified components patched. Reduce fingerprints where they disclose exact versions."

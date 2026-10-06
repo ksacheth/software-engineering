@@ -1,0 +1,344 @@
+import {
+  inOrigin,
+  pathAllowed,
+  type BlocklistEntry,
+  type ScopeSnapshot,
+  type TokenBucket,
+} from "@wvs/scope-guard";
+import { SET_COOKIE_SEPARATOR, type CrawlRecord } from "@wvs/shared";
+
+import {
+  dispatch,
+  type DeniedDecision,
+  type DispatchRequest,
+  type DispatchResult,
+  type LedgerClient,
+} from "../scope-guard/dispatch.js";
+import { canonicalUrl } from "./canonical-url.js";
+import { isBlockedStatus } from "./confidence.js";
+import { extractPage, extractSitemapUrls, type ExtractedPage } from "./extract.js";
+import { persistCrawledPage, type CrawledPageClient } from "./persist.js";
+import type { PageRenderer } from "./renderer.js";
+import { DISALLOW_ALL, NO_ROBOTS, parseRobots, robotsAllows, type RobotsRules } from "./robots.js";
+
+export type CrawlerDb = LedgerClient & CrawledPageClient;
+
+export interface CrawlOptions {
+  scanJobId: string;
+  scope: ScopeSnapshot;
+  adminBlocklist: readonly BlocklistEntry[];
+  /** Read before every request (ADR-0008); a failed read must return true. */
+  isKillSwitchEngaged: () => Promise<boolean>;
+  /** Read before every request alongside the kill switch; true when the scan was paused or cancelled (ADR-0007). */
+  shouldStop?: () => Promise<boolean>;
+  /**
+   * Progress of an earlier run of this scan, so a resumed or redelivered job does
+   * not get a fresh budget: seeds the counters and the seen-set (canonical URLs).
+   */
+  resumeFrom?: { requestsMade: number; pagesCrawled: number; seenUrls: string[] };
+  userAgent: string;
+  limiter: Pick<TokenBucket, "tryRemove" | "msUntilAvailable">;
+  /** Renders HTML pages with JavaScript (DC-5); omitted, the crawl is static only. */
+  renderer?: PageRenderer;
+  /** Called with each fetched page, body included, for detectors that need it. */
+  onPage?: (record: CrawlRecord) => void;
+}
+
+export interface CrawlSummary {
+  pagesCrawled: number;
+  requestsMade: number;
+  blockedPages: number;
+  /** Set when the crawl ended early (kill switch, a ceiling or a pause/cancel), not the frontier running dry. */
+  stoppedBy: "KILL_SWITCH" | "CEILING" | "STOPPED" | null;
+  /** robots.txt could not be fetched (5xx or no answer), so nothing was crawled (RFC 9309). */
+  robotsDisallowAll: boolean;
+}
+
+/** Sitemaps fetched per scan, so a sitemap index cannot spend the request budget. */
+const MAX_SITEMAPS = 5;
+
+const HTML_TYPES = /^(text\/html|application\/xhtml\+xml)/i;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * F.4 crawl: breadth-first over same-origin links from the scope's entry points
+ * and sitemaps, honouring robots.txt. When the static frontier runs dry, each
+ * HTML page is rendered once and whatever the scripts revealed is crawled in
+ * turn. Every request, the browser's included, goes through the scope-guard
+ * dispatch, and every fetched page lands in crawled_page.
+ */
+export async function crawl(db: CrawlerDb, options: CrawlOptions): Promise<CrawlSummary> {
+  return new Crawl(db, options).run();
+}
+
+type QueuedUrl = { url: string; depth: number };
+
+class Crawl {
+  private queue: QueuedUrl[] = [];
+  private toRender: QueuedUrl[] = [];
+  private seen = new Set<string>();
+  private robots: RobotsRules = NO_ROBOTS;
+  private summary: CrawlSummary = { pagesCrawled: 0, requestsMade: 0, blockedPages: 0, stoppedBy: null, robotsDisallowAll: false };
+  /** Tail of the request chain; the browser fires requests in parallel but they are paced one at a time. */
+  private requestChain: Promise<unknown> = Promise.resolve();
+
+  constructor(
+    private db: CrawlerDb,
+    private options: CrawlOptions,
+  ) {
+    const resume = options.resumeFrom;
+    if (!resume) return;
+    this.summary.requestsMade = resume.requestsMade;
+    this.summary.pagesCrawled = resume.pagesCrawled;
+    resume.seenUrls.forEach((url) => this.seen.add(url));
+  }
+
+  async run(): Promise<CrawlSummary> {
+    this.robots = await this.readRobots();
+    for (const path of entryPaths(this.options.scope)) this.enqueue(this.url(path), 0);
+    // RFC 9116 contact file, which P-30 judges; never linked, so asked for by name.
+    this.enqueue(this.url("/.well-known/security.txt"), 0);
+    await this.readSitemaps();
+
+    do {
+      while (this.queue.length > 0 && this.withinBudget()) {
+        const next = this.queue.shift()!;
+        await this.visit(next.url, next.depth);
+      }
+      await this.renderPending();
+    } while (this.queue.length > 0 && this.withinBudget());
+
+    return this.summary;
+  }
+
+  /** Renders every HTML page not yet rendered, queueing what the scripts revealed. */
+  private async renderPending(): Promise<void> {
+    const renderer = this.options.renderer;
+    if (!renderer) return;
+
+    while (this.toRender.length > 0 && this.withinBudget()) {
+      const { url, depth } = this.toRender.shift()!;
+      const rendered = await renderer.render(url, (target, method, headers) =>
+        this.request(target, depth, method, headers),
+      );
+      [...rendered.links, ...rendered.requestedUrls].forEach((link) => this.enqueue(link, depth + 1));
+      // A render that never loaded the document sees a blank page; keep the static values.
+      if (!rendered.loaded) continue;
+      await this.db.crawledPage.update({
+        where: { scanJobId_normalizedUrl_method: { scanJobId: this.options.scanJobId, normalizedUrl: canonicalUrl(url), method: "GET" } },
+        data: { forms: rendered.forms, linksFound: rendered.links },
+      });
+    }
+  }
+
+  private async readRobots(): Promise<RobotsRules> {
+    const res = await this.request(this.url("/robots.txt"), 0);
+    // RFC 9309: an unreachable robots.txt (a 5xx, or no answer at all) means
+    // assume full disallow; a 4xx means no rules. A guard refusal is not the
+    // site's answer, so it leaves the crawl unrestricted by robots.
+    if (res === null || (res.ok && res.status >= 500)) {
+      this.summary.robotsDisallowAll = true;
+      return DISALLOW_ALL;
+    }
+    if (!res.ok || res.status !== 200) return NO_ROBOTS;
+    return parseRobots(res.body, this.options.userAgent);
+  }
+
+  private async readSitemaps(): Promise<void> {
+    const pending = [...this.robots.sitemaps, this.url("/sitemap.xml")];
+    const fetched = new Set<string>();
+
+    while (pending.length > 0 && fetched.size < MAX_SITEMAPS && this.withinBudget()) {
+      const sitemap = this.inScopeUrl(pending.shift()!);
+      if (!sitemap || fetched.has(sitemap)) continue;
+      fetched.add(sitemap);
+      pending.push(...(await this.readSitemap(sitemap)));
+    }
+  }
+
+  /** Enqueues the pages a sitemap lists and returns any nested sitemaps. */
+  private async readSitemap(sitemap: string): Promise<string[]> {
+    const res = await this.request(sitemap, 0);
+    if (!res?.ok || res.status !== 200) return [];
+    const locs = extractSitemapUrls(res.body);
+    locs.filter((loc) => !loc.endsWith(".xml")).forEach((loc) => this.enqueue(loc, 1));
+    return locs.filter((loc) => loc.endsWith(".xml"));
+  }
+
+  private async visit(url: string, depth: number): Promise<void> {
+    const res = await this.request(url, depth);
+    if (!res?.ok) return;
+
+    const location = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && location) {
+      this.enqueueResolved(location, url, depth);
+    }
+
+    const contentType = res.headers.get("content-type");
+    const page = contentType && HTML_TYPES.test(contentType) ? extractPage(res.body, url) : null;
+    page?.links.forEach((link) => this.enqueue(link, depth + 1));
+    if (page && res.status === 200) this.toRender.push({ url, depth });
+
+    await this.persist(url, depth, res, page);
+  }
+
+  private async persist(
+    url: string,
+    depth: number,
+    res: Extract<DispatchResult, { ok: true }>,
+    page: ExtractedPage | null,
+  ): Promise<void> {
+    const blocked = isBlockedStatus(res.status);
+    this.summary.pagesCrawled += 1;
+    if (blocked) this.summary.blockedPages += 1;
+
+    await persistCrawledPage(this.db, {
+      scanJobId: this.options.scanJobId,
+      url,
+      normalizedUrl: canonicalUrl(url),
+      method: "GET",
+      statusCode: res.status,
+      contentType: res.headers.get("content-type"),
+      depth,
+      requestHeaders: { "user-agent": this.options.userAgent },
+      responseHeaders: headerRecord(res.headers),
+      forms: page?.forms ?? [],
+      parameters: queryParameters(url),
+      linksFound: page?.links ?? [],
+      isBlocked: blocked,
+      reducedConfidence: blocked,
+    });
+    this.options.onPage?.({
+      url,
+      method: "GET",
+      statusCode: res.status,
+      contentType: res.headers.get("content-type") ?? undefined,
+      responseHeaders: headerRecord(res.headers),
+      responseBody: res.body,
+      forms: page?.forms ?? [],
+    });
+  }
+
+  /** One paced request through the guard; null when it never reached the target. */
+  private request(
+    url: string,
+    depth: number,
+    method: DispatchRequest["method"] = "GET",
+    headers?: Record<string, string>,
+  ): Promise<DispatchResult | null> {
+    const result = this.requestChain.then(() => this.paced(url, depth, method, headers));
+    this.requestChain = result.catch(() => undefined);
+    return result;
+  }
+
+  private async paced(
+    url: string,
+    depth: number,
+    method: DispatchRequest["method"],
+    headers?: Record<string, string>,
+  ): Promise<DispatchResult | null> {
+    if (this.summary.stoppedBy === "STOPPED") return null;
+    await sleep(this.options.limiter.msUntilAvailable());
+    const killSwitchEngaged = await this.options.isKillSwitchEngaged();
+    // An engaged kill switch still goes to dispatch, which ledgers the refusal.
+    if (!killSwitchEngaged && (await this.options.shouldStop?.())) {
+      this.summary.stoppedBy = "STOPPED";
+      return null;
+    }
+
+    // Counted before dispatching so the ceiling check sees every request already in flight.
+    const requestsMade = this.summary.requestsMade++;
+    try {
+      const result = await dispatch(this.db, {
+        url,
+        method,
+        headers,
+        scanJobId: this.options.scanJobId,
+        scope: this.options.scope,
+        adminBlocklist: this.options.adminBlocklist,
+        killSwitchEngaged,
+        pagesCrawled: this.summary.pagesCrawled,
+        requestsMade,
+        depth,
+        userAgent: this.options.userAgent,
+        rateLimiter: this.options.limiter,
+      });
+      if (!result.ok) this.refuse(result.decision.code);
+      return result;
+    } catch {
+      // Timeouts and network errors are already ledgered as ERROR by dispatch.
+      return null;
+    }
+  }
+
+  /** A request the guard refused never reached the target, so it does not count. */
+  private refuse(code: DeniedDecision["code"]): void {
+    this.summary.requestsMade -= 1;
+    if (code === "KILL_SWITCH" || code === "CEILING") this.summary.stoppedBy = code;
+  }
+
+  private withinBudget(): boolean {
+    const { maxPages, maxRequests } = this.options.scope;
+    return (
+      this.summary.stoppedBy === null &&
+      this.summary.pagesCrawled < maxPages &&
+      this.summary.requestsMade < maxRequests
+    );
+  }
+
+  private enqueueResolved(raw: string, from: string, depth: number): void {
+    try {
+      this.enqueue(new URL(raw, from).toString(), depth);
+    } catch {
+      // An unparseable Location header is not a page.
+    }
+  }
+
+  private enqueue(raw: string, depth: number): void {
+    const url = this.inScopeUrl(raw);
+    if (depth > this.options.scope.maxDepth || !url) return;
+    const key = canonicalUrl(url);
+    if (this.seen.has(key)) return;
+    this.seen.add(key);
+    this.queue.push({ url, depth });
+  }
+
+  /** The absolute form of `raw` when it is crawlable; null for garbage or anything out of scope. */
+  private inScopeUrl(raw: string): string | null {
+    let url: URL;
+    try {
+      url = new URL(raw, this.options.scope.origin);
+    } catch {
+      return null;
+    }
+    const allowed =
+      inOrigin(url, this.options.scope.origin) &&
+      pathAllowed(url.pathname, this.options.scope) &&
+      robotsAllows(url.pathname + url.search, this.robots);
+    return allowed ? url.toString() : null;
+  }
+
+  private url(path: string): string {
+    return new URL(path, this.options.scope.origin).toString();
+  }
+}
+
+/** The scope's include paths, or the site root when it has none. */
+function entryPaths(scope: ScopeSnapshot): string[] {
+  return scope.includedPaths.length > 0 ? scope.includedPaths : ["/"];
+}
+
+function queryParameters(url: string): Array<{ name: string; location: "query" }> {
+  return [...new Set(new URL(url).searchParams.keys())].map((name) => ({ name, location: "query" }));
+}
+
+function headerRecord(headers: Headers): Record<string, string> {
+  const record: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    record[key] = value;
+  });
+  const cookies = headers.getSetCookie();
+  if (cookies.length > 0) record["set-cookie"] = cookies.join(SET_COOKIE_SEPARATOR);
+  return record;
+}

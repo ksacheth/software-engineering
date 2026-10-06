@@ -1,0 +1,11 @@
+id: P-31
+name: "Autocomplete enabled on password or sensitive field"
+type: passive
+cwe: CWE-522
+owaspCategory: "A07:2021"
+severity: LOW
+confidence: CONFIRMED
+priority: C
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "A password or other sensitive field allows browser autocomplete, so the value may be stored on shared devices."
+remediation: "Set autocomplete=\"new-password\" or an appropriate token on sensitive fields; avoid storing them in shared contexts."

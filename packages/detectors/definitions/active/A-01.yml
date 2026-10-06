@@ -1,0 +1,11 @@
+id: A-01
+name: "Reflected Cross-Site Scripting"
+type: active
+cwe: CWE-79
+owaspCategory: "A03:2021"
+severity: HIGH
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "A benign marker sent in a parameter came back unencoded in a context where a browser would execute it, indicating reflected cross-site scripting."
+remediation: "Encode output for its context (HTML, attribute, JavaScript, URL) and add a restrictive Content-Security-Policy."

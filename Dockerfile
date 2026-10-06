@@ -6,6 +6,9 @@
 #        maintenance scheduler and the one-shot migration, chosen by command in
 #        docker-compose.yml. Bun runs the TypeScript sources directly, so there
 #        is no compile step.
+#   worker  the same runtime plus headless Chromium and its system libraries, for
+#        the scan worker (apps/worker), which renders pages with JavaScript.
+#        Without the browser the worker still runs, with a static crawl only.
 #   web  the dashboard's static build behind nginx, which also proxies /api and
 #        /ws to the API (deploy/nginx/wvs.conf).
 
@@ -26,6 +29,8 @@ COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 COPY packages/database/package.json packages/database/
 COPY packages/scope-rules/package.json packages/scope-rules/
+COPY packages/scope-guard/package.json packages/scope-guard/
+COPY packages/detectors/package.json packages/detectors/
 COPY packages/shared/package.json packages/shared/
 RUN bun install --frozen-lockfile
 
@@ -51,7 +56,7 @@ EXPOSE 8080
 # ---------------------------------------------------------------------------
 # Runtime for the API, workers, scheduler and migrations.
 # ---------------------------------------------------------------------------
-FROM source AS app
+FROM source AS runtime
 ENV NODE_ENV=production
 # Report files live on a volume shared by the API and the report worker
 # (REPORT_STORAGE_PATH). Creating the directory here, owned by the runtime
@@ -60,3 +65,24 @@ RUN mkdir -p /app/storage/reports && chown -R bun:bun /app/storage
 USER bun
 EXPOSE 4100
 CMD ["bun", "apps/api/src/main.ts"]
+
+# ---------------------------------------------------------------------------
+# Scan worker: the runtime above plus the Chromium headless shell that
+# apps/worker/src/crawler/playwright-renderer.ts launches. Installed by the
+# Playwright version the lockfile pinned, into a path every user can read.
+# ---------------------------------------------------------------------------
+FROM runtime AS worker
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+USER root
+RUN cd apps/worker \
+    && bunx playwright install --with-deps --only-shell chromium \
+    && chmod -R a+rX /ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
+USER bun
+CMD ["bun", "apps/worker/src/worker.ts"]
+
+# ---------------------------------------------------------------------------
+# The API image (compose's `target: app`). Last, so an untargeted
+# `docker build .` still produces it.
+# ---------------------------------------------------------------------------
+FROM runtime AS app

@@ -4,15 +4,12 @@ import { prisma } from "@wvs/database";
 import { SCAN_QUEUE_NAME, isScanJobPayload, type ScanJobPayload } from "@wvs/shared";
 import { MockDetector } from "./detectors/mock-detector.js";
 import { ScanOrchestrator } from "./orchestrator/scan-orchestrator.js";
+import { createScanEngine } from "./engine/scan-engine-factory.js";
 
-// No production detector exists yet. The mock one reports fabricated findings,
-// so it runs only when asked for by name, never by default.
-if (process.env.WVS_SCAN_DETECTOR !== "mock") {
-  console.error(
-    "[Worker] No scan detector is configured. Set WVS_SCAN_DETECTOR=mock to run the offline mock detector for development; it reports findings that do not exist."
-  );
-  process.exit(1);
-}
+// The real engine crawls and runs the Appendix B detectors. The mock detector
+// reports fabricated findings and runs only when asked for by name, for offline
+// development.
+const useMock = process.env.WVS_SCAN_DETECTOR === "mock";
 
 const REDIS_HOST = process.env.REDIS_HOST || "localhost";
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379", 10);
@@ -32,9 +29,12 @@ const orchestrator = new ScanOrchestrator({
   prisma,
   redis: publisher,
   detector: MockDetector.analyze,
+  engine: useMock ? undefined : await createScanEngine(),
 });
 
-console.log(`[Worker] Starting WVS Scan Worker on queue '${SCAN_QUEUE_NAME}' with the MOCK detector...`);
+console.log(
+  `[Worker] Starting WVS Scan Worker on queue '${SCAN_QUEUE_NAME}' with the ${useMock ? "MOCK detector" : "scan engine"}...`,
+);
 
 export const worker = new Worker(
   SCAN_QUEUE_NAME,

@@ -1,0 +1,11 @@
+id: P-14
+name: "Certificate hostname mismatch"
+type: passive
+cwe: CWE-297
+owaspCategory: "A07:2021"
+severity: HIGH
+confidence: CONFIRMED
+priority: M
+profiles: [PASSIVE, STANDARD, THOROUGH]
+description: "The certificate does not cover the hostname being served, so clients cannot verify they reached the right server."
+remediation: "Issue a certificate whose subject alternative names include this hostname."

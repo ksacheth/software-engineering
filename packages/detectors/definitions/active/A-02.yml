@@ -1,0 +1,11 @@
+id: A-02
+name: "SQL Injection (error-based)"
+type: active
+cwe: CWE-89
+owaspCategory: "A03:2021"
+severity: CRITICAL
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "A syntax-breaking character in a parameter produced a database error message, indicating the value reaches a SQL query unescaped."
+remediation: "Use parameterised queries or prepared statements for every database call, and hide database errors from responses."

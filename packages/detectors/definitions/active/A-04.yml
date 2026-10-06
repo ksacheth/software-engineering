@@ -1,0 +1,11 @@
+id: A-04
+name: "Open Redirect"
+type: active
+cwe: CWE-601
+owaspCategory: "A01:2021"
+severity: MEDIUM
+confidence: TENTATIVE
+priority: M
+profiles: [STANDARD, THOROUGH]
+description: "A redirect parameter accepted a sentinel external host and the response redirected there, allowing phishing via a trusted link."
+remediation: "Redirect only to relative paths or to an allowlist of destinations; reject absolute external URLs."
