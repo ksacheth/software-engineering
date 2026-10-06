@@ -50,6 +50,8 @@ export interface CrawlSummary {
   blockedPages: number;
   /** Set when the crawl ended early (kill switch, a ceiling or a pause/cancel), not the frontier running dry. */
   stoppedBy: "KILL_SWITCH" | "CEILING" | "STOPPED" | null;
+  /** robots.txt could not be fetched (5xx or no answer), so nothing was crawled (RFC 9309). */
+  robotsDisallowAll: boolean;
 }
 
 /** Sitemaps fetched per scan, so a sitemap index cannot spend the request budget. */
@@ -77,7 +79,7 @@ class Crawl {
   private toRender: QueuedUrl[] = [];
   private seen = new Set<string>();
   private robots: RobotsRules = NO_ROBOTS;
-  private summary: CrawlSummary = { pagesCrawled: 0, requestsMade: 0, blockedPages: 0, stoppedBy: null };
+  private summary: CrawlSummary = { pagesCrawled: 0, requestsMade: 0, blockedPages: 0, stoppedBy: null, robotsDisallowAll: false };
   /** Tail of the request chain; the browser fires requests in parallel but they are paced one at a time. */
   private requestChain: Promise<unknown> = Promise.resolve();
 
@@ -132,9 +134,14 @@ class Crawl {
 
   private async readRobots(): Promise<RobotsRules> {
     const res = await this.request(this.url("/robots.txt"), 0);
-    // RFC 9309: an unreachable robots.txt (5xx) means assume full disallow; 4xx means no rules.
-    if (res?.ok && res.status >= 500) return DISALLOW_ALL;
-    if (!res?.ok || res.status !== 200) return NO_ROBOTS;
+    // RFC 9309: an unreachable robots.txt (a 5xx, or no answer at all) means
+    // assume full disallow; a 4xx means no rules. A guard refusal is not the
+    // site's answer, so it leaves the crawl unrestricted by robots.
+    if (res === null || (res.ok && res.status >= 500)) {
+      this.summary.robotsDisallowAll = true;
+      return DISALLOW_ALL;
+    }
+    if (!res.ok || res.status !== 200) return NO_ROBOTS;
     return parseRobots(res.body, this.options.userAgent);
   }
 

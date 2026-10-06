@@ -150,7 +150,21 @@ describe("runScanEngine", () => {
 
     expect(result.requestsMade).toBeLessThanOrEqual(6);
     expect(ledger.filter((row) => row.decision === "ALLOWED").length).toBeLessThanOrEqual(6);
-    expect(result.probesRefused).toBeGreaterThan(0);
+    expect(result.warnings.map((warning) => warning.code)).toContain("CRAWL_LIMIT_REACHED");
+  });
+
+  test("once the budget is spent, active probes are skipped rather than sent to the guard", async () => {
+    serve();
+    const { db, ledger } = fakeDb();
+    const base = input("STANDARD");
+
+    await runScanEngine(
+      db,
+      { ...base, scope: { ...base.scope, maxRequests: 10 }, resumeFrom: { requestsMade: 10, pagesCrawled: 0, seenUrls: [] } },
+      catalogue,
+    );
+
+    expect(ledger.filter((row) => row.decision === "BLOCKED_CEILING").length).toBeLessThanOrEqual(3);
   });
 
   test("resumed spend counts against the ceiling", async () => {

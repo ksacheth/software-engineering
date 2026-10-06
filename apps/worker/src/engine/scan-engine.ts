@@ -85,9 +85,7 @@ export async function runScanEngine(
 
   const summary = await crawlWithRenderer(db, input, limiter, records, warnings);
   budget.requestsMade = summary.requestsMade;
-  if (summary.stoppedBy === "CEILING") {
-    warnings.push({ code: "CRAWL_LIMIT_REACHED", message: "The crawl stopped at a page or request limit." });
-  }
+  warnings.push(...crawlWarnings(summary));
 
   const result = (aborted: EngineAbort | null, rest: Partial<EngineResult> = {}): EngineResult => ({
     findings: [],
@@ -121,12 +119,30 @@ export async function runScanEngine(
   releaseBodies(records);
   const active = await runScanActiveDetectors({ db, catalogue: definitions, input, limiter, records, budget });
   if (active.aborted) return result(active.aborted, { probesRefused: active.probesRefused });
+  if (active.budgetSpent && summary.stoppedBy !== "CEILING") {
+    warnings.push({ code: "CRAWL_LIMIT_REACHED", message: "The request limit was reached before every active check ran." });
+  }
 
   return result(null, {
     findings: [...passive.findings, ...tls.findings, ...active.findings],
     failures: [...passive.failures, ...tls.failures, ...active.failures],
     probesRefused: active.probesRefused,
   });
+}
+
+/** What the user should know about how the crawl ended. */
+function crawlWarnings(summary: CrawlSummary): EngineWarning[] {
+  const warnings: EngineWarning[] = [];
+  if (summary.stoppedBy === "CEILING") {
+    warnings.push({ code: "CRAWL_LIMIT_REACHED", message: "The crawl stopped at a page or request limit." });
+  }
+  if (summary.robotsDisallowAll) {
+    warnings.push({
+      code: "TARGET_BLOCKING_DETECTED",
+      message: "robots.txt could not be fetched, so no pages were crawled (RFC 9309 treats that as disallow-all).",
+    });
+  }
+  return warnings;
 }
 
 /** The kill switch, then a pause or cancel; null when the scan may go on. */
@@ -199,13 +215,21 @@ interface ActiveRun {
 type ActiveOutcome = Awaited<ReturnType<typeof runActiveDetectors>> & {
   aborted: EngineAbort | null;
   probesRefused: number;
+  /** Probes skipped because the scan's request budget was already spent. */
+  budgetSpent: boolean;
 };
 
 async function runScanActiveDetectors({ db, catalogue, input, limiter, records, budget }: ActiveRun): Promise<ActiveOutcome> {
-  const state: { aborted: EngineAbort | null; probesRefused: number } = { aborted: null, probesRefused: 0 };
+  const state = { aborted: null as EngineAbort | null, probesRefused: 0, budgetSpent: false };
 
   const probe: ProbeFn = async (request) => {
     if (state.aborted) return { ok: false };
+    // Once maxRequests is spent every probe would be refused anyway; skip the
+    // pacing wait and the ledger row for each one.
+    if (budget.requestsMade >= input.scope.maxRequests) {
+      state.budgetSpent = true;
+      return { ok: false };
+    }
     try {
       await sleep(limiter.msUntilAvailable());
       const killSwitchEngaged = await input.isKillSwitchEngaged();
@@ -253,7 +277,7 @@ async function runScanActiveDetectors({ db, catalogue, input, limiter, records, 
   };
 
   const outcome = await runActiveDetectors(catalogue, input.profile, { surface, probe, marker: createMarkerFactory(input.scanJobId) });
-  return { ...outcome, aborted: state.aborted, probesRefused: state.probesRefused };
+  return { ...outcome, ...state };
 }
 
 /** A-14 asks for the http:// root of an https scope, which the guard admits only when told. */

@@ -284,6 +284,21 @@ describe("crawl", () => {
     expect(second.pages.has(`${ORIGIN}/private/admin`)).toBe(true);
   });
 
+  test("a robots.txt that never answers disallows the whole site and says so", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: string) => {
+      requested.push(new URL(input).pathname);
+      throw new Error("connect ETIMEDOUT");
+    }) as unknown as typeof fetch;
+    const { db, pages } = fakeDb();
+
+    const summary = await crawl(db, options());
+
+    expect(requested).toEqual(["/robots.txt"]);
+    expect(pages.size).toBe(0);
+    expect(summary.robotsDisallowAll).toBe(true);
+  });
+
   test("honours wildcard robots rules against the query string", async () => {
     const requested = serveSite({
       "/robots.txt": { type: "text/plain", body: "User-agent: *\nDisallow: /*?q=\nDisallow: /*.pdf$\n" },
