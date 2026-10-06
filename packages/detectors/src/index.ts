@@ -10,6 +10,7 @@ export { fingerprint, PASSIVE_DETECTORS, SECURITY_TXT_PATHS, SITE_DETECTORS, TLS
 export {
   ACTIVE_DETECTORS,
   createMarker,
+  createMarkerFactory,
   runActiveDetectors,
   type ActiveContext,
   type ActiveDetector,

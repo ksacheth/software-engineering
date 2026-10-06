@@ -12,6 +12,9 @@ export type ProbeResponse =
   | { ok: true; status: number; headers: Headers; body: string }
   | { ok: false };
 
+/** A probe reply that completed, narrowed out of ProbeResponse. */
+export type OkProbeResponse = Extract<ProbeResponse, { ok: true }>;
+
 /** One guarded, rate-limited, ledgered request. Returns ok:false when the
  *  guard refused or the request never completed. */
 export type ProbeFn = (request: ProbeRequest) => Promise<ProbeResponse>;
@@ -22,7 +25,7 @@ export interface ActiveSurface {
   origin: string;
   /** Pages that returned HTML, used to pick realistic probe targets. */
   entryUrls: string[];
-  /** Query parameter names seen across the crawl; each is probed once. */
+  /** Query parameter names seen across the crawl (URLs and form fields); each is probed once, up to a cap. */
   parameters: string[];
   /** Forms found during the crawl (A-10). */
   forms: Array<{ action: string; method: string; inputs: Array<{ name: string; type: string }> }>;

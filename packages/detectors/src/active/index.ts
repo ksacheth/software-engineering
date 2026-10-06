@@ -8,6 +8,6 @@ export const ACTIVE_DETECTORS: ActiveDetector[] = [...INJECTION_DETECTORS, ...HT
   (a, b) => a.id.localeCompare(b.id),
 );
 
-export { createMarker } from "./marker";
+export { createMarker, createMarkerFactory } from "./marker";
 export { runActiveDetectors } from "./runner";
 export type { ActiveContext, ActiveDetector, ActiveSurface, ProbeFn, ProbeRequest, ProbeResponse } from "./types";
