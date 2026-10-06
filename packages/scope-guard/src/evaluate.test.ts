@@ -150,9 +150,13 @@ describe("evaluate", () => {
     }
   });
 
-  test("path scope: a malformed escape is out of scope", () => {
+  test("path scope: a malformed escape is judged like any other path", () => {
+    expect(evaluate(input({ url: "https://app.example.test/%E0%A4%A", pathname: "/%E0%A4%A" }))).toMatchObject({
+      allowed: true,
+    });
+    const excludingAdmin = { ...scope, excludedPaths: ["/admin"] };
     expect(
-      evaluate(input({ url: "https://app.example.test/%E0%A4%A", pathname: "/%E0%A4%A" })),
+      evaluate(input({ url: "https://app.example.test/admin%E0", pathname: "/admin%E0", scope: excludingAdmin })),
     ).toMatchObject({ allowed: false, code: "OUT_OF_SCOPE" });
   });
 

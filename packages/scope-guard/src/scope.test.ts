@@ -58,12 +58,25 @@ describe("pathAllowed", () => {
     expect(pathAllowed("/%61dmin", withPaths([], ["/admin"]))).toBe(false);
   });
 
-  test("a sibling that merely shares the prefix is not excluded", () => {
-    expect(pathAllowed("/administrators", withPaths([], ["/admin"]))).toBe(true);
+  test("exclusions over-match: anything starting with the excluded path is out", () => {
+    const s = withPaths([], ["/admin"]);
+    for (const path of ["/admin.php", "/admin;jsessionid=1", "/administrators", "/Admin", "/admin%20"]) {
+      expect(pathAllowed(path, s)).toBe(false);
+    }
+    expect(pathAllowed("/blog/admin", s)).toBe(true);
   });
 
-  test("malformed escapes are out of scope", () => {
-    expect(pathAllowed("/%zz", withPaths([], []))).toBe(false);
+  test("double encoding and backslashes cannot reach an excluded path", () => {
+    const s = withPaths([], ["/admin"]);
+    expect(pathAllowed("/%2561dmin", s)).toBe(false);
+    expect(pathAllowed("/%5cadmin", s)).toBe(false);
+    expect(pathAllowed("/x\\..\\admin", s)).toBe(false);
+  });
+
+  test("a malformed escape stays in scope when no rule excludes it", () => {
+    expect(pathAllowed("/100%", withPaths([], []))).toBe(true);
+    expect(pathAllowed("/caf%E9", withPaths([], []))).toBe(true);
+    expect(pathAllowed("/%zz", withPaths(["/app"], []))).toBe(false);
   });
 });
 
@@ -81,5 +94,9 @@ describe("inOrigin", () => {
     expect(
       inOrigin(new URL("http://app.example.test:81/"), scope.origin, { allowPlaintextTwin: true }),
     ).toBe(false);
+  });
+
+  test("plaintext twin refuses a query string", () => {
+    expect(inOrigin(new URL("http://app.example.test/?x=1"), scope.origin, { allowPlaintextTwin: true })).toBe(false);
   });
 });

@@ -17,6 +17,7 @@ function isPlaintextTwin(url: URL, scopeOrigin: URL, method: string): boolean {
     url.username === "" &&
     url.password === "" &&
     url.pathname === "/" &&
+    url.search === "" &&
     method.toUpperCase() === "GET"
   );
 }
@@ -28,21 +29,39 @@ export function inOrigin(url: URL, origin: string, options: OriginOptions = {}):
   return isPlaintextTwin(url, scopeOrigin, options.method ?? "GET");
 }
 
+/** Rounds of percent-decoding, so a double-encoded `/%2561dmin` still reads as `/admin`. */
+const DECODE_ROUNDS = 3;
+
+/** Decodes each run of valid escapes and leaves a malformed one (`/100%`) as it is. */
+function decodeOnce(path: string): string {
+  return path.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run;
+    }
+  });
+}
+
 /**
- * Decodes percent-escapes once, resolves dot segments and collapses repeated
- * slashes, so `/%61dmin`, `//admin` and `/a/%2e%2e/admin` all compare as
- * `/admin`. Returns null for a malformed escape; callers treat that as out of
- * scope.
+ * Decodes percent-escapes (up to DECODE_ROUNDS deep), treats `\` as `/`,
+ * resolves dot segments and collapses repeated slashes, so `/%61dmin`,
+ * `/%5cadmin`, `//admin` and `/a/%2e%2e/admin` all compare as `/admin`.
  */
-function normalisePath(pathname: string): string | null {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    return null;
+function normalisePath(pathname: string): string {
+  let decoded = pathname;
+  for (let round = 0; round < DECODE_ROUNDS; round++) {
+    const next = decodeOnce(decoded);
+    if (next === decoded) break;
+    decoded = next;
   }
+  return resolveSegments(decoded.replace(/\\/g, "/"));
+}
+
+/** Drops empty and `.` segments and applies `..`, so the result is `/`-rooted and canonical. */
+function resolveSegments(path: string): string {
   const segments: string[] = [];
-  for (const segment of decoded.split("/")) {
+  for (const segment of path.split("/")) {
     if (segment === "" || segment === ".") continue;
     if (segment === "..") segments.pop();
     else segments.push(segment);
@@ -50,26 +69,28 @@ function normalisePath(pathname: string): string | null {
   return `/${segments.join("/")}`;
 }
 
-/** Prefix match on segment boundaries: `/app` matches `/app/x`, not `/apple`. */
-function underPrefix(path: string, prefix: string): boolean {
-  return prefix === "/" || path === prefix || path.startsWith(`${prefix}/`);
+/**
+ * Exclusions over-match on purpose: `/admin` also covers `/admin.php`,
+ * `/admin;jsessionid=1` and `/administrator`, compared case-insensitively
+ * because many servers treat `/Admin` as `/admin`.
+ */
+function excluded(path: string, prefixes: readonly string[]): boolean {
+  const subject = path.toLowerCase();
+  return prefixes.some((raw) => subject.startsWith(normalisePath(raw).toLowerCase()));
 }
 
-function matchesAny(path: string, prefixes: readonly string[], fold: boolean): boolean {
-  const subject = fold ? path.toLowerCase() : path;
+/** Inclusions match on segment boundaries: `/app` admits `/app/x`, not `/apple`. */
+function included(path: string, prefixes: readonly string[]): boolean {
   return prefixes.some((raw) => {
-    const prefix = normalisePath(raw) ?? raw;
-    return underPrefix(subject, fold ? prefix.toLowerCase() : prefix);
+    const prefix = normalisePath(raw);
+    return prefix === "/" || path === prefix || path.startsWith(`${prefix}/`);
   });
 }
 
 export function pathAllowed(pathname: string, scope: ScopeSnapshot): boolean {
   const path = normalisePath(pathname);
-  if (path === null) return false;
-  // Exclusions fold case: a case-insensitive server serves /Admin as /admin.
-  if (matchesAny(path, scope.excludedPaths, true)) return false;
-  if (scope.includedPaths.length === 0) return true;
-  return matchesAny(path, scope.includedPaths, false);
+  if (excluded(path, scope.excludedPaths)) return false;
+  return scope.includedPaths.length === 0 || included(path, scope.includedPaths);
 }
 
 /**
