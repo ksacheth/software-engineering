@@ -1,8 +1,15 @@
-import { inOrigin, pathAllowed, type ScopeSnapshot, type TokenBucket } from "@wvs/scope-guard";
+import {
+  inOrigin,
+  pathAllowed,
+  type BlocklistEntry,
+  type ScopeSnapshot,
+  type TokenBucket,
+} from "@wvs/scope-guard";
 import { SET_COOKIE_SEPARATOR, type CrawlRecord } from "@wvs/shared";
 
 import {
   dispatch,
+  type DeniedDecision,
   type DispatchRequest,
   type DispatchResult,
   type LedgerClient,
@@ -12,16 +19,23 @@ import { isBlockedStatus } from "./confidence.js";
 import { extractPage, extractSitemapUrls, type ExtractedPage } from "./extract.js";
 import { persistCrawledPage, type CrawledPageClient } from "./persist.js";
 import type { PageRenderer } from "./renderer.js";
-import { NO_ROBOTS, parseRobots, robotsAllows, type RobotsRules } from "./robots.js";
+import { DISALLOW_ALL, NO_ROBOTS, parseRobots, robotsAllows, type RobotsRules } from "./robots.js";
 
 export type CrawlerDb = LedgerClient & CrawledPageClient;
 
 export interface CrawlOptions {
   scanJobId: string;
   scope: ScopeSnapshot;
-  adminBlocklist: string[];
+  adminBlocklist: readonly BlocklistEntry[];
   /** Read before every request (ADR-0008); a failed read must return true. */
   isKillSwitchEngaged: () => Promise<boolean>;
+  /** Read before every request alongside the kill switch; true when the scan was paused or cancelled (ADR-0007). */
+  shouldStop?: () => Promise<boolean>;
+  /**
+   * Progress of an earlier run of this scan, so a resumed or redelivered job does
+   * not get a fresh budget: seeds the counters and the seen-set (canonical URLs).
+   */
+  resumeFrom?: { requestsMade: number; pagesCrawled: number; seenUrls: string[] };
   userAgent: string;
   limiter: Pick<TokenBucket, "tryRemove" | "msUntilAvailable">;
   /** Renders HTML pages with JavaScript (DC-5); omitted, the crawl is static only. */
@@ -34,8 +48,8 @@ export interface CrawlSummary {
   pagesCrawled: number;
   requestsMade: number;
   blockedPages: number;
-  /** Set when the guard ended the crawl (kill switch or a ceiling), not the frontier running dry. */
-  stoppedBy: "KILL_SWITCH" | "CEILING" | null;
+  /** Set when the crawl ended early (kill switch, a ceiling or a pause/cancel), not the frontier running dry. */
+  stoppedBy: "KILL_SWITCH" | "CEILING" | "STOPPED" | null;
 }
 
 /** Sitemaps fetched per scan, so a sitemap index cannot spend the request budget. */
@@ -64,11 +78,19 @@ class Crawl {
   private seen = new Set<string>();
   private robots: RobotsRules = NO_ROBOTS;
   private summary: CrawlSummary = { pagesCrawled: 0, requestsMade: 0, blockedPages: 0, stoppedBy: null };
+  /** Tail of the request chain; the browser fires requests in parallel but they are paced one at a time. */
+  private requestChain: Promise<unknown> = Promise.resolve();
 
   constructor(
     private db: CrawlerDb,
     private options: CrawlOptions,
-  ) {}
+  ) {
+    const resume = options.resumeFrom;
+    if (!resume) return;
+    this.summary.requestsMade = resume.requestsMade;
+    this.summary.pagesCrawled = resume.pagesCrawled;
+    resume.seenUrls.forEach((url) => this.seen.add(url));
+  }
 
   async run(): Promise<CrawlSummary> {
     this.robots = await this.readRobots();
@@ -99,6 +121,8 @@ class Crawl {
         this.request(target, depth, method, headers),
       );
       [...rendered.links, ...rendered.requestedUrls].forEach((link) => this.enqueue(link, depth + 1));
+      // A render that never loaded the document sees a blank page; keep the static values.
+      if (!rendered.loaded) continue;
       await this.db.crawledPage.update({
         where: { scanJobId_normalizedUrl_method: { scanJobId: this.options.scanJobId, normalizedUrl: canonicalUrl(url), method: "GET" } },
         data: { forms: rendered.forms, linksFound: rendered.links },
@@ -108,6 +132,8 @@ class Crawl {
 
   private async readRobots(): Promise<RobotsRules> {
     const res = await this.request(this.url("/robots.txt"), 0);
+    // RFC 9309: an unreachable robots.txt (5xx) means assume full disallow; 4xx means no rules.
+    if (res?.ok && res.status >= 500) return DISALLOW_ALL;
     if (!res?.ok || res.status !== 200) return NO_ROBOTS;
     return parseRobots(res.body, this.options.userAgent);
   }
@@ -117,8 +143,8 @@ class Crawl {
     const fetched = new Set<string>();
 
     while (pending.length > 0 && fetched.size < MAX_SITEMAPS && this.withinBudget()) {
-      const sitemap = pending.shift()!;
-      if (fetched.has(sitemap) || !this.inScope(sitemap)) continue;
+      const sitemap = this.inScopeUrl(pending.shift()!);
+      if (!sitemap || fetched.has(sitemap)) continue;
       fetched.add(sitemap);
       pending.push(...(await this.readSitemap(sitemap)));
     }
@@ -188,15 +214,34 @@ class Crawl {
   }
 
   /** One paced request through the guard; null when it never reached the target. */
-  private async request(
+  private request(
     url: string,
     depth: number,
     method: DispatchRequest["method"] = "GET",
     headers?: Record<string, string>,
   ): Promise<DispatchResult | null> {
+    const result = this.requestChain.then(() => this.paced(url, depth, method, headers));
+    this.requestChain = result.catch(() => undefined);
+    return result;
+  }
+
+  private async paced(
+    url: string,
+    depth: number,
+    method: DispatchRequest["method"],
+    headers?: Record<string, string>,
+  ): Promise<DispatchResult | null> {
+    if (this.summary.stoppedBy === "STOPPED") return null;
     await sleep(this.options.limiter.msUntilAvailable());
     const killSwitchEngaged = await this.options.isKillSwitchEngaged();
+    // An engaged kill switch still goes to dispatch, which ledgers the refusal.
+    if (!killSwitchEngaged && (await this.options.shouldStop?.())) {
+      this.summary.stoppedBy = "STOPPED";
+      return null;
+    }
 
+    // Counted before dispatching so the ceiling check sees every request already in flight.
+    const requestsMade = this.summary.requestsMade++;
     try {
       const result = await dispatch(this.db, {
         url,
@@ -207,21 +252,23 @@ class Crawl {
         adminBlocklist: this.options.adminBlocklist,
         killSwitchEngaged,
         pagesCrawled: this.summary.pagesCrawled,
-        requestsMade: this.summary.requestsMade,
+        requestsMade,
         depth,
         userAgent: this.options.userAgent,
         rateLimiter: this.options.limiter,
       });
-      if (result.ok) this.summary.requestsMade += 1;
-      else if (result.decision.code === "KILL_SWITCH" || result.decision.code === "CEILING") {
-        this.summary.stoppedBy = result.decision.code;
-      }
+      if (!result.ok) this.refuse(result.decision.code);
       return result;
     } catch {
       // Timeouts and network errors are already ledgered as ERROR by dispatch.
-      this.summary.requestsMade += 1;
       return null;
     }
+  }
+
+  /** A request the guard refused never reached the target, so it does not count. */
+  private refuse(code: DeniedDecision["code"]): void {
+    this.summary.requestsMade -= 1;
+    if (code === "KILL_SWITCH" || code === "CEILING") this.summary.stoppedBy = code;
   }
 
   private withinBudget(): boolean {
@@ -241,21 +288,28 @@ class Crawl {
     }
   }
 
-  private enqueue(url: string, depth: number): void {
-    if (depth > this.options.scope.maxDepth || !this.inScope(url)) return;
+  private enqueue(raw: string, depth: number): void {
+    const url = this.inScopeUrl(raw);
+    if (depth > this.options.scope.maxDepth || !url) return;
     const key = canonicalUrl(url);
     if (this.seen.has(key)) return;
     this.seen.add(key);
     this.queue.push({ url, depth });
   }
 
-  private inScope(raw: string): boolean {
-    const url = new URL(raw);
-    return (
+  /** The absolute form of `raw` when it is crawlable; null for garbage or anything out of scope. */
+  private inScopeUrl(raw: string): string | null {
+    let url: URL;
+    try {
+      url = new URL(raw, this.options.scope.origin);
+    } catch {
+      return null;
+    }
+    const allowed =
       inOrigin(url, this.options.scope.origin) &&
       pathAllowed(url.pathname, this.options.scope) &&
-      robotsAllows(url.pathname, this.robots)
-    );
+      robotsAllows(url.pathname + url.search, this.robots);
+    return allowed ? url.toString() : null;
   }
 
   private url(path: string): string {

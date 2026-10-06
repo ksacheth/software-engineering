@@ -18,9 +18,9 @@ export function canonicalUrl(raw: string): string {
     }
   }
 
-  if (u.pathname.length > 1) {
-    u.pathname = u.pathname.replace(/\/+$/, "");
-  }
+  // Parameter order carries no meaning, so reordered URLs are one page. The
+  // trailing slash does: /dir and /dir/ are different resources.
+  u.searchParams.sort();
 
   return u.toString();
 }

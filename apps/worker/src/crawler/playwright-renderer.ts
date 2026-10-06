@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page, type Route } from "playwright";
+import { chromium, type Browser, type BrowserContext, type LaunchOptions, type Page, type Route } from "playwright";
 
 import type { DispatchRequest } from "../scope-guard/dispatch.js";
 import type { ExtractedForm } from "./extract.js";
@@ -19,8 +19,27 @@ const RENDER_TIMEOUT_MS = 30_000;
 /** Time given to scripts after load to add links or fire requests. */
 const SETTLE_MS = 1_000;
 
+/**
+ * Route interception only covers requests Playwright sees. Everything else the
+ * browser might open on its own (preconnect, DNS prefetch, WebRTC/STUN over UDP,
+ * QUIC, background services) must fail closed: a dead-end proxy takes the
+ * traffic that skips route.fulfill, and the flags switch off the UDP and
+ * prefetch paths that would not honour a proxy at all.
+ */
+export const LAUNCH_OPTIONS: LaunchOptions = {
+  headless: true,
+  proxy: { server: "http://127.0.0.1:1" },
+  args: [
+    "--disable-quic",
+    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+    "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+    "--dns-prefetch-disable",
+    "--disable-background-networking",
+  ],
+};
+
 export async function launchPlaywrightRenderer(userAgent: string): Promise<PageRenderer> {
-  return new PlaywrightRenderer(await chromium.launch({ headless: true }), userAgent);
+  return new PlaywrightRenderer(await chromium.launch(LAUNCH_OPTIONS), userAgent);
 }
 
 class PlaywrightRenderer implements PageRenderer {
@@ -40,9 +59,12 @@ class PlaywrightRenderer implements PageRenderer {
     try {
       await guardContext(context, fetch, requested);
       const page = await context.newPage();
-      await page.goto(url, { waitUntil: "load", timeout: RENDER_TIMEOUT_MS }).catch(() => null);
+      const loaded = await page.goto(url, { waitUntil: "load", timeout: RENDER_TIMEOUT_MS }).then(
+        () => true,
+        () => false,
+      );
       await page.waitForTimeout(SETTLE_MS);
-      return await readPage(page, new URL(url).origin, requested);
+      return { loaded, ...(await readPage(page, new URL(url).origin, requested)) };
     } finally {
       await context.close();
     }
@@ -73,7 +95,7 @@ async function answer(route: Route, fetch: GuardedFetch, requested: Set<string>)
   return route.fulfill({ status: res.status, headers: fulfillHeaders(res.headers), body: res.body });
 }
 
-async function readPage(page: Page, origin: string, requested: Set<string>): Promise<RenderedPage> {
+async function readPage(page: Page, origin: string, requested: Set<string>): Promise<Omit<RenderedPage, "loaded">> {
   const links = await page.$$eval("a[href], area[href]", (els) => els.map((el) => (el as HTMLAnchorElement).href));
   const forms = await page.$$eval("form", (els) =>
     els.map((form) => ({

@@ -11,6 +11,8 @@ interface Group {
 }
 
 export const NO_ROBOTS: RobotsRules = { disallowed: [], allowed: [], sitemaps: [] };
+/** RFC 9309: a robots.txt that cannot be fetched (5xx) means assume everything is disallowed. */
+export const DISALLOW_ALL: RobotsRules = { disallowed: ["/"], allowed: [], sitemaps: [] };
 
 /**
  * Parses robots.txt for one crawler. The group naming our product token wins
@@ -66,9 +68,48 @@ function pickGroup(groups: Group[], token: string): Group | undefined {
   );
 }
 
-/** The longest matching rule wins; Allow wins a tie. */
-export function robotsAllows(pathname: string, rules: RobotsRules): boolean {
-  const longest = (paths: string[]) =>
-    Math.max(-1, ...paths.filter((p) => pathname.startsWith(p)).map((p) => p.length));
+/**
+ * The longest matching rule wins, measured by its raw length; Allow wins a tie.
+ * `pathAndQuery` is the URL's pathname plus search, which is what rules match.
+ */
+export function robotsAllows(pathAndQuery: string, rules: RobotsRules): boolean {
+  const longest = (patterns: string[]) =>
+    Math.max(-1, ...patterns.filter((p) => ruleMatches(p, pathAndQuery)).map((p) => p.length));
   return longest(rules.allowed) >= longest(rules.disallowed);
+}
+
+/** RFC 9309 pattern: `*` matches any run of characters, a trailing `$` anchors the end. */
+function ruleMatches(rule: string, target: string): boolean {
+  const anchored = rule.endsWith("$");
+  const body = anchored ? rule.slice(0, -1) : rule;
+  // An unanchored rule matches any URL it is a prefix of, i.e. it ends in an implicit `*`.
+  return globMatches(anchored ? body : `${body}*`, target);
+}
+
+/**
+ * Whole-string glob match on `*` only. Written as the two-pointer walk rather
+ * than a regex because robots.txt is written by the target, and stacked
+ * wildcards must not be able to backtrack catastrophically.
+ */
+function globMatches(pattern: string, text: string): boolean {
+  let p = 0;
+  let t = 0;
+  let star = -1;
+  let mark = 0;
+  while (t < text.length) {
+    if (pattern[p] === "*") {
+      star = p++;
+      mark = t;
+    } else if (p < pattern.length && pattern[p] === text[t]) {
+      p++;
+      t++;
+    } else if (star !== -1) {
+      p = star + 1;
+      t = ++mark;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[p] === "*") p++;
+  return p === pattern.length;
 }

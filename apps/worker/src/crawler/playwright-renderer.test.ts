@@ -1,11 +1,13 @@
 // @ts-ignore
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { chromium } from "playwright";
 
-import { launchPlaywrightRenderer } from "./playwright-renderer.js";
+import { LAUNCH_OPTIONS, launchPlaywrightRenderer } from "./playwright-renderer.js";
 import type { GuardedFetch, PageRenderer } from "./renderer.js";
 
-const ORIGIN = "http://203.0.113.10";
+const ORIGIN = "http://93.184.216.34";
 /** Launching is the only reliable check: executablePath() names full Chrome even when only the headless shell is installed. */
 const hasChromium = await chromium.launch().then(
   (browser) => browser.close().then(() => true),
@@ -40,7 +42,8 @@ function guardedSite() {
       status: 200,
       headers: new Headers({ "content-type": type, "content-encoding": "gzip" }),
       body,
-      ips: ["203.0.113.10"],
+      truncated: false,
+      ips: ["93.184.216.34"],
     };
   };
   return { fetch, calls };
@@ -62,6 +65,7 @@ describe.skipIf(!hasChromium)("PlaywrightRenderer", () => {
 
     const rendered = await renderer.render(`${ORIGIN}/`, fetch);
 
+    expect(rendered.loaded).toBe(true);
     expect(rendered.links).toContain(`${ORIGIN}/javascript-page`);
     expect(rendered.forms).toEqual([
       { action: `${ORIGIN}/subscribe`, method: "POST", inputs: [{ name: "email", type: "email" }] },
@@ -81,4 +85,48 @@ describe.skipIf(!hasChromium)("PlaywrightRenderer", () => {
     expect(urls).not.toContain(`${ORIGIN}/api/save`);
     expect(calls.every((call) => call.method === "GET")).toBe(true);
   }, 30_000);
+});
+
+test("launch options send unintercepted traffic to a dead-end proxy and disable UDP and prefetch paths", () => {
+  expect(LAUNCH_OPTIONS.proxy?.server).toBe("http://127.0.0.1:1");
+  expect(LAUNCH_OPTIONS.args).toEqual(
+    expect.arrayContaining([
+      "--disable-quic",
+      "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+      "--dns-prefetch-disable",
+      "--disable-background-networking",
+    ]),
+  );
+});
+
+describe.skipIf(!hasChromium)("PlaywrightRenderer fail-closed", () => {
+  test("reports loaded: false when the document request is refused", async () => {
+    const renderer = await launchPlaywrightRenderer("WebsiteVulnerabilityScanner/1.0");
+    try {
+      const rendered = await renderer.render(`${ORIGIN}/`, async () => null);
+      expect(rendered.loaded).toBe(false);
+      expect(rendered.links).toEqual([]);
+    } finally {
+      await renderer.close();
+    }
+  }, 60_000);
+
+  test("a request that skips route interception never reaches the network", async () => {
+    let hits = 0;
+    const server = createServer((_req, res) => {
+      hits++;
+      res.end("reached");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    const browser = await chromium.launch(LAUNCH_OPTIONS);
+    try {
+      const page = await browser.newPage();
+      await expect(page.goto(`http://127.0.0.1:${port}/`, { timeout: 10_000 })).rejects.toThrow();
+      expect(hits).toBe(0);
+    } finally {
+      await browser.close();
+      server.close();
+    }
+  }, 60_000);
 });

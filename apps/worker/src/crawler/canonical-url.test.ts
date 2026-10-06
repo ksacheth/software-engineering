@@ -18,8 +18,15 @@ describe("canonicalUrl", () => {
       .toBe("https://example.com/a");
   });
 
-  test("removes trailing slash", () => {
+  test("keeps the trailing slash so /dir and /dir/ stay distinct", () => {
     expect(canonicalUrl("https://example.com/a/"))
-      .toBe("https://example.com/a");
+      .toBe("https://example.com/a/");
+    expect(canonicalUrl("https://example.com/a"))
+      .not.toBe(canonicalUrl("https://example.com/a/"));
+  });
+
+  test("sorts query parameters so reordered URLs share a key", () => {
+    expect(canonicalUrl("https://example.com/a?b=2&a=1"))
+      .toBe(canonicalUrl("https://example.com/a?a=1&b=2"));
   });
 });

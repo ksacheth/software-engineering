@@ -4,7 +4,7 @@ import type { ScopeSnapshot } from "@wvs/scope-guard";
 import { crawl, type CrawlerDb, type CrawlOptions } from "./crawler.js";
 import type { PageRenderer } from "./renderer.js";
 
-const ORIGIN = "http://203.0.113.10";
+const ORIGIN = "http://93.184.216.34";
 const realFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -15,11 +15,11 @@ afterEach(() => {
 const SITE: Record<string, { status?: number; type?: string; body?: string; location?: string; cookies?: string[] }> = {
   "/robots.txt": {
     type: "text/plain",
-    body: "User-agent: *\nDisallow: /private\nSitemap: http://203.0.113.10/sitemap.xml\n",
+    body: "User-agent: *\nDisallow: /private\nSitemap: http://93.184.216.34/sitemap.xml\n",
   },
   "/sitemap.xml": {
     type: "application/xml",
-    body: "<urlset><url><loc>http://203.0.113.10/from-sitemap</loc></url></urlset>",
+    body: "<urlset><url><loc>http://93.184.216.34/from-sitemap</loc></url></urlset>",
   },
   "/": {
     body: `<a href="/about#team">About</a>
@@ -40,12 +40,13 @@ const SITE: Record<string, { status?: number; type?: string; body?: string; loca
   "/search": { body: "Results" },
 };
 
-function serveSite(): string[] {
+function serveSite(overrides: typeof SITE = {}): string[] {
   const requested: string[] = [];
+  const site = { ...SITE, ...overrides };
   globalThis.fetch = (async (input: string) => {
     const path = new URL(input).pathname;
     requested.push(path);
-    const page = SITE[path];
+    const page = site[path];
     if (!page) return new Response("Not found", { status: 404, headers: { "content-type": "text/html" } });
     const headers = new Headers({ "content-type": page.type ?? "text/html" });
     if (page.location) headers.set("location", page.location);
@@ -76,7 +77,7 @@ function scope(overrides: Partial<ScopeSnapshot> = {}): ScopeSnapshot {
     origin: ORIGIN,
     includedPaths: [],
     excludedPaths: [],
-    verifiedIpSet: ["203.0.113.10"],
+    verifiedIpSet: ["93.184.216.34"],
     rateLimit: 1000,
     maxPages: 50,
     maxRequests: 100,
@@ -186,9 +187,10 @@ describe("crawl", () => {
     const renderer: PageRenderer = {
       render: async (url, fetch) => {
         rendered.push(url);
-        if (url !== `${ORIGIN}/`) return { links: [], forms: [], requestedUrls: [] };
+        if (url !== `${ORIGIN}/`) return { loaded: true, links: [], forms: [], requestedUrls: [] };
         await fetch(`${ORIGIN}/bundle.js`, "GET", {});
         return {
+          loaded: true,
           links: [`${ORIGIN}/javascript-page`],
           forms: [{ action: `${ORIGIN}/subscribe`, method: "POST", inputs: [] }],
           requestedUrls: [`${ORIGIN}/api/items`],
@@ -208,5 +210,130 @@ describe("crawl", () => {
     expect(ledger.some((row) => row.url === `${ORIGIN}/bundle.js`)).toBe(true);
     expect(rendered.filter((url) => url === `${ORIGIN}/`)).toHaveLength(1);
     expect(summary.requestsMade).toBe(requested.length);
+  });
+  test("ignores relative, garbage and off-origin sitemap entries instead of crashing", async () => {
+    const requested = serveSite({
+      "/sitemap.xml": {
+        type: "application/xml",
+        body: `<urlset>
+          <url><loc>/relative-page</loc></url>
+          <url><loc>http://[bad</loc></url>
+          <url><loc>https://elsewhere.example/x</loc></url>
+        </urlset>`,
+      },
+      "/robots.txt": { type: "text/plain", body: "Sitemap: not a url\nSitemap: /nested.xml\n" },
+      "/nested.xml": { type: "application/xml", body: "<urlset><url><loc>/from-nested</loc></url></urlset>" },
+    });
+    const { db, pages } = fakeDb();
+
+    await crawl(db, options());
+
+    expect(pages.has(`${ORIGIN}/relative-page`)).toBe(true);
+    expect(pages.has(`${ORIGIN}/from-nested`)).toBe(true);
+    expect(requested).not.toContain("/x");
+  });
+
+  test("keeps the static forms and links when the render never loaded the document", async () => {
+    serveSite();
+    const { db, pages } = fakeDb();
+    const renderer: PageRenderer = {
+      render: async () => ({ loaded: false, links: [], forms: [], requestedUrls: [] }),
+      close: async () => {},
+    };
+
+    await crawl(db, options({ renderer }));
+
+    expect(pages.get(`${ORIGIN}/`).forms).toHaveLength(1);
+    expect(pages.get(`${ORIGIN}/`).linksFound).toContain(`${ORIGIN}/about`);
+  });
+
+  test("a resumed crawl keeps its spent budget", async () => {
+    const requested = serveSite();
+    const { db } = fakeDb();
+
+    const summary = await crawl(db, options({ resumeFrom: { requestsMade: 98, pagesCrawled: 0, seenUrls: [] } }));
+
+    expect(requested).toHaveLength(2);
+    expect(summary.requestsMade).toBe(100);
+  });
+
+  test("a resumed crawl does not revisit seen pages", async () => {
+    serveSite();
+    const { db, pages } = fakeDb();
+
+    const summary = await crawl(
+      db,
+      options({ resumeFrom: { requestsMade: 4, pagesCrawled: 2, seenUrls: [`${ORIGIN}/`, `${ORIGIN}/about`] } }),
+    );
+
+    expect(pages.has(`${ORIGIN}/`)).toBe(false);
+    expect(pages.has(`${ORIGIN}/about`)).toBe(false);
+    expect(summary.pagesCrawled).toBeGreaterThan(2);
+  });
+
+  test("a 5xx robots.txt disallows the whole site but a 4xx allows it", async () => {
+    const unavailable = serveSite({ "/robots.txt": { status: 503, body: "down" } });
+    const first = fakeDb();
+    await crawl(first.db, options());
+    expect(unavailable).toEqual(["/robots.txt"]);
+    expect(first.pages.size).toBe(0);
+
+    serveSite({ "/robots.txt": { status: 404, body: "" } });
+    const second = fakeDb();
+    await crawl(second.db, options());
+    expect(second.pages.has(`${ORIGIN}/private/admin`)).toBe(true);
+  });
+
+  test("honours wildcard robots rules against the query string", async () => {
+    const requested = serveSite({
+      "/robots.txt": { type: "text/plain", body: "User-agent: *\nDisallow: /*?q=\nDisallow: /*.pdf$\n" },
+      "/": { body: `<a href="/s?q=1">s</a><a href="/doc.pdf">d</a><a href="/doc.pdf.html">h</a>` },
+      "/doc.pdf.html": { body: "ok" },
+    });
+    const { db } = fakeDb();
+
+    await crawl(db, options());
+
+    expect(requested).not.toContain("/s");
+    expect(requested).not.toContain("/doc.pdf");
+    expect(requested).toContain("/doc.pdf.html");
+  });
+
+  test("stops before the next request when shouldStop turns true", async () => {
+    const requested = serveSite();
+    const { db } = fakeDb();
+    let calls = 0;
+
+    const summary = await crawl(db, options({ shouldStop: async () => ++calls > 3 }));
+
+    expect(summary.stoppedBy).toBe("STOPPED");
+    expect(requested).toHaveLength(3);
+  });
+
+  test("paces browser requests one at a time and never overshoots maxRequests", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: string) => {
+      requested.push(new URL(input).pathname);
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return new Response("<p>hi</p>", { headers: { "content-type": "text/html" } });
+    }) as unknown as typeof fetch;
+    const { db } = fakeDb();
+    const renderer: PageRenderer = {
+      render: async (_url, fetch) => {
+        await Promise.all(Array.from({ length: 10 }, (_, i) => fetch(`${ORIGIN}/xhr-${i}`, "GET", {})));
+        return { loaded: true, links: [], forms: [], requestedUrls: [] };
+      },
+      close: async () => {},
+    };
+
+    const summary = await crawl(db, options({ renderer, scope: scope({ maxRequests: 6 }) }));
+
+    expect(peak).toBe(1);
+    expect(requested.length).toBeLessThanOrEqual(6);
+    expect(summary.requestsMade).toBeLessThanOrEqual(6);
   });
 });

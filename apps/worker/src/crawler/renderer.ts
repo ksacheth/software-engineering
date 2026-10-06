@@ -9,6 +9,8 @@ export type GuardedFetch = (
 ) => Promise<DispatchResult | null>;
 
 export interface RenderedPage {
+  /** False when the document itself never loaded, so the other fields describe a blank page. */
+  loaded: boolean;
   /** Same-origin links in the DOM after scripts ran. */
   links: string[];
   forms: ExtractedForm[];
