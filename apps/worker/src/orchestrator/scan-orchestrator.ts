@@ -1,5 +1,6 @@
 import type { CrawledPage, Prisma, PrismaClient, ScanJob, Target } from "@wvs/database";
 import type { ScanEvent, ScanJobPayload, ScanProgressEvent, ScanWarningCode } from "@wvs/shared";
+import { isKillSwitchEngaged, KILL_SWITCH_SETTING_KEY } from "@wvs/shared";
 import type { MockCrawlRecord, RawFinding } from "../detectors/mock-detector.js";
 import { Deduplicator, type DeduplicatedFinding } from "../processors/deduplicator.js";
 import { AdvisoryEnricher } from "../enrichers/advisory-enricher.js";
@@ -171,6 +172,12 @@ export class ScanOrchestrator {
     // scan is left as that flow set it and nothing is persisted.
     if (discovery.aborted) {
       console.log(`[Orchestrator] ScanJob ${scanJobId} stopped by ${discovery.aborted}; not completing it.`);
+      // The engine's kill-switch read fails closed, so a database blip also
+      // looks like the switch. Nothing else moves the row then (the job is not
+      // retried and the reconciler only handles QUEUED), so fail it here.
+      if (discovery.aborted === "KILL_SWITCH" && !(await this.killSwitchConfirmed())) {
+        await this.markFailed(scanJobId, new Error("Scan stopped because the kill switch could not be read"));
+      }
       return;
     }
 
@@ -363,6 +370,16 @@ export class ScanOrchestrator {
         return null;
       }
       throw err;
+    }
+  }
+
+  /** True only when the kill-switch row is readable and engaged. */
+  private async killSwitchConfirmed(): Promise<boolean> {
+    try {
+      const setting = await this.prisma.systemSetting.findUnique({ where: { key: KILL_SWITCH_SETTING_KEY } });
+      return isKillSwitchEngaged(setting?.value);
+    } catch {
+      return false;
     }
   }
 

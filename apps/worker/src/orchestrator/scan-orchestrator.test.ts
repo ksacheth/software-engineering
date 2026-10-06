@@ -203,12 +203,29 @@ describe("ScanOrchestrator", () => {
       expect(mockPrisma.findings.size).toBe(1);
     });
 
-    test("does not complete or persist a run the engine aborted", async () => {
+    test("does not complete or persist a run stopped by an engaged kill switch", async () => {
+      mockPrisma.killSwitch = "engaged";
+
       await withEngine(outcome({ aborted: "KILL_SWITCH" })).processScanJob(PAYLOAD);
 
+      // The kill-switch flow (ADR-0008) moves the row; the orchestrator leaves it.
       expect(scan().status).toBe("RUNNING");
       expect(mockPrisma.findings.size).toBe(0);
       expect(statuses()).toEqual(["RUNNING"]);
+    });
+
+    test("fails a run stopped by a kill-switch read that was not really engaged", async () => {
+      for (const killSwitch of ["released", new Error("db down")]) {
+        mockPrisma.scanJobs.set(SCAN_ID, { ...scan(), status: "QUEUED" });
+        mockRedis.events = [];
+        mockPrisma.killSwitch = killSwitch;
+
+        await withEngine(outcome({ aborted: "KILL_SWITCH" })).processScanJob(PAYLOAD);
+
+        expect(scan().status).toBe("FAILED");
+        expect(scan().failureReason).toContain("kill switch could not be read");
+        expect(mockPrisma.findings.size).toBe(0);
+      }
     });
 
     test("leaves a paused scan paused when the engine stopped for it", async () => {

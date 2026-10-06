@@ -16,6 +16,15 @@ export class MockPrisma {
   onScanJobUpdate?: (where: any, data: any) => void;
   /** Makes `scanFindingDiff.createMany` throw, to exercise the rollback path. */
   failDiffInsert = false;
+  /** The kill-switch setting row's value; undefined means no row, an Error means the read fails. */
+  killSwitch: string | Error | undefined;
+
+  systemSetting = {
+    findUnique: async () => {
+      if (this.killSwitch instanceof Error) throw this.killSwitch;
+      return this.killSwitch === undefined ? null : { value: this.killSwitch };
+    },
+  };
 
   scanJob = {
     findUnique: async ({ where }: any) => this.scanJobs.get(where.id) || null,

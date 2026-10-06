@@ -24,19 +24,20 @@ async function killSwitchReader(): Promise<boolean> {
 const STATUS_POLL_MS = 2_000;
 
 /**
- * True once the scan row is no longer RUNNING (paused, cancelled or aborted),
- * read at most every STATUS_POLL_MS. A failed read keeps the scan going: the
- * kill switch, not this, is the fail-closed control.
+ * True once the scan row is no longer RUNNING for this attempt (paused,
+ * cancelled, aborted, or resumed as a newer attempt that another worker now
+ * runs), read at most every STATUS_POLL_MS. A failed read keeps the scan
+ * going: the kill switch, not this, is the fail-closed control.
  */
-function stopReader(scanJobId: string): () => Promise<boolean> {
+function stopReader(scanJobId: string, attempt: number): () => Promise<boolean> {
   let stopped = false;
   let lastRead = 0;
   return async () => {
     if (stopped || Date.now() - lastRead < STATUS_POLL_MS) return stopped;
     lastRead = Date.now();
     try {
-      const row = await prisma.scanJob.findUnique({ where: { id: scanJobId }, select: { status: true } });
-      stopped = row?.status !== "RUNNING";
+      const row = await prisma.scanJob.findUnique({ where: { id: scanJobId }, select: { status: true, attempt: true } });
+      stopped = row?.status !== "RUNNING" || row.attempt !== attempt;
     } catch (error) {
       console.warn(`[Engine] Scan ${scanJobId}: could not read its status, continuing:`, error);
     }
@@ -52,15 +53,23 @@ function loadBlocklist(): Promise<BlocklistEntry[]> {
   });
 }
 
-/** What an earlier run of this scan already spent, so a resumed or redelivered job keeps one budget. */
+/**
+ * The requests an earlier run of this scan already sent, so a resumed or
+ * redelivered job keeps one request budget. Pages are crawled again rather
+ * than marked seen: response bodies are not stored, so a page skipped here
+ * would never reach the detectors and the scan would finish with no findings
+ * for it. Re-crawled pages upsert their existing crawled_page rows.
+ */
 async function loadResume(scanJobId: string): Promise<NonNullable<EngineInput["resumeFrom"]>> {
-  const [requestsMade, pages] = await Promise.all([
-    // Refusals never reached the target; ERROR rows did (or tried to).
-    prisma.urlLedger.count({ where: { scanJobId, decision: { in: ["ALLOWED", "ERROR"] } } }),
-    prisma.crawledPage.findMany({ where: { scanJobId }, select: { normalizedUrl: true } }),
-  ]);
-  const seenUrls = [...new Set(pages.map((page) => page.normalizedUrl))];
-  return { requestsMade, pagesCrawled: pages.length, seenUrls };
+  const requestsMade = await prisma.urlLedger.count({
+    where: {
+      scanJobId,
+      // Refusals never left the worker. ERROR rows count only when a request
+      // was attempted (it has a response time); a DNS failure is also ERROR.
+      OR: [{ decision: "ALLOWED" }, { decision: "ERROR", responseTimeMs: { not: null } }],
+    },
+  });
+  return { requestsMade, pagesCrawled: 0, seenUrls: [] };
 }
 
 /** Builds the orchestrator engine: loads the catalogue once, then crawls and
@@ -89,7 +98,7 @@ export async function createScanEngine(): Promise<OrchestratorEngine> {
         },
         adminBlocklist,
         isKillSwitchEngaged: killSwitchReader,
-        shouldStop: stopReader(scanJob.id),
+        shouldStop: stopReader(scanJob.id, scanJob.attempt),
         resumeFrom,
         launchRenderer,
         userAgent: scannerUserAgent(),
