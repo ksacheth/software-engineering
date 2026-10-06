@@ -216,8 +216,8 @@ describe("health", () => {
     expect(body.queue).toMatchObject({ waiting: 0, active: 0 });
     expect(body.scans).toMatchObject({ QUEUED: 0, RUNNING: 0, PAUSED: 0 });
     expect(body.killSwitch).toEqual({ engaged: false });
-    // Signing the administrator up queued a verification email that the test
-    // environment cannot deliver, so the outbox is honestly not empty.
+    // Tests send email through the in-memory transport, so nothing should be
+    // waiting in the outbox, but rows from other suites may share the database.
     expect(body.email).toMatchObject({
       pending: expect.any(Number),
       deadLettered: 0,
