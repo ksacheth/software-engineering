@@ -6,6 +6,9 @@
 #        maintenance scheduler and the one-shot migration, chosen by command in
 #        docker-compose.yml. Bun runs the TypeScript sources directly, so there
 #        is no compile step.
+#   worker  the app image plus headless Chromium and its system libraries, for
+#        the scan worker (apps/worker), which renders pages with JavaScript.
+#        Without the browser the worker still runs, with a static crawl only.
 #   web  the dashboard's static build behind nginx, which also proxies /api and
 #        /ws to the API (deploy/nginx/wvs.conf).
 
@@ -62,3 +65,18 @@ RUN mkdir -p /app/storage/reports && chown -R bun:bun /app/storage
 USER bun
 EXPOSE 4100
 CMD ["bun", "apps/api/src/main.ts"]
+
+# ---------------------------------------------------------------------------
+# Scan worker: the runtime above plus the Chromium headless shell that
+# apps/worker/src/crawler/playwright-renderer.ts launches. Installed by the
+# Playwright version the lockfile pinned, into a path every user can read.
+# ---------------------------------------------------------------------------
+FROM app AS worker
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+USER root
+RUN cd apps/worker \
+    && bunx playwright install --with-deps --only-shell chromium \
+    && chmod -R a+rX /ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
+USER bun
+CMD ["bun", "apps/worker/src/worker.ts"]
