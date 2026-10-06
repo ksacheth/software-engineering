@@ -5,6 +5,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { parse } from "yaml";
 
 import type { ScanProfile } from "@wvs/shared";
+import { PASSIVE_DETECTORS, SITE_DETECTORS, TLS_DETECTORS } from "./passive";
 import schema from "../schema/detector.schema.json" with { type: "json" };
 
 export interface DetectorDefinition {
@@ -45,10 +46,21 @@ export async function loadDefinitions(dir: string = DEFINITIONS_DIR): Promise<De
     }
   }
 
+  // The shipped catalogue must cover every registered detector, so a gap stops
+  // the worker at start instead of failing a scan. Fixture directories are exempt.
+  if (dir === DEFINITIONS_DIR) problems.push(...missingDefinitions(catalogue));
+
   if (problems.length > 0) {
     throw new Error(`Invalid detector definitions:\n${problems.join("\n")}`);
   }
   return catalogue;
+}
+
+/** Registered passive, site and TLS detectors the catalogue has no definition for. */
+function missingDefinitions(catalogue: DetectorCatalogue): string[] {
+  return [...PASSIVE_DETECTORS, ...SITE_DETECTORS, ...TLS_DETECTORS]
+    .filter((detector) => !catalogue.has(detector.id))
+    .map((detector) => `detector ${detector.id} has no definition`);
 }
 
 /** The definitions a scan of this profile runs. */

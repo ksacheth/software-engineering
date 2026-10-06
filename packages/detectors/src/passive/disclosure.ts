@@ -22,34 +22,54 @@ const p17: PassiveDetector = {
   },
 };
 
-/** Signatures of error pages and stack traces from common platforms. */
+/**
+ * Signatures of error pages and stack traces from common platforms. Every
+ * repetition is bounded and no `\s` crosses a line, so none backtracks
+ * quadratically on a hostile body.
+ */
 const ERROR_SIGNATURES: Array<[platform: string, pattern: RegExp]> = [
-  ["Java", /\n\s*at [\w$.]+\([\w$]+\.java:\d+\)/],
-  [".NET", /Server Error in '[^']*' Application|System\.\w+Exception:|   at \w[\w.]+\(.*\) in .+:line \d+/],
+  ["Java", /\n[ \t]*at [\w$.]{1,200}\([\w$]{1,100}\.java:\d{1,6}\)/],
+  [".NET", /Server Error in '[^'\n]{0,100}' Application|System\.\w{1,100}Exception:|   at \w[\w.]{1,200}\(.{0,200}\) in .{1,200}:line \d+/],
   ["Python", /Traceback \(most recent call last\):/],
   ["Django", /You're seeing this error because you have <code>DEBUG = True<\/code>/],
-  ["PHP", /<b>(?:Fatal error|Warning|Parse error)<\/b>:.+ on line <b>\d+<\/b>|(?:Fatal error|Parse error): .+ in \/\S+ on line \d+/],
-  ["Laravel", /Whoops, looks like something went wrong|Illuminate\\[\w\\]+Exception/],
-  ["Node.js", /\n\s*at .+ \((?:\/|node:internal)[^)]+:\d+:\d+\)/],
+  ["PHP", /<b>(?:Fatal error|Warning|Parse error)<\/b>:.{1,300} on line <b>\d+<\/b>|(?:Fatal error|Parse error): .{1,300} in \/\S{1,200} on line \d+/],
+  ["Laravel", /Whoops, looks like something went wrong|Illuminate\\[\w\\]{1,200}Exception/],
+  ["Node.js", /\n[ \t]*at .{1,200} \((?:\/|node:internal)[^)\n]{1,300}:\d+:\d+\)/],
   ["Ruby on Rails", /\.rb:\d+:in `|ActionController::RoutingError/],
-  ["SQL", /You have an error in your SQL syntax|ORA-\d{5}:|PG::\w+Error|SQLSTATE\[\w+\]|Unclosed quotation mark after the character string/],
+  ["SQL", /You have an error in your SQL syntax|ORA-\d{5}:|PG::\w{1,100}Error|SQLSTATE\[\w+\]|Unclosed quotation mark after the character string/],
 ];
 
+/**
+ * Pages a platform itself renders when it fails. A trace quoted in a tutorial
+ * has no such marker and a 2xx status, so it is not disclosure.
+ */
+const ERROR_PAGE_MARKER =
+  /Server Error in '[^'\n]{0,100}' Application|You're seeing this error because you have <code>DEBUG = True|Whoops, looks like something went wrong|<b>(?:Fatal error|Parse error)<\/b>:/;
+
 const SNIPPET_LENGTH = 200;
+
+/** Only the line the signature hit; the rest of a trace would carry more paths and code. */
+function snippetAt(body: string, match: RegExpExecArray): string {
+  const hit = match.index + (body[match.index] === "\n" ? 1 : 0);
+  const lineStart = body.lastIndexOf("\n", hit - 1) + 1;
+  const lineEnd = body.indexOf("\n", hit);
+  const start = Math.max(lineStart, hit - 40);
+  return body.slice(start, Math.min(lineEnd === -1 ? body.length : lineEnd, start + SNIPPET_LENGTH)).trim();
+}
 
 const p20: PassiveDetector = {
   id: "P-20",
   inspect(page) {
     if (!page.body) return [];
+    if (page.statusCode < 500 && !ERROR_PAGE_MARKER.test(page.body)) return [];
     for (const [platform, pattern] of ERROR_SIGNATURES) {
       const match = pattern.exec(page.body);
       if (!match) continue;
-      const start = Math.max(0, match.index - 40);
       return [
         {
           affectedUrl: page.url,
           detail: `The response contains a ${platform} error or stack trace (HTTP ${page.statusCode}).`,
-          evidence: { extractedSnippet: page.body.slice(start, start + SNIPPET_LENGTH).trim() },
+          evidence: { extractedSnippet: snippetAt(page.body, match) },
         },
       ];
     }

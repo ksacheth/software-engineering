@@ -12,8 +12,9 @@ function served(page: PageView): boolean {
   return page.statusCode === 200 && Boolean(page.body);
 }
 
-function exposed(page: PageView, detail: string, match?: RegExpExecArray | null): Observation[] {
-  const snippet = match ? match[0] : page.body!.slice(0, SNIPPET_LENGTH);
+/** The evidence is the matched signature only, never a prefix of the body (ADR-0010). */
+function exposed(page: PageView, detail: string, match: RegExpExecArray | null): Observation[] {
+  const snippet = match?.[0] ?? "";
   return [{ affectedUrl: page.url, detail, evidence: { extractedSnippet: snippet.trim().slice(0, SNIPPET_LENGTH) } }];
 }
 
@@ -43,9 +44,9 @@ const p21: PassiveDetector = {
 
 /** Configuration files, and a line that shows the file was served raw. */
 const CONFIG_SIGNATURES: Array<[file: RegExp, body: RegExp]> = [
-  [/\/\.env(\.[\w-]+)?$/, /^[A-Z][A-Z0-9_]*\s*=\s*\S.*$/m],
+  [/\/\.env(\.[\w-]+)?$/, /^[A-Z][A-Z0-9_]*[^\S\n]*=[^\S\n]*\S.*$/m],
   [/\/web\.config$/i, /<configuration[\s>]/],
-  [/\/(wp-config|config|settings|database)\.php(\.\w+)?$/i, /<\?php[\s\S]*(define\s*\(|\$\w+\s*=)/],
+  [/\/(wp-config|config|settings|database)\.php(\.\w+)?$/i, /^\s*<\?php[\s\S]{0,4000}?(define\s*\(|\$\w+\s*=)/],
   [/\/(application|bootstrap)(-\w+)?\.(ya?ml|properties)$/i, /^\s*(spring|server|datasource)[.:]/m],
   [/\/appsettings(\.\w+)?\.json$/i, /"ConnectionStrings"|"Logging"\s*:/],
   [/\/(\.npmrc|\.aws\/credentials|\.docker\/config\.json|docker-compose\.ya?ml)$/i, /_authToken|aws_secret_access_key|"auths"|^services:/m],
@@ -64,10 +65,13 @@ const p22: PassiveDetector = {
   },
 };
 
-/** Shows the setting's name, never its value. */
+/**
+ * Shows the setting's name, never its value. Every line of the match is
+ * redacted, since a signature may span several (ADR-0010).
+ */
 function redactValue(match: RegExpExecArray): RegExpExecArray {
   const redacted = Object.assign([...match], match) as RegExpExecArray;
-  redacted[0] = match[0].replace(/(=|:)\s*\S.*$/, "$1 [redacted]");
+  redacted[0] = match[0].replace(/(=|:)[^\S\n]*\S[^\n]*/g, "$1 [redacted]");
   return redacted;
 }
 
@@ -95,7 +99,14 @@ const p24: PassiveDetector = {
     // data served raw, which never comes back as text/html.
     if (!served(page) || !BACKUP_SUFFIX.test(pathOf(page)) || page.contentType.startsWith("text/html")) return [];
     const original = pathOf(page).replace(BACKUP_SUFFIX, "");
-    return exposed(page, `A backup copy of ${original} is served raw at ${pathOf(page)}.`);
+    // A backup of a config file is mostly credentials, so no body content is kept (ADR-0010).
+    return [
+      {
+        affectedUrl: page.url,
+        detail: `A backup copy of ${original} is served raw at ${pathOf(page)}.`,
+        evidence: { extractedSnippet: `${pathOf(page)} (${page.contentType || "unknown type"}, ${page.body!.length} characters)` },
+      },
+    ];
   },
 };
 

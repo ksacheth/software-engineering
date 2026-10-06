@@ -42,16 +42,35 @@ const p26: PassiveDetector = {
   },
 };
 
-/** Formats a credential has no reason to be in a response, with how to show it safely. */
+/**
+ * Formats a credential has no reason to be in a response, with how to show it
+ * safely. Google API keys (AIza...) are left out on purpose: Maps, Firebase
+ * and reCAPTCHA browser keys are public by design.
+ */
 const SECRET_PATTERNS: Array<[kind: string, pattern: RegExp]> = [
-  ["private key", /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/],
-  ["AWS access key", /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/],
-  ["GitHub token", /\bgh[pousr]_[A-Za-z0-9]{36,}\b/],
-  ["Slack token", /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/],
-  ["Stripe secret key", /\b[rs]k_live_[0-9A-Za-z]{24,}\b/],
-  ["Google API key", /\bAIza[0-9A-Za-z_-]{35}\b/],
-  ["credential assignment", /\b(?:api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token)["']?\s*[:=]\s*["'][A-Za-z0-9_\-/+=]{20,}["']/i],
+  ["private key", /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/g],
+  ["AWS access key", /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g],
+  ["GitHub token", /\bgh[pousr]_[A-Za-z0-9]{36,255}\b/g],
+  ["Slack token", /\bxox[abposr]-[A-Za-z0-9-]{10,255}\b/g],
+  ["Stripe secret key", /\b[rs]k_live_[0-9A-Za-z]{24,255}\b/g],
+  ["credential assignment", /\b(?:api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token)["']?[^\S\n]{0,20}[:=][^\S\n]{0,20}["']([A-Za-z0-9_\-/+=]{20,256})["']/gi],
 ];
+
+const PLACEHOLDER = /your|example|placeholder|changeme|change[_-]?me|dummy|sample|redacted|xxxx/i;
+const MIN_ENTROPY_BITS = 3;
+
+/** Shannon entropy per character; real secrets are random, config placeholders are not. */
+function entropy(value: string): number {
+  const counts = new Map<string, number>();
+  for (const char of value) counts.set(char, (counts.get(char) ?? 0) + 1);
+  return -[...counts.values()].reduce((sum, count) => sum + (count / value.length) * Math.log2(count / value.length), 0);
+}
+
+/** A captured assignment value is a secret only if it is not an obvious placeholder. */
+function looksReal(match: RegExpMatchArray): boolean {
+  const value = match[1];
+  return value === undefined || (!PLACEHOLDER.test(value) && entropy(value) >= MIN_ENTROPY_BITS);
+}
 
 /** Keeps enough to recognise the secret, never enough to use it (ADR-0010). */
 export function redactSecret(secret: string): string {
@@ -62,8 +81,9 @@ const p27: PassiveDetector = {
   id: "P-27",
   inspect(page) {
     if (!page.body) return [];
+    const body = page.body;
     return SECRET_PATTERNS.flatMap(([kind, pattern]) => {
-      const match = pattern.exec(page.body!);
+      const match = [...body.matchAll(pattern)].find(looksReal);
       if (!match) return [];
       return [
         {
@@ -77,7 +97,8 @@ const p27: PassiveDetector = {
   },
 };
 
-const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+/** Bounded so a long run of address characters cannot make the scan quadratic. */
+const EMAIL = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,255}\.[A-Z]{2,24}\b/gi;
 /** Asset names (logo@2x.png) and documentation addresses are not personal data. */
 const NOT_AN_ADDRESS = /\.(png|jpe?g|gif|svg|webp|avif|ico|js|css|map)$|@(example|test|localhost)\.|^(user|name|email|you)@/i;
 
@@ -99,7 +120,8 @@ const p28: PassiveDetector = {
 const SENSITIVE_PATH = /\/(account|profile|settings|admin|dashboard|billing|checkout|orders?|my)(\/|$)/i;
 
 function looksSensitive(page: PageView): boolean {
-  return page.setCookies.length > 0 || SENSITIVE_PATH.test(new URL(page.url).pathname) || Boolean(page.html()?.("input[type=password]").length);
+  // A Set-Cookie alone proves nothing: analytics and consent cookies are on nearly every page.
+  return SENSITIVE_PATH.test(new URL(page.url).pathname) || Boolean(page.html()?.("input[type=password]").length);
 }
 
 const p29: PassiveDetector = {
@@ -133,11 +155,13 @@ const p31: PassiveDetector = {
       .filter((el) => SAVES_INPUT($(el).attr("autocomplete")) && SAVES_INPUT($(el).closest("form").attr("autocomplete")))
       .map((el) => {
         const name = $(el).attr("name") ?? $(el).attr("id") ?? "password";
+        // The value attribute of a prefilled field is the stored password (ADR-0010).
+        const field = $(el).clone().removeAttr("value");
         return {
           affectedUrl: page.url,
           affectedParameter: name,
           detail: `The password field "${name}" lets the browser save what is typed.`,
-          evidence: { extractedSnippet: $.html(el).slice(0, 200) },
+          evidence: { extractedSnippet: $.html(field).slice(0, 200) },
         };
       });
   },

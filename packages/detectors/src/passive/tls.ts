@@ -77,7 +77,8 @@ const p16: TlsDetector = {
       observations.push(onOrigin(facts, `The certificate is signed with ${cert.signatureAlgorithm}.`, "signature"));
     }
     const minimum = cert.keyType === "other" ? 0 : MIN_KEY_BITS[cert.keyType];
-    if (cert.keyBits < minimum) {
+    // A missing size (null, or the 0 a probe falls back to) is unknown, not a weak key.
+    if (cert.keyBits !== null && cert.keyBits > 0 && cert.keyBits < minimum) {
       observations.push(onOrigin(facts, `The ${cert.keyType} key is ${cert.keyBits} bits, under ${minimum}.`, "key"));
     }
     return observations;

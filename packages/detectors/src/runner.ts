@@ -29,13 +29,31 @@ export function runPassiveDetectors(
   records: CrawlRecord[],
   detectors: { page?: PassiveDetector[]; site?: SiteDetector[] } = {},
 ): DetectionResult {
-  const pages = records.map(toPageView);
+  const { pages, failures: setupFailures } = toPageViews(records);
   const perPage = runDetectors(catalogue, profile, detectors.page ?? PASSIVE_DETECTORS, pages, (page) => page.url);
   const perSite = runDetectors(catalogue, profile, detectors.site ?? SITE_DETECTORS, sites(pages), (site) => `${site.origin}/`);
   return {
     findings: [...perPage.findings, ...perSite.findings],
-    failures: [...perPage.failures, ...perSite.failures],
+    failures: [...setupFailures, ...perPage.failures, ...perSite.failures],
   };
+}
+
+/** One record that cannot become a page (say, an unparseable URL) must not abort the run (F.5). */
+function toPageViews(records: CrawlRecord[]): { pages: PageView[]; failures: DetectorFailure[] } {
+  const pages: PageView[] = [];
+  const failures: DetectorFailure[] = [];
+  for (const record of records) {
+    try {
+      pages.push(toPageView(record));
+    } catch (error) {
+      failures.push({ detectorId: "page-view", affectedUrl: record.url, message: messageOf(error) });
+    }
+  }
+  return { pages, failures };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function sites(pages: PageView[]): SiteView[] {
@@ -65,7 +83,15 @@ function runDetectors<Input>(
   const failures: DetectorFailure[] = [];
 
   for (const detector of detectors) {
-    const definition = definitionFor(catalogue, detector.id);
+    const definition = catalogue.get(detector.id);
+    if (!definition) {
+      failures.push({
+        detectorId: detector.id,
+        affectedUrl: inputs[0] === undefined ? "" : locate(inputs[0]),
+        message: `Detector ${detector.id} has no definition in the catalogue`,
+      });
+      continue;
+    }
     if (!definition.profiles.includes(profile)) continue;
 
     for (const input of inputs) {
@@ -90,19 +116,13 @@ function inspect<Input>(
     return {
       detectorId: detector.id,
       affectedUrl: locate(input),
-      message: error instanceof Error ? error.message : String(error),
+      message: messageOf(error),
     };
   }
 }
 
 function findingKey(finding: RawFinding): string {
   return `${finding.detectorId}|${finding.affectedUrl}|${finding.affectedParameter ?? ""}`;
-}
-
-function definitionFor(catalogue: DetectorCatalogue, id: string): DetectorDefinition {
-  const definition = catalogue.get(id);
-  if (!definition) throw new Error(`Detector ${id} has no definition in the catalogue`);
-  return definition;
 }
 
 export function toFinding(definition: DetectorDefinition, observation: Observation): RawFinding {

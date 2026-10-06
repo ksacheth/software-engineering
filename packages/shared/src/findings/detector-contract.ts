@@ -21,8 +21,8 @@ export interface CrawlRecord {
   contentType?: string;
   requestHeaders?: Record<string, string> | null;
   responseHeaders?: Record<string, string> | null;
-  forms?: any;
-  parameters?: any;
+  forms?: unknown;
+  parameters?: unknown;
   responseBody?: string | null;
 }
 
@@ -53,7 +53,7 @@ export interface RawFinding {
   cveId?: string;
   epssScore?: number;
   epssPercentile?: number;
-  advisoryData?: any;
+  advisoryData?: unknown;
   evidence?: RawFindingEvidence;
 }
 
@@ -71,7 +71,8 @@ export interface CertificateFacts {
   /** e.g. sha256WithRSAEncryption; null when it could not be read. */
   signatureAlgorithm: string | null;
   keyType: "RSA" | "EC" | "other";
-  keyBits: number;
+  /** Null when the runtime did not expose the key size. */
+  keyBits: number | null;
 }
 
 /** What the worker's TLS probe learned about one HTTPS origin (P-11..P-16). */

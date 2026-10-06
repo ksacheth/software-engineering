@@ -4,7 +4,8 @@ export interface ParsedCookie {
   name: string;
   /** Attribute names, lower-cased, mapped to their values ("" for flags). */
   attributes: Map<string, string>;
-  raw: string;
+  /** The header with the value replaced, safe to store as evidence (ADR-0010). */
+  redacted: string;
 }
 
 export function parseSetCookie(header: string): ParsedCookie {
@@ -16,7 +17,8 @@ export function parseSetCookie(header: string): ParsedCookie {
     if (key) attributes.set(key, eq === -1 ? "" : part.slice(eq + 1).trim());
   }
   const eq = nameValue.indexOf("=");
-  return { name: (eq === -1 ? "" : nameValue.slice(0, eq)).trim(), attributes, raw: header.trim() };
+  const name = (eq === -1 ? "" : nameValue.slice(0, eq)).trim();
+  return { name, attributes, redacted: [`${name}=[redacted]`, ...parts.map((part) => part.trim())].join("; ") };
 }
 
 /** A Set-Cookie that only deletes the cookie leaves nothing to protect. */
@@ -44,7 +46,7 @@ function cookieDetector(id: string, check: (cookie: ParsedCookie, page: PageView
           affectedUrl: `${page.origin}/`,
           affectedParameter: cookie.name,
           detail: `${detail} First seen on ${page.url}.`,
-          evidence: { responseHeaders: { "set-cookie": cookie.raw }, extractedSnippet: cookie.raw },
+          evidence: { responseHeaders: { "set-cookie": cookie.redacted }, extractedSnippet: cookie.redacted },
         });
       }
       return observations;

@@ -3,7 +3,8 @@ import type { Observation, PageView, PassiveDetector } from "../types";
 /**
  * P-01..P-06: response header policies. They are set per site, not per page,
  * so each reports once against the origin root, with the header as the
- * parameter; the evidence names the first page found without it.
+ * parameter; the evidence names the first page found without it. Only the
+ * header concerned is stored, never Set-Cookie or Authorization (ADR-0010).
  */
 function siteWide(page: PageView, headerName: string, detail: string): Observation[] {
   return [
@@ -11,13 +12,32 @@ function siteWide(page: PageView, headerName: string, detail: string): Observati
       affectedUrl: `${page.origin}/`,
       affectedParameter: headerName,
       detail: `${detail} First seen on ${page.url}.`,
-      evidence: { responseHeaders: page.responseHeaders },
+      evidence: { responseHeaders: { [headerName]: page.header(headerName) ?? "(absent)" } },
     },
   ];
 }
 
 /** CSP sources that let an injected script run. */
 const WEAK_SCRIPT_SOURCES = ["'unsafe-inline'", "'unsafe-eval'", "*", "http:", "https:", "data:"];
+/** Sources a browser ignores once 'strict-dynamic' is present. */
+const IGNORED_BY_STRICT_DYNAMIC = ["*", "http:", "https:", "data:"];
+const NONCE_OR_HASH = /^'(?:nonce-|sha(?:256|384|512)-)/;
+
+/** Multiple policies arrive comma-joined, and the browser enforces each one. */
+function splitPolicies(header: string): string[] {
+  return header.split(",").map((policy) => policy.trim()).filter(Boolean);
+}
+
+/** The script sources a browser would still honour as permissive, given nonces, hashes and strict-dynamic. */
+function weakScriptSources(sources: string[]): string[] {
+  const hasNonceOrHash = sources.some((source) => NONCE_OR_HASH.test(source));
+  const strictDynamic = sources.includes("'strict-dynamic'");
+  return sources.filter((source) => {
+    if (!WEAK_SCRIPT_SOURCES.includes(source)) return false;
+    if (source === "'unsafe-inline'" && hasNonceOrHash) return false;
+    return !(strictDynamic && IGNORED_BY_STRICT_DYNAMIC.includes(source));
+  });
+}
 
 export function cspDirective(csp: string, name: string): string[] | undefined {
   for (const directive of csp.split(";")) {
@@ -27,21 +47,26 @@ export function cspDirective(csp: string, name: string): string[] | undefined {
   return undefined;
 }
 
+/**
+ * What is wrong with the policies as a set, or null. Every policy is enforced,
+ * so one that restricts scripts is enough; the weakest is reported otherwise.
+ */
+function cspProblem(policies: string[]): string | null {
+  const scriptSources = policies.map((policy) => cspDirective(policy, "script-src") ?? cspDirective(policy, "default-src"));
+  if (scriptSources.every((sources) => !sources)) return "The policy sets neither script-src nor default-src.";
+  const weakness = scriptSources.filter((sources): sources is string[] => Boolean(sources)).map(weakScriptSources);
+  if (weakness.some((weak) => weak.length === 0)) return null;
+  return `Script sources allow ${weakness[0]!.join(", ")}.`;
+}
+
 const p01: PassiveDetector = {
   id: "P-01",
   inspect(page) {
     if (!page.isHtmlDocument) return [];
     const csp = page.header("content-security-policy");
     if (!csp) return siteWide(page, "content-security-policy", "No Content-Security-Policy header is sent.");
-
-    const scriptSources = cspDirective(csp, "script-src") ?? cspDirective(csp, "default-src");
-    if (!scriptSources) {
-      return siteWide(page, "content-security-policy", "The policy sets neither script-src nor default-src.");
-    }
-    const weak = scriptSources.filter((source) => WEAK_SCRIPT_SOURCES.includes(source));
-    return weak.length > 0
-      ? siteWide(page, "content-security-policy", `Script sources allow ${weak.join(", ")}.`)
-      : [];
+    const problem = cspProblem(splitPolicies(csp));
+    return problem ? siteWide(page, "content-security-policy", problem) : [];
   },
 };
 
@@ -71,23 +96,32 @@ const p03: PassiveDetector = {
   },
 };
 
+/** frame-ancestors from every policy that sets it; empty when none does. */
+function frameAncestors(csp: string | undefined): string[][] {
+  return splitPolicies(csp ?? "").flatMap((policy) => {
+    const sources = cspDirective(policy, "frame-ancestors");
+    return sources ? [sources] : [];
+  });
+}
+
 const p04: PassiveDetector = {
   id: "P-04",
   inspect(page) {
     if (!page.isHtmlDocument) return [];
-    const ancestors = cspDirective(page.header("content-security-policy") ?? "", "frame-ancestors");
-    const xfo = page.header("x-frame-options")?.trim().toUpperCase();
+    const ancestors = frameAncestors(page.header("content-security-policy"));
+    // A proxy and the app may each send the header; judge the distinct values.
+    const xfo = [...new Set((page.header("x-frame-options") ?? "").split(",").map((value) => value.trim().toUpperCase()).filter(Boolean))];
 
-    if (ancestors) {
-      return ancestors.includes("*")
+    if (ancestors.length > 0) {
+      return ancestors.every((sources) => sources.includes("*"))
         ? siteWide(page, "content-security-policy", "frame-ancestors allows any origin.")
         : [];
     }
-    if (xfo === "DENY" || xfo === "SAMEORIGIN") return [];
+    if (xfo.length > 0 && xfo.every((value) => value === "DENY" || value === "SAMEORIGIN")) return [];
     return siteWide(
       page,
       "x-frame-options",
-      xfo ? `X-Frame-Options is "${xfo}", which browsers ignore.` : "Neither frame-ancestors nor X-Frame-Options is set.",
+      xfo.length > 0 ? `X-Frame-Options is "${xfo.join(", ")}", which browsers ignore.` : "Neither frame-ancestors nor X-Frame-Options is set.",
     );
   },
 };

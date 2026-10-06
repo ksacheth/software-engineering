@@ -32,8 +32,20 @@ function versionAfter(token: string, path: string): string | null {
   return new RegExp(String.raw`${escaped}[\w.-]*?[-.@/]v?${VERSION}(?=[./-]|$)`).exec(path)?.[1] ?? null;
 }
 
-const SCRIPT_SRC = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
-const GENERATOR = /<meta\b[^>]*name\s*=\s*["']generator["'][^>]*content\s*=\s*["']([^"']+)["']/i;
+/** Words a build appends to a library's file name: jquery.slim.min.js, react.production.min.js. */
+const BUILD_WORDS = "min|slim|bundle|production|development|prod|dev|runtime|full|umd|esm|global|browser|with-locales";
+
+/**
+ * True when the file is the library itself. The token must be the whole stem,
+ * optionally followed by a version and build words, so jquery.validate.min.js
+ * or bootstrap-datepicker-1.9.0.js are not mistaken for the core library.
+ */
+function isLibraryFile(file: string, token: string): boolean {
+  const escaped = token.replace(/[-.]/g, "\\$&");
+  return new RegExp(String.raw`^${escaped}(?:[.-](?:${BUILD_WORDS}))*(?:[.-]v?\d+(?:\.\d+){0,3})?(?:[.-](?:${BUILD_WORDS}))*\.js$`).test(file);
+}
+
+const MAX_SRC_LENGTH = 500;
 
 /** Every technology a response reveals: script libraries, the generator meta tag, banner headers. */
 export function fingerprint(page: PageView): Technology[] {
@@ -41,13 +53,14 @@ export function fingerprint(page: PageView): Technology[] {
 }
 
 function scriptLibraries(page: PageView): Technology[] {
-  if (!page.body) return [];
+  const $ = page.html();
+  if (!$) return [];
   const found: Technology[] = [];
-  for (const [, src] of page.body.matchAll(SCRIPT_SRC)) {
-    const path = src!.toLowerCase().split(/[?#]/)[0]!;
+  for (const el of $("script[src]").toArray()) {
+    const src = ($(el).attr("src") ?? "").trim().slice(0, MAX_SRC_LENGTH);
+    const path = src.toLowerCase().split(/[?#]/)[0]!;
     const file = path.split("/").at(-1)!;
-    // The longest matching token is the most specific: react-dom over react.
-    const library = LIBRARIES.filter((l) => file.includes(l.token)).sort((a, b) => b.token.length - a.token.length)[0];
+    const library = LIBRARIES.find((l) => isLibraryFile(file, l.token));
     if (!library) continue;
     found.push({ name: library.name, version: versionAfter(library.token, path), npm: library.npm, source: `script ${src}` });
   }
@@ -55,7 +68,7 @@ function scriptLibraries(page: PageView): Technology[] {
 }
 
 function generator(page: PageView): Technology[] {
-  const content = page.body ? GENERATOR.exec(page.body)?.[1] : undefined;
+  const content = page.html()?.('meta[name="generator" i]').first().attr("content")?.trim().slice(0, MAX_SRC_LENGTH);
   if (!content) return [];
   const version = new RegExp(VERSION).exec(content)?.[1] ?? null;
   return [{ name: content.replace(new RegExp(`\\s*${VERSION}.*$`), "").trim(), version, npm: null, source: "meta generator" }];

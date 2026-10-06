@@ -120,7 +120,7 @@ describe("security.txt (P-30)", () => {
   });
 
   test.each([
-    ["missing", [] as CrawlRecord[], "is not published"],
+    ["missing", [page("/.well-known/security.txt", "Not found", "text/plain", { statusCode: 404 })], "is not published"],
     ["answered by the app shell", [page("/.well-known/security.txt", SPA_SHELL)], "is not published"],
     ["without Contact", [page("/.well-known/security.txt", `Expires: ${validUntil}\n`, "text/plain")], "no Contact"],
     ["expired", [page("/.well-known/security.txt", "Contact: mailto:a@b.co\nExpires: 2020-01-01T00:00:00Z\n", "text/plain")], "expired"],
