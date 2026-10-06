@@ -156,6 +156,15 @@ describe("dispatch pins the connection to the approved IP", () => {
     expect(sent[0]!.url).toContain("93.184.216.34");
   });
 
+  test("a probe's capitalised Host replaces the real one instead of being joined to it", async () => {
+    const { db } = fakeLedger();
+    const { transport, sent } = recordingTransport();
+
+    await dispatch(db, namedRequest({ transport, headers: { Host: "wvsprobe1.invalid", "User-Agent": "probe" } }));
+
+    expect(sent[0]!.headers).toEqual({ host: "wvsprobe1.invalid", "user-agent": "probe" });
+  });
+
   test("never contacts an IP outside the verified set, whatever the name resolves to", async () => {
     const { db, rows } = fakeLedger();
     const { transport, sent } = recordingTransport();

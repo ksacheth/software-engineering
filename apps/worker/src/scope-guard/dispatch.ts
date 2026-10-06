@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 import type { PrismaClient, ScopeDecision } from "@wvs/database";
 import {
   evaluate,
@@ -152,13 +154,13 @@ export async function dispatch(
   if (!decision.allowed) return { ok: false, decision };
 
   const startedAt = Date.now();
-  const pinned = pinTo(req.url, decision.ips[0]!);
   try {
+    const pinned = pinTo(req.url, decision.ips[0]!);
     const transport = req.transport ?? fetchTransport;
     const res = await transport({
       url: pinned.url,
       method: req.method,
-      headers: { host: pinned.host, "user-agent": req.userAgent, ...req.headers },
+      headers: requestHeaders(pinned.host, req.userAgent, req.headers),
       serverName: pinned.serverName,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -221,12 +223,27 @@ function pinTo(raw: string, ip: string): { url: string; host: string; serverName
   const original = new URL(raw);
   const pinned = new URL(raw);
   pinned.hostname = ip.includes(":") ? `[${ip}]` : ip;
-  const isIpLiteral = pinned.hostname === original.hostname;
+  const isIpLiteral = isIP(original.hostname.replace(/^\[|\]$/g, "")) !== 0;
+  // The hostname setter ignores values it cannot parse; an unchanged name
+  // would let fetch resolve DNS itself, so refuse rather than connect.
+  if (pinned.hostname === original.hostname && !isIpLiteral) {
+    throw new Error(`Could not pin ${original.hostname} to ${ip}`);
+  }
   return {
     url: pinned.toString(),
     host: original.host,
     serverName: original.protocol === "https:" && !isIpLiteral ? original.hostname : undefined,
   };
+}
+
+/**
+ * Caller headers override the defaults case-insensitively, so a probe's own
+ * `Host` (A-08) replaces the real one instead of being joined to it.
+ */
+function requestHeaders(host: string, userAgent: string, extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { host, "user-agent": userAgent };
+  for (const [name, value] of Object.entries(extra)) headers[name.toLowerCase()] = value;
+  return headers;
 }
 
 /** Bun's fetch connects to the URL's IP and verifies the certificate against `tls.serverName`. */
