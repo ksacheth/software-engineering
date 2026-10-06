@@ -145,6 +145,16 @@ const p29: PassiveDetector = {
 /** Values that let a browser save what is typed. */
 const SAVES_INPUT = (value: string | undefined) => value === undefined || ["on", ""].includes(value.trim().toLowerCase());
 
+/** Attributes that describe a password field without carrying what was typed or prefilled (ADR-0010). */
+const DESCRIPTIVE_ATTRIBUTES = ["type", "name", "id", "autocomplete"];
+
+function passwordFieldSnippet(attributes: Record<string, string> | undefined): string {
+  const shown = DESCRIPTIVE_ATTRIBUTES.filter((key) => attributes?.[key] !== undefined).map(
+    (key) => `${key}="${attributes![key]!.slice(0, 60)}"`,
+  );
+  return `<input ${shown.join(" ")}>`;
+}
+
 const p31: PassiveDetector = {
   id: "P-31",
   inspect(page) {
@@ -155,13 +165,11 @@ const p31: PassiveDetector = {
       .filter((el) => SAVES_INPUT($(el).attr("autocomplete")) && SAVES_INPUT($(el).closest("form").attr("autocomplete")))
       .map((el) => {
         const name = $(el).attr("name") ?? $(el).attr("id") ?? "password";
-        // The value attribute of a prefilled field is the stored password (ADR-0010).
-        const field = $(el).clone().removeAttr("value");
         return {
           affectedUrl: page.url,
           affectedParameter: name,
           detail: `The password field "${name}" lets the browser save what is typed.`,
-          evidence: { extractedSnippet: $.html(field).slice(0, 200) },
+          evidence: { extractedSnippet: passwordFieldSnippet($(el).attr()) },
         };
       });
   },

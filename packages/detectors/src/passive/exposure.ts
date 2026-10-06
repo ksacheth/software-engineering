@@ -25,7 +25,7 @@ function pathOf(page: PageView): string {
 /** Version control metadata, and the content that proves it is real. */
 const VCS_SIGNATURES: Array<[system: string, path: RegExp, body: RegExp]> = [
   ["Git", /\/\.git(\/|$)/, /^ref: refs\/|^\[core\]|repositoryformatversion|^[0-9a-f]{40}\s*$/m],
-  ["Subversion", /\/\.svn(\/|$)/, /^(?:SQLite format 3|\d+\s*\n\s*dir\b)/m],
+  ["Subversion", /\/\.svn(\/|$)/, /^(?:SQLite format 3|\d{1,6}\n(?:[ \t\r]*\n){0,3}[ \t\r]*dir\b)/m],
   ["Mercurial", /\/\.hg(\/|$)/, /^(?:revlogv1|store|fncache|dotencode)$/m],
 ];
 
@@ -47,7 +47,7 @@ const CONFIG_SIGNATURES: Array<[file: RegExp, body: RegExp]> = [
   [/\/\.env(\.[\w-]+)?$/, /^[A-Z][A-Z0-9_]*[^\S\n]*=[^\S\n]*\S.*$/m],
   [/\/web\.config$/i, /<configuration[\s>]/],
   [/\/(wp-config|config|settings|database)\.php(\.\w+)?$/i, /^\s*<\?php[\s\S]{0,4000}?(define\s*\(|\$\w+\s*=)/],
-  [/\/(application|bootstrap)(-\w+)?\.(ya?ml|properties)$/i, /^\s*(spring|server|datasource)[.:]/m],
+  [/\/(application|bootstrap)(-\w+)?\.(ya?ml|properties)$/i, /^[ \t]*(spring|server|datasource)[.:]/m],
   [/\/appsettings(\.\w+)?\.json$/i, /"ConnectionStrings"|"Logging"\s*:/],
   [/\/(\.npmrc|\.aws\/credentials|\.docker\/config\.json|docker-compose\.ya?ml)$/i, /_authToken|aws_secret_access_key|"auths"|^services:/m],
 ];

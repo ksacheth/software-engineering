@@ -18,7 +18,25 @@ export function parseSetCookie(header: string): ParsedCookie {
   }
   const eq = nameValue.indexOf("=");
   const name = (eq === -1 ? "" : nameValue.slice(0, eq)).trim();
-  return { name, attributes, redacted: [`${name}=[redacted]`, ...parts.map((part) => part.trim())].join("; ") };
+  return { name, attributes, redacted: redactCookie(name, parts) };
+}
+
+/**
+ * Standard attributes, which carry no secret. Anything else is dropped: a
+ * quoted value containing `;` (`sid="a;b"`) splits into fake attributes that
+ * would otherwise echo the rest of the value.
+ */
+const SAFE_ATTRIBUTES = new Set(["path", "domain", "expires", "max-age", "samesite", "secure", "httponly", "priority", "partitioned"]);
+
+/** The cookie as evidence: its name, its standard attributes, and never a value (ADR-0010). */
+function redactCookie(name: string, parts: string[]): string {
+  const shown = parts
+    .map((part) => part.trim())
+    .filter((part) => {
+      const eq = part.indexOf("=");
+      return SAFE_ATTRIBUTES.has((eq === -1 ? part : part.slice(0, eq)).trim().toLowerCase());
+    });
+  return [`${name}=[redacted]`, ...shown].join("; ");
 }
 
 /** A Set-Cookie that only deletes the cookie leaves nothing to protect. */

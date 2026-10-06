@@ -30,6 +30,12 @@ describe("secrets never reach evidence (ADR-0010)", () => {
     }
   });
 
+  test("cookie evidence drops a quoted value's tail and non-standard attributes", () => {
+    const record = page("/", "<p>hi</p>", { "set-cookie": 'sid="abc;tailsecret"; Path=/; Foo=attrsecret' });
+    const [finding] = findingsFor("P-07", record);
+    expect(finding?.evidence?.extractedSnippet).toBe("sid=[redacted]; Path=/");
+  });
+
   test("header findings store only the header concerned", () => {
     const record = page("/", "<p>hi</p>", {
       "set-cookie": "sid=supersecrettoken123; Secure",
@@ -66,6 +72,12 @@ describe("secrets never reach evidence (ADR-0010)", () => {
     expect(finding?.evidence?.extractedSnippet).toContain('name="pw"');
     expect(finding?.evidence?.extractedSnippet).not.toContain("hunter2");
   });
+
+  test("P-31 evidence keeps only descriptive attributes", () => {
+    const body = '<form><input type="password" name="pw" data-initial="hunter2" placeholder="hunter2"></form>';
+    const [finding] = findingsFor("P-31", page("/settings", body));
+    expect(finding?.evidence?.extractedSnippet).toBe('<input type="password" name="pw">');
+  });
 });
 
 describe("hostile bodies are scanned quickly", () => {
@@ -89,6 +101,19 @@ describe("hostile bodies are scanned quickly", () => {
   test("the scanned body is capped", () => {
     const view = toPageView(page("/", "x".repeat(2_000_000)));
     expect(view.body!.length).toBeLessThan(1_000_000);
+  });
+
+  test.each([
+    ["/.svn/entries", "1" + "\n".repeat(KB200)],
+    ["/application.yml", "\n".repeat(KB200)],
+  ])("file-exposure signatures finish fast on %s", (path, body) => {
+    const started = performance.now();
+    run(page(path, body, { "content-type": "text/plain" }));
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  test("the Subversion signature still matches a real entries file", () => {
+    expect(findingsFor("P-21", page("/.svn/entries", "10\n\ndir\n0\n", { "content-type": "text/plain" }))).toHaveLength(1);
   });
 });
 
@@ -117,6 +142,14 @@ describe("false positives", () => {
     expect(findingsFor("P-20", page("/blog/python", trace))).toEqual([]);
     expect(findingsFor("P-20", page("/blog/python", trace, {}, { statusCode: 500 }))).toHaveLength(1);
     expect(findingsFor("P-20", page("/x", "<h1>Whoops, looks like something went wrong.</h1>"))).toHaveLength(1);
+  });
+
+  test("P-20 reports rendered PHP and database errors at any status", () => {
+    const php = "<br />\n<b>Warning</b>:  Undefined variable $x in <b>/var/www/a.php</b> on line <b>3</b><br />";
+    const sql = "<p>You have an error in your SQL syntax; check the manual near '1'</p>";
+    expect(findingsFor("P-20", page("/item", php))).toHaveLength(1);
+    expect(findingsFor("P-20", page("/item", sql))).toHaveLength(1);
+    expect(findingsFor("P-20", page("/missing", "<pre>ActionController::RoutingError</pre>", {}, { statusCode: 404 }))).toHaveLength(1);
   });
 
   test("P-20 keeps only the first trace line", () => {
