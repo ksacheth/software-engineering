@@ -106,6 +106,13 @@ describe("page content (P-25..P-29, P-31)", () => {
     expect(findingsFor("P-28", page("/.git/config", config, "text/plain"))).toEqual([]);
     const contact = "Contact: security@shop.example.com: reply within a day";
     expect(findingsFor("P-28", page("/", contact, "text/plain")).map((f) => f.affectedParameter)).toEqual(["security@shop.example.com"]);
+    const remotes = "deploy@git.shop.example.com:/srv/site.git\nci@git.shop.example.com:site.git\n";
+    expect(findingsFor("P-28", page("/remotes.txt", remotes, "text/plain"))).toEqual([]);
+  });
+
+  test("P-28 still reports an address in an email:password dump", () => {
+    const dump = "jane.doe@shop.example.com:Password123\n";
+    expect(findingsFor("P-28", page("/dump.txt", dump, "text/plain")).map((f) => f.affectedParameter)).toEqual(["jane.doe@shop.example.com"]);
   });
 
   test("P-29 flags a cacheable account page but not one sent with no-store", () => {

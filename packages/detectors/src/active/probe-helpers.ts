@@ -11,17 +11,15 @@ export function withParameter(url: string, parameter: string, value: string): st
   return probed.toString();
 }
 
-/** The URL a parameter was first seen on, preferring an HTML page (A-01 needs
- *  an HTML reply) over any other crawled URL, then falling back to the first
- *  crawled page (always in scope), then the origin root. */
-export function targetFor(parameter: string, surface: ActiveSurface): string {
+/** The URL a parameter was first seen on, falling back to the first crawled
+ *  page (always in scope), then the origin root. `preferHtml` picks an HTML
+ *  page carrying the parameter first, for a detector that needs an HTML reply
+ *  (A-01); the others keep the first URL seen, which may be a redirect or a
+ *  raw file (A-04, A-11). */
+export function targetFor(parameter: string, surface: ActiveSurface, preferHtml = false): string {
   const carries = (url: string) => new URL(url).searchParams.has(parameter);
-  return (
-    surface.entryUrls.find(carries) ??
-    surface.parameterUrls.find(carries) ??
-    surface.entryUrls[0] ??
-    `${surface.origin}/`
-  );
+  const seenOn = (preferHtml ? surface.entryUrls.find(carries) : undefined) ?? surface.parameterUrls.find(carries);
+  return seenOn ?? surface.entryUrls[0] ?? `${surface.origin}/`;
 }
 
 /** Parameter names to probe: those seen in page URLs first (they are real

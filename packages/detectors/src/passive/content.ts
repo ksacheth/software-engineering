@@ -102,13 +102,17 @@ const EMAIL = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,255}\.[A-Z]{2,24}\b/gi;
 /** Asset names (logo@2x.png) and documentation addresses are not personal data. */
 const NOT_AN_ADDRESS = /\.(png|jpe?g|gif|svg|webp|avif|ico|js|css|map)$|@(example|test|localhost)\.|^(user|name|email|you)@/i;
 
+/** The path of an SCP-style remote after `user@host`: `:org/repo`, `:/srv/repo`
+ *  or `:repo.git`. A bare `:value`, as in an `email:password` dump, is not one. */
+const REMOTE_PATH = /^:(?:[\w.~-]*\/|[\w.~-]+\.git\b)/;
+
 /**
  * `git@github.com:org/repo` and `ssh://git@host/` name a login on a host, not a
- * mailbox: a match followed by ":path", or written as a URL's user part.
+ * mailbox: a match followed by a remote path, or written as a URL's user part.
  */
 function isLoginOnHost(body: string, match: RegExpExecArray): boolean {
   const end = match.index + match[0].length;
-  return /^:[^\s:]/.test(body.slice(end, end + 2)) || body.slice(Math.max(0, match.index - 3), match.index) === "://";
+  return REMOTE_PATH.test(body.slice(end, end + 256)) || body.slice(Math.max(0, match.index - 3), match.index) === "://";
 }
 
 const p28: PassiveDetector = {

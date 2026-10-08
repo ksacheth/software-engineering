@@ -150,6 +150,22 @@ describe("injection probes", () => {
     expect(await idsFrom(ctx)).toContain("A-01");
   });
 
+  test("A-11 keeps the raw-file URL crawled first even when an HTML page shares the parameter", async () => {
+    const { probe } = fixture({
+      "/download": (_req, url) =>
+        /etc\/passwd/.test(url.searchParams.get("file") ?? "")
+          ? { headers: { "content-type": "text/plain" }, body: "root:x:0:0:root:/root:/bin/bash" }
+          : { status: 404, body: "Not found" },
+      "/preview": { body: "<p>Preview</p>" },
+    });
+    const ctx = context(probe, {
+      parameters: ["file"],
+      entryUrls: [`${ORIGIN}/`, `${ORIGIN}/preview?file=report.txt`],
+      parameterUrls: [`${ORIGIN}/download?file=report.txt`, `${ORIGIN}/preview?file=report.txt`],
+    });
+    expect(await idsFrom(ctx)).toContain("A-11");
+  });
+
   test("A-11 probes a parameter seen only on a URL that served plain text", async () => {
     const { probe } = fixture({
       "/download": (_req, url) =>

@@ -11,10 +11,11 @@ import { isHtml, safeProbe, selectParameters, targetFor, withParameter } from ".
 async function perParameter(
   context: ActiveContext,
   probe: (context: ActiveContext, parameter: string, target: string) => Promise<Observation | null>,
+  { preferHtml = false }: { preferHtml?: boolean } = {},
 ): Promise<Observation[]> {
   const observations: Observation[] = [];
   for (const parameter of selectParameters(context.surface)) {
-    const observation = await probe(context, parameter, targetFor(parameter, context.surface));
+    const observation = await probe(context, parameter, targetFor(parameter, context.surface, preferHtml));
     if (observation) observations.push(observation);
   }
   return observations;
@@ -41,7 +42,7 @@ const a01: ActiveDetector = {
         detail: `The value of "${parameter}" is reflected into the page without encoding its HTML-significant characters.`,
         evidence: { extractedSnippet: `reflected: ${probeValue}` },
       };
-    }),
+    }, { preferHtml: true }),
 };
 
 /** A single quote breaks unparameterised SQL; these are the resulting errors. */
