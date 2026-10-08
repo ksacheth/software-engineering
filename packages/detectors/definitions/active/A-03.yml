@@ -1,4 +1,5 @@
 id: A-03
+version: "1.0.0"
 name: "SQL Injection (boolean-based)"
 type: active
 cwe: CWE-89

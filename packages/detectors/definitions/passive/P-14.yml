@@ -1,4 +1,5 @@
 id: P-14
+version: "1.0.0"
 name: "Certificate hostname mismatch"
 type: passive
 cwe: CWE-297

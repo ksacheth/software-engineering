@@ -1,4 +1,5 @@
 id: P-16
+version: "1.0.0"
 name: "Weak certificate signature algorithm or key size"
 type: passive
 cwe: CWE-327

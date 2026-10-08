@@ -1,4 +1,5 @@
 id: A-12
+version: "1.0.0"
 name: "Server-side template injection (detection only)"
 type: active
 cwe: CWE-1336

@@ -24,10 +24,9 @@ function redirectHost(location: string, requestUrl: string): string | null {
 const a04: ActiveDetector = {
   id: "A-04",
   run: async (context) => {
-    const { entryUrls, origin } = context.surface;
     const observations: Observation[] = [];
     for (const parameter of selectParameters(context.surface, (name) => REDIRECT_PARAMS.test(name))) {
-      const target = targetFor(parameter, entryUrls, origin);
+      const target = targetFor(parameter, context.surface);
       const probeUrl = withParameter(target, parameter, `https://${SENTINEL_HOST}/`);
       const response = await safeProbe(context, { url: probeUrl, method: "GET" });
       if (!response.ok || !isRedirect(response)) continue;

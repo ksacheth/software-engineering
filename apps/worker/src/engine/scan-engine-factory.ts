@@ -1,9 +1,9 @@
-import { prisma } from "@wvs/database";
+import { Prisma, prisma } from "@wvs/database";
 import type { ScanJob, Target } from "@wvs/database";
 import type { BlocklistEntry } from "@wvs/scope-guard";
 import type { ScanProfile } from "@wvs/shared";
 import { isKillSwitchEngaged, KILL_SWITCH_SETTING_KEY } from "@wvs/shared";
-import { loadDefinitions, type DetectorCatalogue } from "@wvs/detectors";
+import { detectorVersions, loadDefinitions, type DetectorCatalogue } from "@wvs/detectors";
 
 import { renderJsEnabled, scannerUserAgent } from "../config.js";
 import { launchPlaywrightRenderer } from "../crawler/playwright-renderer.js";
@@ -72,6 +72,17 @@ async function loadResume(scanJobId: string): Promise<NonNullable<EngineInput["r
   return { requestsMade, pagesCrawled: 0, seenUrls: [] };
 }
 
+/**
+ * Records which detector versions the scan runs (FR-3.12). Written once: a scan
+ * resumed after a worker upgrade keeps the versions it started with.
+ */
+async function recordDetectorVersions(scanJob: ScanJob, catalogue: DetectorCatalogue): Promise<void> {
+  await prisma.scanJob.updateMany({
+    where: { id: scanJob.id, detectorVersions: { equals: Prisma.DbNull } },
+    data: { detectorVersions: detectorVersions(catalogue, scanJob.profile as ScanProfile) },
+  });
+}
+
 /** Builds the orchestrator engine: loads the catalogue once, then crawls and
  *  detects each scan against its target's scope snapshot. */
 export async function createScanEngine(): Promise<OrchestratorEngine> {
@@ -80,7 +91,11 @@ export async function createScanEngine(): Promise<OrchestratorEngine> {
   const launchRenderer = renderJsEnabled() ? launchPlaywrightRenderer : undefined;
 
   return async (scanJob: ScanJob & { target: Target }) => {
-    const [adminBlocklist, resumeFrom] = await Promise.all([loadBlocklist(), loadResume(scanJob.id)]);
+    const [adminBlocklist, resumeFrom] = await Promise.all([
+      loadBlocklist(),
+      loadResume(scanJob.id),
+      recordDetectorVersions(scanJob, catalogue),
+    ]);
     const result = await runScanEngine(
       prisma,
       {

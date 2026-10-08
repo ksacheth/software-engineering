@@ -10,6 +10,7 @@ import schema from "../schema/detector.schema.json" with { type: "json" };
 
 export interface DetectorDefinition {
   id: string;
+  version: string;
   name: string;
   type: "passive" | "active";
   cwe: string | null;
@@ -66,6 +67,11 @@ function missingDefinitions(catalogue: DetectorCatalogue): string[] {
 /** The definitions a scan of this profile runs. */
 export function definitionsForProfile(catalogue: DetectorCatalogue, profile: ScanProfile): DetectorDefinition[] {
   return [...catalogue.values()].filter((definition) => definition.profiles.includes(profile));
+}
+
+/** Detector id to version for every detector a scan of this profile runs (FR-3.12). */
+export function detectorVersions(catalogue: DetectorCatalogue, profile: ScanProfile): Record<string, string> {
+  return Object.fromEntries(definitionsForProfile(catalogue, profile).map((definition) => [definition.id, definition.version]));
 }
 
 function checkDefinition(type: "passive" | "active", file: string, value: unknown): DetectorDefinition | string {

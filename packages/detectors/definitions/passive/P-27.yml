@@ -1,4 +1,5 @@
 id: P-27
+version: "1.0.0"
 name: "Secret or credential pattern in response body"
 type: passive
 cwe: CWE-540

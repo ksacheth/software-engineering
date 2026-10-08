@@ -1,4 +1,5 @@
 id: P-05
+version: "1.0.0"
 name: "Missing or overly permissive Referrer-Policy"
 type: passive
 cwe: CWE-200

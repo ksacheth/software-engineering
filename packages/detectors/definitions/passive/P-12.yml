@@ -1,4 +1,5 @@
 id: P-12
+version: "1.0.0"
 name: "Weak cipher suite offered"
 type: passive
 cwe: CWE-327

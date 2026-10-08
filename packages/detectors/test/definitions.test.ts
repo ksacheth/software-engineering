@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DEFINITIONS_DIR, definitionsForProfile, loadDefinitions } from "../src";
+import { DEFINITIONS_DIR, definitionsForProfile, detectorVersions, loadDefinitions } from "../src";
 
 const SRS = join(import.meta.dir, "../../../docs/srs/SRS.md");
 const P01 = await readFile(join(DEFINITIONS_DIR, "passive/P-01.yml"), "utf8");
@@ -54,6 +54,14 @@ describe("detector catalogue", () => {
   test("a STANDARD scan runs every detector", async () => {
     expect(definitionsForProfile(await loadDefinitions(), "STANDARD").length).toBe(45);
   });
+
+  test("records the version of each detector a profile runs", async () => {
+    const catalogue = await loadDefinitions();
+    const passive = detectorVersions(catalogue, "PASSIVE");
+    expect(Object.keys(passive)).toHaveLength(31);
+    expect(passive["A-01"]).toBeUndefined();
+    expect(detectorVersions(catalogue, "STANDARD")["A-01"]).toMatch(/^\d+\.\d+\.\d+$/);
+  });
 });
 
 describe("loadDefinitions", () => {
@@ -74,6 +82,11 @@ describe("loadDefinitions", () => {
     const error = await loadDefinitions(dir).catch((e: Error) => e.message);
     expect(error).toContain("P-01.yml");
     expect(error).toContain("P-02.yml");
+  });
+
+  test("rejects a definition without a version", async () => {
+    const dir = await catalogueWith({ "passive/P-01.yml": P01.replace(/^version:.*\n/m, "") });
+    await expect(loadDefinitions(dir)).rejects.toThrow("P-01.yml");
   });
 
   test("rejects an id that does not match its file name", async () => {

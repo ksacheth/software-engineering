@@ -1,4 +1,5 @@
 id: P-03
+version: "1.0.0"
 name: "Missing X-Content-Type-Options: nosniff"
 type: passive
 cwe: CWE-693

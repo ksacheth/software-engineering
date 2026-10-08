@@ -1,4 +1,5 @@
 id: P-06
+version: "1.0.0"
 name: "Missing Permissions-Policy"
 type: passive
 cwe: CWE-693

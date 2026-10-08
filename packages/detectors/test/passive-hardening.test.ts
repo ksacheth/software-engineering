@@ -59,11 +59,11 @@ describe("secrets never reach evidence (ADR-0010)", () => {
   });
 
   test("P-24 stores no body content", () => {
-    const body = "DB_PASSWORD=hunter2\nAPI_TOKEN=abcdef\n";
-    const [finding] = findingsFor("P-24", page("/.env.old", body, { "content-type": "application/octet-stream" }));
+    const body = "INSERT INTO users VALUES ('admin', 'hunter2');\n";
+    const [finding] = findingsFor("P-24", page("/dump.sql.old", body, { "content-type": "application/octet-stream" }));
     expect(finding).toBeDefined();
     expect(JSON.stringify(finding?.evidence)).not.toContain("hunter2");
-    expect(finding?.evidence?.extractedSnippet).toContain("/.env.old");
+    expect(finding?.evidence?.extractedSnippet).toContain("/dump.sql.old");
   });
 
   test("P-31 strips the value attribute of a prefilled password field", () => {

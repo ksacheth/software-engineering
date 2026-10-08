@@ -49,6 +49,13 @@ describe("file exposure (P-21..P-24)", () => {
     expect(finding?.evidence?.extractedSnippet).toBe("DB_PASSWORD= [redacted]");
   });
 
+  test("a backup of a configuration file is reported once, as P-22", () => {
+    const backup = page("/config.php.bak", "<?php\ndefine('DB_HOST', 'db');\n", "application/octet-stream");
+    expect(findingsFor("P-22", backup)).toHaveLength(1);
+    expect(findingsFor("P-24", backup)).toEqual([]);
+    expect(findingsFor("P-24", page("/notes.txt.bak", "shopping list", "application/octet-stream"))).toHaveLength(1);
+  });
+
   test("a 404 for a sensitive path is not an exposure", () => {
     expect(findingsFor("P-21", page("/.git/HEAD", "ref: refs/heads/main", "text/plain", { statusCode: 404 }))).toEqual([]);
   });
@@ -92,6 +99,20 @@ describe("page content (P-25..P-29, P-31)", () => {
     const body = '<a href="mailto:jane.doe@shop.example.com">Jane</a><img src="logo@2x.png"> support@example.com';
     const findings = findingsFor("P-28", page("/", body), page("/team", body));
     expect(findings.map((f) => f.affectedParameter)).toEqual(["jane.doe@shop.example.com"]);
+  });
+
+  test("P-28 does not read an SSH remote or a URL's user part as an address", () => {
+    const config = '[remote "origin"]\n\turl = git@github.com:shop/site.git\n\tpushurl = ssh://deploy@git.shop.example.com/site.git\n';
+    expect(findingsFor("P-28", page("/.git/config", config, "text/plain"))).toEqual([]);
+    const contact = "Contact: security@shop.example.com: reply within a day";
+    expect(findingsFor("P-28", page("/", contact, "text/plain")).map((f) => f.affectedParameter)).toEqual(["security@shop.example.com"]);
+    const remotes = "deploy@git.shop.example.com:/srv/site.git\nci@git.shop.example.com:site.git\n";
+    expect(findingsFor("P-28", page("/remotes.txt", remotes, "text/plain"))).toEqual([]);
+  });
+
+  test("P-28 still reports an address in an email:password dump", () => {
+    const dump = "jane.doe@shop.example.com:Password123\n";
+    expect(findingsFor("P-28", page("/dump.txt", dump, "text/plain")).map((f) => f.affectedParameter)).toEqual(["jane.doe@shop.example.com"]);
   });
 
   test("P-29 flags a cacheable account page but not one sent with no-store", () => {

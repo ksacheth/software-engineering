@@ -1,4 +1,5 @@
 id: P-30
+version: "1.0.0"
 name: "Missing or malformed security.txt (RFC 9116)"
 type: passive
 cwe: null

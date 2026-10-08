@@ -25,6 +25,10 @@ export interface ActiveSurface {
   origin: string;
   /** Pages that returned HTML, used to pick realistic probe targets. */
   entryUrls: string[];
+  /** Every crawled URL with a query string, whatever it returned. A redirect
+   *  (A-04) or a raw file (A-11) is where its parameter is read, so these are
+   *  not limited to HTML pages. */
+  parameterUrls: string[];
   /** Query parameter names seen across the crawl (URLs and form fields); each is probed once, up to a cap. */
   parameters: string[];
   /** Forms found during the crawl (A-10). */

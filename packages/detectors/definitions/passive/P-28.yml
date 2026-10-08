@@ -1,4 +1,5 @@
 id: P-28
+version: "1.0.0"
 name: "Email or personal data disclosure in response"
 type: passive
 cwe: CWE-200
