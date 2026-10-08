@@ -138,6 +138,18 @@ describe("injection probes", () => {
     expect(await idsFrom(context(probe))).toContain("A-11");
   });
 
+  test("A-01 prefers the HTML page carrying a parameter over a JSON endpoint crawled first", async () => {
+    const { probe } = fixture({
+      "/api/items": { headers: { "content-type": "application/json" }, body: "[]" },
+      "/search": (_req, url) => ({ body: `<p>${url.searchParams.get("q")}</p>` }),
+    });
+    const ctx = context(probe, {
+      entryUrls: [`${ORIGIN}/`, `${ORIGIN}/search?q=x`],
+      parameterUrls: [`${ORIGIN}/api/items?q=x`, `${ORIGIN}/search?q=x`],
+    });
+    expect(await idsFrom(ctx)).toContain("A-01");
+  });
+
   test("A-11 probes a parameter seen only on a URL that served plain text", async () => {
     const { probe } = fixture({
       "/download": (_req, url) =>
