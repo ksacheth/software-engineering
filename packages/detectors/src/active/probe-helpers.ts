@@ -13,14 +13,18 @@ export function withParameter(url: string, parameter: string, value: string): st
 
 /** The URL a parameter was first seen on, falling back to the first crawled
  *  page (always in scope), then the origin root. */
-export function targetFor(parameter: string, entryUrls: string[], origin: string): string {
-  return entryUrls.find((url) => new URL(url).searchParams.has(parameter)) ?? entryUrls[0] ?? `${origin}/`;
+export function targetFor(parameter: string, surface: ActiveSurface): string {
+  return (
+    surface.parameterUrls.find((url) => new URL(url).searchParams.has(parameter)) ??
+    surface.entryUrls[0] ??
+    `${surface.origin}/`
+  );
 }
 
 /** Parameter names to probe: those seen in page URLs first (they are real
  *  query inputs), then form-only names, capped at MAX_PARAMETERS. */
 export function selectParameters(surface: ActiveSurface, accept: (name: string) => boolean = () => true): string[] {
-  const inUrls = new Set(surface.entryUrls.flatMap((url) => [...new URL(url).searchParams.keys()]));
+  const inUrls = new Set(surface.parameterUrls.flatMap((url) => [...new URL(url).searchParams.keys()]));
   const candidates = surface.parameters.filter(accept);
   const ordered = [...candidates.filter((name) => inUrls.has(name)), ...candidates.filter((name) => !inUrls.has(name))];
   return ordered.slice(0, MAX_PARAMETERS);

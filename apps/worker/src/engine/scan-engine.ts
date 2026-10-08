@@ -270,6 +270,7 @@ async function runScanActiveDetectors({ db, catalogue, input, limiter, records, 
   const surface: ActiveSurface = {
     origin: input.scope.origin,
     entryUrls: records.filter((r) => r.contentType?.includes("html")).map((r) => r.url),
+    parameterUrls: records.map((r) => r.url).filter((url) => new URL(url).search !== ""),
     parameters: collectParameters(records),
     forms: collectForms(records),
     adminUrls: records.map((r) => r.url).filter((url) => ADMIN_URL.test(url)),

@@ -41,10 +41,14 @@ function fixture(routes: Record<string, Reply | ((req: ProbeRequest, url: URL) =
   return { probe, requests };
 }
 
+/** Parameter URLs default to the entry pages, as on a site whose query
+ *  inputs all return HTML. */
 function surface(overrides: Partial<ActiveSurface> = {}): ActiveSurface {
+  const entryUrls = overrides.entryUrls ?? [`${ORIGIN}/search?q=hello`];
   return {
     origin: ORIGIN,
-    entryUrls: [`${ORIGIN}/search?q=hello`],
+    entryUrls,
+    parameterUrls: entryUrls,
     parameters: ["q"],
     forms: [],
     adminUrls: [],
@@ -132,6 +136,21 @@ describe("injection probes", () => {
       "/search": (_req, url) => (/etc\/passwd/.test(url.searchParams.get("q") ?? "") ? { body: "root:x:0:0:root:/root:/bin/bash" } : { body: "ok" }),
     });
     expect(await idsFrom(context(probe))).toContain("A-11");
+  });
+
+  test("A-11 probes a parameter seen only on a URL that served plain text", async () => {
+    const { probe } = fixture({
+      "/download": (_req, url) =>
+        /etc\/passwd/.test(url.searchParams.get("file") ?? "")
+          ? { headers: { "content-type": "text/plain" }, body: "root:x:0:0:root:/root:/bin/bash" }
+          : { status: 404, body: "Not found" },
+    });
+    const ctx = context(probe, {
+      parameters: ["file"],
+      entryUrls: [`${ORIGIN}/`],
+      parameterUrls: [`${ORIGIN}/download?file=report.txt`],
+    });
+    expect(await idsFrom(ctx)).toContain("A-11");
   });
 
   test("A-12 flags server-side evaluation but not a page that echoes the expression", async () => {
@@ -315,6 +334,19 @@ describe("parameter volume", () => {
 });
 
 describe("A-04 redirects", () => {
+  test("probes a redirect endpoint the crawl saw only as a 302, not the first page", async () => {
+    const { probe, requests } = fixture({
+      "/go": (_req, url) => ({ status: 302, headers: { location: url.searchParams.get("url") ?? "/" } }),
+    });
+    const ctx = context(probe, {
+      parameters: ["url"],
+      entryUrls: [`${ORIGIN}/`],
+      parameterUrls: [`${ORIGIN}/go?url=%2F`],
+    });
+    expect(await idsFrom(ctx)).toContain("A-04");
+    expect(requests.some((r) => new URL(r.url).pathname === "/" && r.url.includes("url="))).toBe(false);
+  });
+
   test("a /login?next= redirect that merely carries the sentinel is not an open redirect", async () => {
     const { probe } = fixture({
       "/go": (_req, url) => ({ status: 302, headers: { location: `/login?next=${encodeURIComponent(url.toString())}` } }),

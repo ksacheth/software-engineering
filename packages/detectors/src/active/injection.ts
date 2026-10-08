@@ -12,10 +12,9 @@ async function perParameter(
   context: ActiveContext,
   probe: (context: ActiveContext, parameter: string, target: string) => Promise<Observation | null>,
 ): Promise<Observation[]> {
-  const { entryUrls, origin } = context.surface;
   const observations: Observation[] = [];
   for (const parameter of selectParameters(context.surface)) {
-    const observation = await probe(context, parameter, targetFor(parameter, entryUrls, origin));
+    const observation = await probe(context, parameter, targetFor(parameter, context.surface));
     if (observation) observations.push(observation);
   }
   return observations;
