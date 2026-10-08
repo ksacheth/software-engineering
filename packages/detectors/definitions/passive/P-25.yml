@@ -1,4 +1,5 @@
 id: P-25
+version: "1.0.0"
 name: "Mixed active content on HTTPS page"
 type: passive
 cwe: CWE-311

@@ -1,4 +1,5 @@
 id: P-13
+version: "1.0.0"
 name: "Certificate expired, not yet valid, or expiring within 30 days"
 type: passive
 cwe: CWE-324

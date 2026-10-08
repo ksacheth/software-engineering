@@ -1,4 +1,5 @@
 id: P-23
+version: "1.0.0"
 name: "Directory listing enabled"
 type: passive
 cwe: CWE-548

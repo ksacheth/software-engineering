@@ -1,4 +1,5 @@
 id: A-02
+version: "1.0.0"
 name: "SQL Injection (error-based)"
 type: active
 cwe: CWE-89

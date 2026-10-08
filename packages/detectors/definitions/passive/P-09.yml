@@ -1,4 +1,5 @@
 id: P-09
+version: "1.0.0"
 name: "Cookie without or with weak SameSite"
 type: passive
 cwe: CWE-1275

@@ -1,4 +1,5 @@
 id: P-31
+version: "1.0.0"
 name: "Autocomplete enabled on password or sensitive field"
 type: passive
 cwe: CWE-522

@@ -1,4 +1,5 @@
 id: A-05
+version: "1.0.0"
 name: "CORS misconfiguration"
 type: active
 cwe: CWE-942

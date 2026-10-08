@@ -1,4 +1,5 @@
 id: P-26
+version: "1.0.0"
 name: "External script without Subresource Integrity"
 type: passive
 cwe: CWE-353

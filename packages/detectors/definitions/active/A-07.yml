@@ -1,4 +1,5 @@
 id: A-07
+version: "1.0.0"
 name: "Dangerous HTTP methods enabled"
 type: active
 cwe: CWE-650

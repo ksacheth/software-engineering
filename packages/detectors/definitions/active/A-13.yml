@@ -1,4 +1,5 @@
 id: A-13
+version: "1.0.0"
 name: "Unauthenticated access to administrative interface"
 type: active
 cwe: CWE-306

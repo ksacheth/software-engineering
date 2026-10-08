@@ -1,4 +1,5 @@
 id: P-02
+version: "1.0.0"
 name: "Missing HTTP Strict-Transport-Security"
 type: passive
 cwe: CWE-319

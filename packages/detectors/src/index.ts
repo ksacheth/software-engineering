@@ -1,6 +1,7 @@
 export {
   DEFINITIONS_DIR,
   definitionsForProfile,
+  detectorVersions,
   loadDefinitions,
   type DetectorCatalogue,
   type DetectorDefinition,

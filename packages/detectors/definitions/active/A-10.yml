@@ -1,4 +1,5 @@
 id: A-10
+version: "1.0.0"
 name: "Missing anti-CSRF token on state-changing form"
 type: active
 cwe: CWE-352

@@ -1,4 +1,5 @@
 id: A-09
+version: "1.0.0"
 name: "Sensitive file and directory enumeration"
 type: active
 cwe: CWE-538

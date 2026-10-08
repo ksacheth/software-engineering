@@ -6,6 +6,7 @@
   "type": "object",
   "required": [
     "id",
+    "version",
     "name",
     "type",
     "cwe",
@@ -23,6 +24,11 @@
       "description": "Appendix B identifier. P- detectors are passive, A- detectors are safe-active.",
       "type": "string",
       "pattern": "^[PA]-\\d{2}$"
+    },
+    "version": {
+      "description": "Semantic version of the detector's logic. Bump it when what the detector reports changes, so a scan's recorded versions say which logic produced its findings (FR-3.12).",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
     },
     "name": { "type": "string", "minLength": 1 },
     "type": { "enum": ["passive", "active"] },

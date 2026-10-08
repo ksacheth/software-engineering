@@ -1,4 +1,5 @@
 id: P-04
+version: "1.0.0"
 name: "Missing or permissive frame-ancestors / X-Frame-Options"
 type: passive
 cwe: CWE-1021

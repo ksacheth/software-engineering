@@ -1,4 +1,5 @@
 id: P-17
+version: "1.0.0"
 name: "Server / framework version disclosure in headers"
 type: passive
 cwe: CWE-200

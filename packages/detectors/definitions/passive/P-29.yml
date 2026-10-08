@@ -1,4 +1,5 @@
 id: P-29
+version: "1.0.0"
 name: "Sensitive page cacheable by intermediaries"
 type: passive
 cwe: CWE-525

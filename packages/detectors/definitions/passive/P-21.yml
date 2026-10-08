@@ -1,4 +1,5 @@
 id: P-21
+version: "1.0.0"
 name: "Exposed version control directory (.git, .svn, .hg)"
 type: passive
 cwe: CWE-527

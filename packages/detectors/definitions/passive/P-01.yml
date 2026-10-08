@@ -1,4 +1,5 @@
 id: P-01
+version: "1.0.0"
 name: "Missing or weak Content-Security-Policy"
 type: passive
 cwe: CWE-693

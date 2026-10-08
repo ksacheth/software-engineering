@@ -1,4 +1,5 @@
 id: P-08
+version: "1.0.0"
 name: "Cookie without HttpOnly attribute"
 type: passive
 cwe: CWE-1004

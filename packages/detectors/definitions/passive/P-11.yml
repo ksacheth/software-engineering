@@ -1,4 +1,5 @@
 id: P-11
+version: "1.0.0"
 name: "Deprecated TLS protocol offered (TLS 1.0 / 1.1 / SSLv3)"
 type: passive
 cwe: CWE-327
