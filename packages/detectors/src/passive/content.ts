@@ -102,11 +102,26 @@ const EMAIL = /\b[A-Z0-9._%+-]{1,64}@[A-Z0-9.-]{1,255}\.[A-Z]{2,24}\b/gi;
 /** Asset names (logo@2x.png) and documentation addresses are not personal data. */
 const NOT_AN_ADDRESS = /\.(png|jpe?g|gif|svg|webp|avif|ico|js|css|map)$|@(example|test|localhost)\.|^(user|name|email|you)@/i;
 
+/**
+ * `git@github.com:org/repo` and `ssh://git@host/` name a login on a host, not a
+ * mailbox: a match followed by ":path", or written as a URL's user part.
+ */
+function isLoginOnHost(body: string, match: RegExpExecArray): boolean {
+  const end = match.index + match[0].length;
+  return /^:[^\s:]/.test(body.slice(end, end + 2)) || body.slice(Math.max(0, match.index - 3), match.index) === "://";
+}
+
 const p28: PassiveDetector = {
   id: "P-28",
   inspect(page) {
-    if (!page.body || !/^(text\/|application\/(json|xml))/.test(page.contentType)) return [];
-    const addresses = new Set((page.body.match(EMAIL) ?? []).map((a) => a.toLowerCase()).filter((a) => !NOT_AN_ADDRESS.test(a)));
+    const body = page.body;
+    if (!body || !/^(text\/|application\/(json|xml))/.test(page.contentType)) return [];
+    const addresses = new Set(
+      [...body.matchAll(EMAIL)]
+        .filter((match) => !isLoginOnHost(body, match))
+        .map(([address]) => address.toLowerCase())
+        .filter((address) => !NOT_AN_ADDRESS.test(address)),
+    );
     return [...addresses].map((address) => ({
       affectedUrl: `${page.origin}/`,
       affectedParameter: address,

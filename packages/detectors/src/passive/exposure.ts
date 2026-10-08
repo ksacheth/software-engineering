@@ -52,16 +52,22 @@ const CONFIG_SIGNATURES: Array<[file: RegExp, body: RegExp]> = [
   [/\/(\.npmrc|\.aws\/credentials|\.docker\/config\.json|docker-compose\.ya?ml)$/i, /_authToken|aws_secret_access_key|"auths"|^services:/m],
 ];
 
+/** The line that proves `page` is a configuration file served raw, or null. */
+function configMatch(page: PageView): RegExpExecArray | null {
+  if (!served(page) || page.contentType.startsWith("text/html")) return null;
+  for (const [file, body] of CONFIG_SIGNATURES) {
+    if (!file.test(pathOf(page))) continue;
+    const match = body.exec(page.body!);
+    if (match) return match;
+  }
+  return null;
+}
+
 const p22: PassiveDetector = {
   id: "P-22",
   inspect(page) {
-    if (!served(page) || page.contentType.startsWith("text/html")) return [];
-    for (const [file, body] of CONFIG_SIGNATURES) {
-      if (!file.test(pathOf(page))) continue;
-      const match = body.exec(page.body!);
-      if (match) return exposed(page, `The configuration file ${pathOf(page)} is served raw.`, redactValue(match));
-    }
-    return [];
+    const match = configMatch(page);
+    return match ? exposed(page, `The configuration file ${pathOf(page)} is served raw.`, redactValue(match)) : [];
   },
 };
 
@@ -98,6 +104,9 @@ const p24: PassiveDetector = {
     // An HTML answer is most likely a catch-all route; the risk is source or
     // data served raw, which never comes back as text/html.
     if (!served(page) || !BACKUP_SUFFIX.test(pathOf(page)) || page.contentType.startsWith("text/html")) return [];
+    // A backup that P-22 proves is a configuration file (config.php.bak,
+    // .env.old) is reported once, there, with the stronger evidence.
+    if (configMatch(page)) return [];
     const original = pathOf(page).replace(BACKUP_SUFFIX, "");
     // A backup of a config file is mostly credentials, so no body content is kept (ADR-0010).
     return [
