@@ -117,7 +117,15 @@ cd software-engineering
 cp .env.example .env
 ```
 
-Ensure `.env` has appropriate values. The default configuration connects to the local Docker Compose services.
+Fill in the two secrets. The API refuses to start without `BETTER_AUTH_SECRET`, and the `wvs_app` password must be the same in `DATABASE_URL` and `WVS_APP_PASSWORD`:
+
+```bash
+SECRET=$(openssl rand -base64 32)
+PASS=$(openssl rand -hex 24)
+perl -pi -e "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=\"$SECRET\"|; s|APP_PASSWORD_HERE|$PASS|g" .env
+```
+
+The rest of the defaults connect to the local Docker Compose services. Root scripts pass this `.env` to every workspace (`bun --env-file=.env`), so run them from the repo root.
 
 ### 2. Start Infrastructure Services
 
@@ -143,18 +151,17 @@ bun install
 
 ### 4. Setup the Database
 
-Generate the Prisma Client and synchronize the database schema:
+Generate the Prisma Client, apply the migrations and provision the least-privilege `wvs_app` role the app connects as:
 
 ```bash
 # Generate Prisma client types
 bun run db:generate
 
-# Push schema directly to development database
-bun run db:push
-
-# (Or run migrations)
-# bun run db:migrate:dev
+# Apply migrations, then create wvs_app with WVS_APP_PASSWORD
+bun run db:migrate:deploy
 ```
+
+`db:push` does not create `wvs_app`, so the app cannot log in after it alone.
 
 ### 5. Start Development Servers
 

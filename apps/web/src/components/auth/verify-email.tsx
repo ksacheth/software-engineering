@@ -12,6 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldDescription } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { absoluteAppUrl } from "@/lib/auth/app-url";
+import {
+  RESEND_COOLDOWN_SECONDS,
+  useResendCooldown,
+} from "@/lib/auth/use-resend-cooldown";
 import { cn } from "@/lib/utils";
 import { OpenEmailButton } from "./open-email-button";
 import { OtpField } from "./otp-field";
@@ -21,13 +25,17 @@ export type VerifyEmailProps = {
   className?: string;
 };
 
-/** Seconds the resend button stays disabled to prevent spamming the endpoint. */
-const RESEND_COOLDOWN_SECONDS = 60;
-
 const CODE_LENGTH = EMAIL_VERIFICATION_CODE.length;
 
 /** Key sign-up and sign-in use to hand the address to this view. */
 const EMAIL_STORAGE_KEY = "better-auth-ui.verify-email";
+
+/**
+ * Where the resend cooldown for `email` is kept, so a refresh resumes it. Keyed
+ * by address so a different account arriving in the same tab starts afresh.
+ */
+const resendStorageKey = (email: string) =>
+  `${EMAIL_STORAGE_KEY}.resend-at:${email}`;
 
 /**
  * F.1 email confirmation (ADR-0013): the user types the code from the email.
@@ -56,6 +64,7 @@ export function VerifyEmail({ className }: VerifyEmailProps) {
 
   const onConfirmed = () => {
     sessionStorage.removeItem(EMAIL_STORAGE_KEY);
+    sessionStorage.removeItem(resendStorageKey(email));
     toast.success("Email confirmed. Sign in to continue.");
     navigate({ to: signInPath });
   };
@@ -152,17 +161,15 @@ function ConfirmationCodeForm({
 
 /**
  * Sends a fresh code. Starts cooling down, because arriving here means a code
- * was sent a moment ago.
+ * was sent a moment ago; a refresh resumes that cooldown rather than restarting
+ * it.
  */
 function ResendCodeButton({ email }: { email: string }) {
   const { authClient, redirectTo } = useAuth();
-  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timeout = setTimeout(() => setCooldown(cooldown - 1), 1000);
-    return () => clearTimeout(timeout);
-  }, [cooldown]);
+  const { cooldown, isCoolingDown, startCooldown } = useResendCooldown(
+    RESEND_COOLDOWN_SECONDS,
+    resendStorageKey(email),
+  );
 
   // The API answers the standard resend route with a code (ADR-0013).
   const { mutate: sendVerificationEmail, isPending } = useSendVerificationEmail(
@@ -170,7 +177,7 @@ function ResendCodeButton({ email }: { email: string }) {
     {
       onSuccess: () => {
         toast.success("A new code is on its way.");
-        setCooldown(RESEND_COOLDOWN_SECONDS);
+        startCooldown();
       },
     },
   );
@@ -179,13 +186,13 @@ function ResendCodeButton({ email }: { email: string }) {
     <Button
       type="button"
       variant="outline"
-      disabled={cooldown > 0 || isPending}
+      disabled={isCoolingDown || isPending}
       onClick={() =>
         sendVerificationEmail({ email, callbackURL: absoluteAppUrl(redirectTo) })
       }
     >
       {isPending && <Spinner />}
-      {cooldown > 0 ? `Send a new code in ${cooldown}s` : "Send a new code"}
+      {isCoolingDown ? `Send a new code in ${cooldown}s` : "Send a new code"}
     </Button>
   );
 }

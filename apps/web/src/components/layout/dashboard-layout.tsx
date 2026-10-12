@@ -3,6 +3,7 @@ import { UserButton } from '@/components/auth/user/user-button';
 import { ShieldAlert } from 'lucide-react';
 import { MainNav } from './main-nav';
 import { KillSwitchBanner } from './kill-switch-banner';
+import { SiteFooter } from './site-footer';
 
 export function DashboardLayout() {
   return (
@@ -23,6 +24,7 @@ export function DashboardLayout() {
       <main className="flex-1">
         <Outlet />
       </main>
+      <SiteFooter />
     </div>
   );
 }

@@ -86,6 +86,35 @@ describe("VerifyEmail", () => {
     expect(screen.getByRole("button", { name: /Send a new code in/ })).toBeTruthy();
   });
 
+  test("a refresh resumes the resend cooldown instead of restarting it", () => {
+    const key = `better-auth-ui.verify-email.resend-at:${EMAIL}`;
+    sessionStorage.setItem(key, String(Date.now() + 20_000));
+
+    renderVerifyEmail();
+
+    expect(screen.getByRole("button", { name: "Send a new code in 20s" })).toBeTruthy();
+  });
+
+  test("a cooldown that ran out while away lets the code be resent at once", () => {
+    const key = `better-auth-ui.verify-email.resend-at:${EMAIL}`;
+    sessionStorage.setItem(key, String(Date.now() - 1_000));
+
+    renderVerifyEmail();
+
+    const resend = screen.getByRole("button", { name: "Send a new code" });
+    expect((resend as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  test("first arrival starts the cooldown and keeps it for a refresh", () => {
+    renderVerifyEmail();
+
+    const stored = Number(
+      sessionStorage.getItem(`better-auth-ui.verify-email.resend-at:${EMAIL}`),
+    );
+    expect(stored - Date.now()).toBeGreaterThan(55_000);
+    expect(screen.getByRole("button", { name: "Send a new code in 60s" })).toBeTruthy();
+  });
+
   test("sends the typed code with the address, then leads to sign-in", async () => {
     renderVerifyEmail();
 
@@ -97,6 +126,9 @@ describe("VerifyEmail", () => {
     const verify = requests.find((r) => r.path.endsWith("/email-otp/verify-email"));
     expect(verify?.body).toEqual({ email: EMAIL, otp: "482913" });
     expect(sessionStorage.getItem("better-auth-ui.verify-email")).toBeNull();
+    expect(
+      sessionStorage.getItem(`better-auth-ui.verify-email.resend-at:${EMAIL}`),
+    ).toBeNull();
   });
 
   test("a refused code clears the field and stays on the page", async () => {

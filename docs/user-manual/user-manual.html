@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WVS User Manual</title>
+<style>
+  /* The blue band across the top of every page after the first, as in the
+     IRIS manuals. Page one draws its own masthead and band instead. */
+  @page {
+    size: A4;
+    margin: 22mm 0 16mm 0;
+    @top-left-corner { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
+    @top-left { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
+    @top-center { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
+    @top-right { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
+    @top-right-corner { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
+    @bottom-center { content: counter(page); font: 8pt Helvetica, Arial, sans-serif; color: #999; }
+  }
+  @page :first {
+    margin-top: 0;
+    @bottom-center { content: none; }
+  }
+
+  :root {
+    --blue: #1f9ad6;
+    --blue-dark: #1677b0;
+    --ink: #2b2b2b;
+    --title: #424242;
+    --frame: #8a80cf;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    font-family: "Proxima Nova", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  /* Page-one masthead, modelled on the IRIS manuals. */
+  .masthead { display: flex; align-items: center; justify-content: space-between; padding: 6mm 9mm 4mm; }
+  .wordmark { font-weight: 200; font-size: 34pt; letter-spacing: 0.45em; color: #111; margin-right: -0.45em; }
+  .brand { display: flex; flex-direction: column; align-items: center; color: #1b2a41; }
+  .brand svg { width: 13mm; height: 13mm; }
+  .brand span { font-size: 6.5pt; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 1mm; }
+  .band { height: 7mm; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8); }
+
+  main { padding: 0 25mm; }
+
+  .cover { padding-top: 14mm; }
+  .team { font-size: 20pt; font-weight: 300; margin: 0; color: #111; }
+  h1 { font-size: 30pt; line-height: 1.15; color: var(--title); margin: 1mm 0 5mm; font-weight: 700; }
+  .meta { margin: 0 0 3mm; }
+  .accent { width: 13mm; height: 2mm; background: var(--blue); margin: 8mm 0 6mm 1mm; }
+  .intro-label { margin: 0 0 2mm; }
+
+  h2 { color: var(--blue); font-weight: 400; font-size: 19pt; margin: 9mm 0 3mm; break-after: avoid; }
+  h2.page { break-before: page; margin-top: 0; }
+  h3 { color: #4a4a4a; font-weight: 400; font-size: 14.5pt; margin: 7mm 0 2mm; break-after: avoid; }
+  h4 { font-size: 11.5pt; margin: 5mm 0 1mm; break-after: avoid; }
+  p { margin: 0 0 3mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 7mm; }
+  li { margin-bottom: 1.2mm; }
+  li > ul, li > ol { margin-top: 1.2mm; }
+  ul ul { list-style: circle; }
+  ul ul ul { list-style: square; }
+
+  figure { margin: 3mm 0 6mm; break-inside: avoid; text-align: center; }
+  figure img { border: 1px solid var(--frame); display: block; margin: 0 auto; max-width: 100%; }
+  figcaption { font-size: 8.5pt; color: #777; margin-top: 1.5mm; }
+  .w100 img { width: 100%; }
+  .w85 img { width: 85%; }
+  .w70 img { width: 70%; }
+  .w55 img { width: 55%; }
+  .w45 img { width: 45%; }
+  .w35 img { width: 35%; }
+
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 5mm; font-size: 10pt; break-inside: avoid; }
+  th, td { border: 1px solid #d6d6d6; padding: 1.6mm 2.4mm; text-align: left; vertical-align: top; }
+  th { background: #eef6fb; font-weight: 600; }
+
+  .note { margin-top: 6mm; }
+  .note strong { display: block; margin-bottom: 2mm; }
+  .tip { border-left: 1mm solid var(--blue); background: #f2f9fd; padding: 2.5mm 4mm; margin: 2mm 0 5mm; break-inside: avoid; }
+
+  .toc { font-size: 10.5pt; list-style: none; padding-left: 0; }
+  .toc ul { list-style: none; padding-left: 5mm; margin: 1mm 0 2mm; }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc li { break-inside: avoid; margin-bottom: 0.8mm; }
+  .toc > li > a { font-weight: 600; }
+
+  .end { display: flex; gap: 4mm; margin: 10mm 0 6mm; }
+  .end span { width: 2.2mm; height: 2.2mm; background: var(--blue); }
+  kbd, code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5pt; background: #f3f3f3; padding: 0 1mm; border-radius: 1mm; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wordmark">WVS</div>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <span>Vulnerability Scanner</span>
+  </div>
+</header>
+<div class="band"></div>
+
+<main>
+
+<section class="cover">
+  <p class="team">Team WVS</p>
+  <h1>Website Vulnerability Scanner<br>User Manual</h1>
+  <p class="meta">12/10/2026</p>
+  <p class="meta">Document prepared by: Deepthi, Jasmine and Sacheth Koushal</p>
+  <div class="accent"></div>
+
+  <p class="intro-label">Introduction</p>
+  <p>This manual describes the features available to users of the Website Vulnerability Scanner (WVS). It explains how to register a website, prove that you own it, scan it, review and triage what the scan finds, and share the results as a report. The last section covers the extra tools available to administrators of a WVS deployment.</p>
+  <p>WVS is a detection tool, not an attack tool. It scans only websites whose ownership has been proved, it never exploits what it finds, and it keeps its request rate low so the website is not harmed.</p>
+
+  <h2 class="page">Contents</h2>
+  <ul class="toc">
+    <li><a href="#access">Accessing WVS</a></li>
+    <li><a href="#actions">Actions available to the user</a></li>
+    <li><a href="#overview">WVS overview</a></li>
+    <li><a href="#features">WVS features</a>
+      <ul>
+        <li><a href="#targets">1. Registering a target</a></li>
+        <li><a href="#verify">2. Proving ownership</a></li>
+        <li><a href="#details">3. Target details and scope</a></li>
+        <li><a href="#scan">4. Starting a scan</a></li>
+        <li><a href="#follow">5. Following a scan</a></li>
+        <li><a href="#history">6. Viewing scan history</a></li>
+        <li><a href="#findings">7. Reviewing findings</a></li>
+        <li><a href="#finding">8. Finding details</a></li>
+        <li><a href="#triage">9. Triaging findings</a></li>
+        <li><a href="#reports">10. Generating reports</a></li>
+        <li><a href="#share">11. Sharing a report</a></li>
+        <li><a href="#account">12. Account settings</a></li>
+        <li><a href="#security">13. Security and two-factor sign-in</a></li>
+      </ul>
+    </li>
+    <li><a href="#admin">Administrator features</a>
+      <ul>
+        <li><a href="#admin-system">1. System status and health</a></li>
+        <li><a href="#admin-kill">2. The kill switch</a></li>
+        <li><a href="#admin-accounts">3. Accounts</a></li>
+        <li><a href="#admin-quotas">4. Organisations and quotas</a></li>
+        <li><a href="#admin-blocklist">5. Network blocklist</a></li>
+        <li><a href="#admin-audit">6. Audit log</a></li>
+      </ul>
+    </li>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#notes">Notes</a></li>
+  </ul>
+</section>
+
+<h2 class="page" id="access">Accessing WVS</h2>
+
+<h3>Creating an account</h3>
+<ol>
+  <li>Open the WVS web address in your browser and click <b>Sign Up</b> at the bottom of the sign-in card.</li>
+  <li>Enter your <b>Name</b>, <b>Email</b> and a <b>Password</b> of at least 12 characters. The strength meter under the password shows how strong it is. Click <b>Sign Up</b>.</li>
+</ol>
+<figure class="w55"><img src="images/01-sign-up.png" alt="Sign up form"></figure>
+<ol start="3">
+  <li>WVS emails you a 6-digit confirmation code. The code expires after 10 minutes, and it stops working after three wrong attempts.</li>
+</ol>
+<figure class="w70"><img src="images/02b-confirmation-email.png" alt="Confirmation code email"></figure>
+<ol start="4">
+  <li>Type the code into the <b>Confirmation code</b> boxes and click <b>Confirm email</b>. If the email has not arrived, or the code has stopped working, wait for the countdown to finish and click <b>Send a new code</b>.</li>
+</ol>
+<figure class="w55"><img src="images/02-verify-email.png" alt="Verify email page"></figure>
+<ol start="5">
+  <li>Once the address is confirmed, WVS returns you to the sign-in page and shows the message below. Confirming the code does not sign you in, so sign in with your email and password to continue.</li>
+</ol>
+<figure class="w45"><img src="images/02c-email-confirmed.png" alt="Email confirmed message"></figure>
+
+<h3>Signing in</h3>
+<ol>
+  <li>Enter your <b>Email</b> and <b>Password</b> and click <b>Sign In</b>.</li>
+  <li>If your email address is not confirmed yet, WVS sends a new confirmation code and opens the <b>Verify Email</b> page instead.</li>
+  <li>If two-factor authentication is turned on for your account, WVS then asks for a code from your authenticator app (see <a href="#security">Security and two-factor sign-in</a>).</li>
+</ol>
+<figure class="w55"><img src="images/03-sign-in.png" alt="Sign in form"></figure>
+
+<h4>Resetting a forgotten password</h4>
+<ol>
+  <li>On the sign-in page, click <b>Forgot password?</b> and enter your email address.</li>
+  <li>WVS emails you a reset link. The link works for 30 minutes.</li>
+  <li>Open the link and choose a new password of at least 12 characters.</li>
+  <li>Resetting the password signs you out on every other device.</li>
+</ol>
+
+<h2 class="page" id="actions">Actions available to the user</h2>
+<p>Users have access to the following actions within WVS. They are illustrated in the sections that follow.</p>
+<ul>
+  <li>Register a website (a <b>target</b>) and prove ownership of it with a DNS TXT record or a well-known file.</li>
+  <li>Limit what is scanned with included and excluded path prefixes.</li>
+  <li>Start a scan with a <b>Passive</b>, <b>Standard</b> or <b>Thorough</b> profile, and pause, resume or cancel it while it runs.</li>
+  <li>View the history of scans, filtered by:
+    <ul>
+      <li>Target</li>
+      <li>Status (the menu lists status codes, such as <code>COMPLETED</code> or <code>ABORTED_SAFETY</code>)</li>
+    </ul>
+  </li>
+  <li>Review findings by applying different filters:
+    <ul>
+      <li>Severity:
+        <ul><li>Critical</li><li>High</li><li>Medium</li><li>Low</li><li>Info</li></ul>
+      </li>
+      <li>Triage state:
+        <ul>
+          <li>Needs action (the default): Open and Confirmed findings only</li>
+          <li>All triage states</li>
+          <li>A single state: Open, Confirmed, False positive, Accepted risk or Resolved (claimed)</li>
+        </ul>
+      </li>
+      <li>Diff status:
+        <ul><li>New</li><li>Persisting</li></ul>
+      </li>
+      <li>Confidence, OWASP category and target</li>
+      <li>Free-text search by finding name or URL, or by detector ID</li>
+    </ul>
+  </li>
+  <li>Triage findings, one at a time or many at once.</li>
+  <li>Generate reports as an <b>Executive Summary</b> or a <b>Technical Report</b>, in PDF, HTML, JSON, CSV or SARIF, and download them.</li>
+  <li>Share a report through a time-limited link, and revoke the link.</li>
+  <li>Manage the account: name, avatar, password, active sessions, two-factor authentication, and deleting the account.</li>
+</ul>
+
+<h4>What each role can do</h4>
+<p>Every account has one role, which decides which of the actions above are available. A new account starts as an <b>Analyst</b>, and each new account gets its own organisation. Only an administrator can change a role.</p>
+<table>
+  <tr><th>Role</th><th>What the role can do</th></tr>
+  <tr><td>Analyst, Developer</td><td>Every action in this manual except the Admin area.</td></tr>
+  <tr><td>Viewer</td><td>Read-only. Can view targets, scans and findings, and request reports. Can download a report only if it contains no raw evidence. Cannot register targets, start scans, triage findings or create share links. Raw evidence is never shown to a viewer.</td></tr>
+  <tr><td>Administrator</td><td>Everything an analyst can do in their own organisation, plus the Admin area described in <a href="#admin">Administrator features</a>.</td></tr>
+</table>
+
+<h2 id="overview">WVS overview</h2>
+<p>After signing in, WVS opens the <b>Targets</b> page. The bar at the top of every page holds the main menu on the left and your account menu on the right.</p>
+<figure class="w100"><img src="images/04-main-navigation.png" alt="Main navigation"></figure>
+<ul>
+  <li><b>Targets</b>: the websites you have registered, and where you prove ownership and start scans.</li>
+  <li><b>Dashboard</b>: currently empty. A posture overview is planned.</li>
+  <li><b>Scans</b>: every scan your organisation has run.</li>
+  <li><b>Findings</b>: what the latest scan of each target found.</li>
+  <li><b>Reports</b>: generated reports, ready to download or share.</li>
+  <li><b>Admin</b>: shown to administrators only.</li>
+</ul>
+<p>Click your name in the top right corner to open the account menu, which holds <b>Settings</b> and <b>Sign Out</b>.</p>
+<figure class="w35"><img src="images/27-user-menu.png" alt="Account menu"></figure>
+
+<h2 class="page" id="features">WVS features</h2>
+
+<h3 id="targets">1. Registering a target</h3>
+<ul>
+  <li>A target is one website origin, such as <code>https://shop.example.com</code>. Open <b>Targets</b> and click <b>Register Target</b>. Registered targets are listed with their verification status, the date verification expires, and whether they can be scanned. Click <b>Details</b> to open a target.</li>
+</ul>
+<figure class="w100"><img src="images/07b-targets-list.png" alt="Targets page"></figure>
+<ul>
+  <li>Fill in the <b>Register Target</b> form:
+    <ul>
+      <li><b>Target Label</b>: a friendly name, for example "Production Application".</li>
+      <li><b>Origin URL</b>: the scheme and host only (<code>http://</code> or <code>https://</code>). Paths, query strings and IP addresses are not accepted.</li>
+      <li><b>Verification Method</b>: how you will prove ownership. <b>DNS TXT Record</b> is recommended and works with every hosting provider. <b>Well-Known File</b> suits sites where you can upload a file. The example in this manual uses Well-Known File.</li>
+      <li><b>Authorisation Acknowledgement</b>: tick the box to confirm that you own the target or have written permission from its owner to scan it. This statement is recorded once, at registration, and cannot be edited later.</li>
+    </ul>
+  </li>
+  <li>Click <b>Register &amp; Continue</b>.</li>
+</ul>
+<figure class="w45"><img src="images/05-register-target.png" alt="Register target form"></figure>
+
+<h3 id="verify">2. Proving ownership</h3>
+<ul>
+  <li>After registering, WVS opens the <b>Ownership Verification</b> page. The target shows <b>Pending</b> and <b>Not Scannable</b> until ownership is proved.</li>
+  <li>Publish the token shown on the page:
+    <ul>
+      <li><b>Well-Known File</b>: create a file at <code>/.well-known/wvs-verification.txt</code> on your website that contains exactly the token, served as plain text. The URL must not redirect to a private or internal address. Click <b>Open</b> to check the file is reachable.</li>
+      <li><b>DNS TXT Record</b>: with your DNS provider, create a TXT record at <code>_wvs-verification.&lt;your hostname&gt;</code> whose value is the token. For this method the page shows the record name and value instead of a file URL.</li>
+    </ul>
+  </li>
+  <li>Use the copy buttons next to each value to avoid typing mistakes, then click <b>Verify ownership</b>. The screenshots below show the Well-Known File method.</li>
+</ul>
+<figure class="w85"><img src="images/06-verify-ownership.png" alt="Ownership verification instructions"></figure>
+<ul>
+  <li>When the token is found, the target is marked <b>Verified</b> and <b>Scannable</b>. WVS records the IP addresses the website resolved to at that moment and only ever sends scan traffic to those addresses.</li>
+</ul>
+<figure class="w85"><img src="images/07-target-verified.png" alt="Target verified"></figure>
+<div class="tip">Verification lasts 90 days. When fewer than 14 days remain, the expiry date on the Targets page turns amber and the target's page shows an <b>Ownership Verification Expiring Soon</b> warning. Re-verify from <b>Re-verify / View Instructions</b> on the target's page, and again whenever the site's hosting or DNS changes. A target that is not verified shows a <b>Verify</b> button on the Targets page. Targets that resolve to private, loopback or cloud-metadata addresses are always refused.</div>
+
+<h3 id="details">3. Target details and scope</h3>
+<ul>
+  <li>The target details page shows everything WVS knows about the target:
+    <ul>
+      <li><b>Start Scan</b> and <b>Verification Instructions</b> buttons.</li>
+      <li><b>Verification Lifecycle</b>: the method, status, when it was verified and when it expires.</li>
+      <li><b>Authorisation Acknowledgement</b>: whether the acknowledgement was recorded, and when.</li>
+      <li><b>Verified IP Set</b>: the addresses scan traffic is pinned to.</li>
+    </ul>
+  </li>
+  <li><b>Archive Target</b> takes effect immediately, without a confirmation step, and cannot be undone. An archived target can no longer be scanned or verified. It stays listed on the Targets page when <b>Show archived</b> is switched on.</li>
+  <li><b>Delete Target</b> asks for confirmation, then permanently removes the target together with all of its scans and findings.</li>
+</ul>
+<figure class="w100"><img src="images/08-target-detail.png" alt="Target details page"></figure>
+<ul>
+  <li>Use <b>Scope Configuration</b>, further down the same page, to control which parts of the site are scanned:
+    <ul>
+      <li><b>Included Path Prefixes</b>: when any are set, only URLs that start with one of them are crawled and scanned. Leave the list empty to scan the whole origin.</li>
+      <li><b>Excluded Path Prefixes</b>: URLs that start with one of these are never requested, for example <code>/logout</code> or <code>/admin</code>.</li>
+    </ul>
+  </li>
+  <li>Type a prefix, click <b>Add</b>, and click <b>Save Scope</b>. The footer shows <b>Unsaved changes</b> until you save.</li>
+</ul>
+<figure class="w100"><img src="images/09-scope-config.png" alt="Scope configuration"></figure>
+
+<h3 id="scan">4. Starting a scan</h3>
+<ul>
+  <li>Click <b>Start Scan</b> on the target details page and choose a profile:</li>
+</ul>
+<table>
+  <tr><th>Profile</th><th>Best for</th><th>Rate</th><th>Depth</th><th>Pages</th><th>Requests</th></tr>
+  <tr><td>Passive</td><td>Production sites, minimum load</td><td>5 req/s</td><td>3</td><td>100</td><td>1,000</td></tr>
+  <tr><td>Standard (default)</td><td>A balance of coverage and time</td><td>10 req/s</td><td>5</td><td>200</td><td>2,000</td></tr>
+  <tr><td>Thorough</td><td>Staging or low-traffic sites</td><td>10 req/s</td><td>10</td><td>1,000</td><td>10,000</td></tr>
+</table>
+<ul>
+  <li>Tick <b>Customise limits</b> to lower any of <b>Requests / second</b>, <b>Concurrency</b>, <b>Crawl depth</b>, <b>Page ceiling</b> and <b>Request ceiling</b> for a fragile site. Fields left blank keep the profile value. Limits can never go above system policy: rate 1 to 10 requests per second, depth 1 to 10, pages 1 to 1,000 and requests 1 to 10,000. A scan also never goes faster than your organisation's request-rate quota, which an administrator may set below 10.</li>
+  <li>The <b>Will run with</b> line confirms the final limits. Click <b>Start Scan</b>.</li>
+</ul>
+<figure class="w45"><img src="images/10-start-scan.png" alt="Start scan dialog"></figure>
+<div class="tip">A target can have only one active scan at a time, and your organisation's quota limits how many scans can run at once.</div>
+
+<h3 id="follow">5. Following a scan</h3>
+<ul>
+  <li>WVS opens the scan page as soon as the scan is queued. While the scan runs, the page updates live (every 2 seconds or faster): the <b>Phase</b>, <b>Pages crawled</b>, <b>Requests made</b> and <b>Findings</b>, and the findings discovered so far.</li>
+  <li>Click <b>Pause</b> to stop the scan temporarily and <b>Resume</b> to continue it from where it stopped. A paused scan still holds one of your organisation's concurrent-scan slots. Click <b>Cancel</b> to end the scan.</li>
+</ul>
+<figure class="w100"><img src="images/11-scan-live.png" alt="Running scan"></figure>
+<p>A scan is always in one of these states:</p>
+<table>
+  <tr><th>Status</th><th>Meaning</th></tr>
+  <tr><td>Queued</td><td>Waiting for a scan worker to pick it up.</td></tr>
+  <tr><td>Running</td><td>Crawling the site and running detectors.</td></tr>
+  <tr><td>Paused</td><td>Stopped temporarily. <b>Resume</b> continues it.</td></tr>
+  <tr><td>Completed</td><td>Finished. Its findings are available.</td></tr>
+  <tr><td>Cancelled</td><td>Ended by a user before it finished.</td></tr>
+  <tr><td>Failed</td><td>Stopped by an error. The page shows a <b>Scan failed</b> message with the reason.</td></tr>
+  <tr><td>Aborted (safety)</td><td>Stopped by a safety control, such as the administrator kill switch. It cannot be resumed.</td></tr>
+</table>
+<p>The scan page can also show these messages:</p>
+<ul>
+  <li><b>Reduced coverage</b>: lists reasons the scan could not see everything, for example the target blocking the scanner.</li>
+  <li><b>No update from the scan engine</b>: the scan has reported no progress for over five minutes. Click <b>Refresh</b> to check again.</li>
+</ul>
+<ul>
+  <li>When the scan finishes, its status changes to <b>Completed</b> and the <b>Findings</b> section lists everything it found, compared with the previous scan of the same target. The section has the same filters as the Findings page.</li>
+</ul>
+<figure class="w100"><img src="images/12-scan-completed.png" alt="Findings of a completed scan"></figure>
+<ul>
+  <li>Further down, <b>Resolved since previous scan</b> lists findings that the previous scan found and this scan no longer sees. In this example, <code>/backup</code> was excluded from scope before the rescan, so the backup findings appear here. This is what the scanner observed, and it is separate from the triage state <b>Resolved (claimed)</b>, which is a person's claim.</li>
+</ul>
+<figure class="w100"><img src="images/12b-resolved-since.png" alt="Resolved since previous scan"></figure>
+<ul>
+  <li>At the bottom of the page, the <b>Reports</b> section generates reports for this scan, and <b>How this scan was produced</b> records the profile, who started the scan, the limits, the scope snapshot, the detector versions and the times it was queued, started and finished.</li>
+</ul>
+<figure class="w100"><img src="images/14-scan-provenance.png" alt="Scan provenance"></figure>
+
+<h3 id="history">6. Viewing scan history</h3>
+<ul>
+  <li>The <b>Scans</b> page lists every scan your organisation has run, newest first, with its profile, status, start time and number of findings.</li>
+  <li>Use the <b>All targets</b> and <b>All statuses</b> menus to narrow the list. The status menu lists status codes, for example <code>ABORTED_SAFETY</code> for Aborted (safety). Click a scan to open it.</li>
+</ul>
+<figure class="w100"><img src="images/13-scans-list.png" alt="Scans page"></figure>
+
+<h3 id="findings">7. Reviewing findings</h3>
+<ul>
+  <li>The <b>Findings</b> page shows what the latest completed scan of each target found, most urgent first. Each row shows the severity, the finding name, the detector ID and affected URL, the target, the diff and triage status, and the CVSS and EPSS scores where known.</li>
+  <li>Use the filter bar to narrow the list:
+    <ul>
+      <li><b>Search name or URL</b> and <b>Detector</b> (for example <code>A-01</code>).</li>
+      <li>The severity chips: <b>Critical</b>, <b>High</b>, <b>Medium</b>, <b>Low</b> and <b>Info</b>.</li>
+      <li>The triage menu. It defaults to <b>Needs action</b>, which shows only Open and Confirmed findings, so findings marked False positive, Accepted risk or Resolved (claimed) are hidden. Choose <b>All triage states</b> to see every finding.</li>
+      <li>The diff status, confidence, OWASP category and target menus, and the sort order on the right.</li>
+    </ul>
+  </li>
+</ul>
+<figure class="w100"><img src="images/15-findings-list.png" alt="Findings page"></figure>
+<ul>
+  <li>For example, after typing "injection" in the search box:</li>
+</ul>
+<figure class="w100"><img src="images/16-findings-search.png" alt="Findings search"></figure>
+<p>The <b>Diff</b> column compares each finding with the previous scan of its target:</p>
+<table>
+  <tr><th>Diff status</th><th>Meaning</th></tr>
+  <tr><td>New</td><td>First seen in this scan.</td></tr>
+  <tr><td>Persisting</td><td>Also found by the previous scan.</td></tr>
+</table>
+<p>Findings that a rescan no longer sees do not appear on this page. They are listed under <b>Resolved since previous scan</b> on that scan's page (see <a href="#follow">Following a scan</a>).</p>
+
+<h3 id="finding">8. Finding details</h3>
+<ul>
+  <li>Click a finding to open its details. The top of the page shows its severity, triage and diff status, a description of the problem, and the affected URL and parameter.</li>
+  <li><b>How to fix it</b> explains the remediation.</li>
+  <li><b>Technical detail</b> lists the detector, confidence, CWE, OWASP category, CVSS, CVE and EPSS, how many times it occurs, and when it was first and last seen.</li>
+  <li><b>Evidence</b> shows the request and response that substantiate the finding. Evidence is withheld when WVS has not confirmed that credentials and personal data were redacted from it, and it is never shown to viewers.</li>
+</ul>
+<figure class="w100"><img src="images/17-finding-detail.png" alt="Finding details"></figure>
+
+<h3 id="triage">9. Triaging findings</h3>
+<ul>
+  <li>Triage records your judgement about a finding. Choose a <b>Triage state</b> on the right of the finding details page, add a justification, and click <b>Record triage</b>.</li>
+</ul>
+<table>
+  <tr><th>Triage state</th><th>Meaning</th></tr>
+  <tr><td>Open</td><td>Not yet judged, or reopened.</td></tr>
+  <tr><td>Confirmed</td><td>A real issue that needs fixing.</td></tr>
+  <tr><td>False positive</td><td>Not a real issue. Hidden from the default list. Needs a justification.</td></tr>
+  <tr><td>Accepted risk</td><td>Real, but accepted. Hidden from the default list. Needs a justification.</td></tr>
+  <tr><td>Resolved (claimed)</td><td>You believe it is fixed. Hidden from the default list. The next scan shows whether it is really gone.</td></tr>
+</table>
+<figure class="w100"><img src="images/18-triage-form.png" alt="Triage form"></figure>
+<ul>
+  <li>Triage applies to the finding in every scan of that target, so it carries forward to future scans. Each change is recorded with your name in the <b>History</b> and in the audit log.</li>
+</ul>
+<figure class="w45"><img src="images/19-triage-history.png" alt="Triage history"></figure>
+<h4>Triaging several findings at once</h4>
+<ul>
+  <li>On the Findings page, tick the checkboxes beside the findings. A bar shows how many are selected. Click <b>Set triage…</b>.</li>
+</ul>
+<figure class="w100"><img src="images/20-bulk-select.png" alt="Selecting several findings"></figure>
+<ul>
+  <li>Choose the state, enter a justification, and click <b>Record triage</b>. The findings update together, and those marked False positive or Accepted risk drop out of the default list.</li>
+</ul>
+<figure class="w45"><img src="images/21-bulk-triage.png" alt="Bulk triage dialog"></figure>
+
+<h3 id="reports">10. Generating reports</h3>
+<ul>
+  <li>Click <b>Generate report</b> on the <b>Reports</b> page or in the Reports section of a completed scan, and choose:
+    <ul>
+      <li><b>Scan</b>: any completed scan.</li>
+      <li><b>Template</b>: <b>Executive Summary</b> (posture, severity distribution and trend for a non-technical reader, never including raw evidence) or <b>Technical Report</b> (every finding with its description and remediation, plus evidence where available, for the people fixing them).</li>
+      <li><b>Format</b>: PDF for reading and sending, HTML as a self-contained page, JSON for scripts, CSV for spreadsheets, or SARIF 2.1.0 for GitHub code scanning.</li>
+      <li><b>Severity threshold</b> and <b>Triage states</b> to include. Leave every triage box unticked to include all states.</li>
+    </ul>
+  </li>
+  <li>Click <b>Generate</b>.</li>
+</ul>
+<figure class="w45"><img src="images/22-generate-report.png" alt="Generate report dialog"></figure>
+<ul>
+  <li>Reports are generated in the background, and WVS emails you when yours is ready. Click <b>Download</b> to save a ready report. A report's status is one of:
+    <ul>
+      <li><b>Queued</b> or <b>Generating</b>: still being produced.</li>
+      <li><b>Ready</b>: available to download and share.</li>
+      <li><b>Failed</b>: could not be produced. The row shows the reason.</li>
+      <li><b>Expired</b>: the evidence in the report has passed its retention period, so it can no longer be downloaded.</li>
+    </ul>
+  </li>
+</ul>
+<figure class="w100"><img src="images/23-reports-list.png" alt="Reports page"></figure>
+<ul>
+  <li>Every report carries a <b>Coverage limitations</b> section that says what the scan could not see. The first page of an Executive Summary:</li>
+</ul>
+<figure class="w85"><img src="images/25-report-executive.png" alt="Executive summary report"></figure>
+<ul>
+  <li>A finding as it appears in the Technical Report. Evidence is included only when its redaction has been confirmed; otherwise the report says it is withheld, as in this example.</li>
+</ul>
+<figure class="w85"><img src="images/26-report-technical.png" alt="Technical report finding"></figure>
+
+<h3 id="share">11. Sharing a report</h3>
+<ul>
+  <li>Click <b>Share</b> next to a ready report. The button reads <b>Shared</b> while the report has a working link. Under <b>Expires after</b>, choose how long the link should work (1, 7, 14 or 30 days; 7 days by default), then click <b>Create link</b>. If the report contains evidence, the dialog also shows when that evidence expires, because a link cannot outlast it.</li>
+</ul>
+<figure class="w55"><img src="images/24a-share-create.png" alt="Choosing how long a share link lasts"></figure>
+<ul>
+  <li>Copy the link straight away: it is shown only once. Anyone with the link can download the report without signing in, until it expires. Creating a new link stops the old one working, and <b>Revoke link</b> stops it immediately. Viewers cannot create share links.</li>
+</ul>
+<figure class="w55"><img src="images/24-share-report.png" alt="Share link created"></figure>
+
+<h3 id="account">12. Account settings</h3>
+<ul>
+  <li>Open <b>Settings</b> from the account menu. On the <b>Account</b> tab you can change your avatar and name and delete your account. The <b>Change email</b> card is shown, but changing the email address is not available in this version.</li>
+  <li>To delete your account, click <b>Delete account</b>, enter your password and confirm. WVS then emails you a confirmation link that works for 24 hours, and the account is deleted only when you open it. Deleting removes your account and everything belonging to your organisation, permanently.</li>
+</ul>
+<figure class="w85"><img src="images/28-settings-account.png" alt="Account settings"></figure>
+
+<h3 id="security">13. Security and two-factor sign-in</h3>
+<ul>
+  <li>The <b>Security</b> tab holds:
+    <ul>
+      <li><b>Change password</b>: enter your <b>Current password</b> and a <b>New password</b>, then click <b>Update password</b>.</li>
+      <li><b>Active sessions</b>: every device signed in to your account. The current session has a <b>Sign Out</b> button and other sessions have <b>Revoke</b>. <b>Sign out other devices</b> ends every session except this one, and <b>Sign out everywhere</b> ends all of them, including this one.</li>
+      <li><b>Two-Factor Authentication</b>: an extra sign-in step, so a stolen password is not enough on its own.</li>
+    </ul>
+  </li>
+</ul>
+<figure class="w85"><img src="images/29-settings-security.png" alt="Security settings"></figure>
+<h4>Turning on two-factor authentication</h4>
+<ol>
+  <li>Click <b>Enable two-factor</b> and enter your password.</li>
+  <li>Scan the QR code with an authenticator app such as Google Authenticator or Microsoft Authenticator. If you cannot scan it, type the setup key into the app instead. (The QR code and key are blurred in this manual.)</li>
+  <li>Enter the 6-digit code the app shows and click <b>Verify</b>.</li>
+</ol>
+<figure class="w55"><img src="images/30-enable-2fa.png" alt="Enable two-factor"></figure>
+<ol start="4">
+  <li>WVS shows ten backup codes. Save them somewhere safe with <b>Copy to clipboard</b>, <b>Download .txt</b> or <b>Print</b>. Each code works once, for when you do not have your authenticator. Click <b>Done</b>.</li>
+</ol>
+<figure class="w55"><img src="images/31-backup-codes.png" alt="Backup codes"></figure>
+<ul>
+  <li>The Security tab now shows that two-factor authentication is on. From here you can <b>Regenerate backup codes</b> or <b>Disable two-factor</b>.</li>
+</ul>
+<figure class="w85"><img src="images/32-2fa-on.png" alt="Two-factor is on"></figure>
+<h4>Signing in with two-factor authentication</h4>
+<ul>
+  <li>After your password, enter the code from your authenticator app. Tick <b>Trust this device</b> to be asked for the code less often on this device, or click <b>Use a backup code</b> if you do not have the app.</li>
+</ul>
+<figure class="w55"><img src="images/33-2fa-challenge.png" alt="Two-factor sign-in"></figure>
+
+<h2 class="page" id="admin">Administrator features</h2>
+<p>Administrators operate the whole WVS deployment. They manage accounts, quotas, the network blocklist and the kill switch across every organisation, but they cannot see another organisation's targets, scans or findings. An administrator must turn on two-factor authentication before using the Admin area.</p>
+
+<h3>Accessing the Admin area</h3>
+<ol>
+  <li>Click <b>Admin</b> in the top bar.</li>
+  <li>Choose a tab: <b>System</b>, <b>Accounts</b>, <b>Organisations</b>, <b>Blocklist</b> or <b>Audit log</b>.</li>
+</ol>
+
+<h3 id="admin-system">1. System status and health</h3>
+<ul>
+  <li>The <b>System</b> tab shows whether scanning is running normally and the <b>System health</b> checks: Database, Redis, Scan queue, Active scans and Email retry queue. The checks refresh every 15 seconds, and each one reports on its own.</li>
+</ul>
+<figure class="w100"><img src="images/34-admin-system.png" alt="Admin system tab"></figure>
+
+<h3 id="admin-kill">2. The kill switch</h3>
+<ul>
+  <li>The kill switch halts all scanning at once. Engaging it aborts every queued, running and paused scan in every organisation and refuses new ones until it is released.</li>
+  <li>Click <b>Engage kill switch</b>, give a reason (it is kept in the audit log), type <b>HALT</b> to confirm, and click <b>Halt all scans</b>.</li>
+</ul>
+<figure class="w55"><img src="images/35-kill-switch-confirm.png" alt="Kill switch confirmation"></figure>
+<ul>
+  <li>While the kill switch is engaged, every user sees a red banner and no scan can start, resume or send a request. Click <b>Release kill switch</b> and give a reason to allow scanning again. Releasing it restarts nothing: aborted scans stay aborted.</li>
+</ul>
+<figure class="w100"><img src="images/36-kill-switch-engaged.png" alt="Kill switch engaged"></figure>
+
+<h3 id="admin-accounts">3. Accounts</h3>
+<ul>
+  <li>The <b>Accounts</b> tab lists every account with its organisation, role, two-factor status and last sign-in. Search by email or name.</li>
+  <li>Change an account's role with the role menu: <code>ADMIN</code>, <code>ANALYST</code>, <code>DEVELOPER</code> or <code>VIEWER</code>.</li>
+  <li>Click <b>Suspend</b> and confirm to block an account from signing in. The suspension lasts until an administrator clicks <b>Lift suspension</b>.</li>
+</ul>
+<figure class="w100"><img src="images/37-admin-accounts.png" alt="Admin accounts tab"></figure>
+
+<h3 id="admin-quotas">4. Organisations and quotas</h3>
+<ul>
+  <li>The <b>Organisations</b> tab lists each organisation with its members, active and allowed scans, and request rate cap. Click <b>Edit</b> to change its quota:
+    <ul>
+      <li><b>Concurrent scans</b>: between 0 and 20. Zero suspends scanning for the organisation.</li>
+      <li><b>Request rate</b>: at most 10 requests per second, the safety limit that applies to every scan.</li>
+    </ul>
+  </li>
+  <li>A new quota applies to scans started from then on. Scans already running are not stopped.</li>
+</ul>
+<figure class="w55"><img src="images/38-admin-quota.png" alt="Quota dialog"></figure>
+
+<h3 id="admin-blocklist">5. Network blocklist</h3>
+<ul>
+  <li>The <b>Blocklist</b> tab holds hosts and address ranges that no target may resolve to and no scan may reach. Choose a <b>Type</b> (host and subdomains, CIDR network or address range), enter the <b>Pattern</b>, explain the entry under <b>Why is it blocked?</b>, and click <b>Add to blocklist</b>.</li>
+  <li>Switch an entry off with its <b>Active</b> toggle, or remove it with the delete button. Targets already verified against a blocked host stay registered but can no longer be scanned.</li>
+</ul>
+<figure class="w100"><img src="images/39-admin-blocklist.png" alt="Admin blocklist tab"></figure>
+
+<h3 id="admin-audit">6. Audit log</h3>
+<ul>
+  <li>The <b>Audit log</b> is a permanent, append-only record of actions: target changes, scans, triage decisions, report exports and shares, and every administrator action. Times are shown in UTC.</li>
+  <li>Filter by <b>Action</b> or by <b>Resource id</b> and click <b>Apply</b>.</li>
+</ul>
+<figure class="w100"><img src="images/40-admin-audit.png" alt="Admin audit log"></figure>
+
+<h2 class="page" id="glossary">Glossary</h2>
+<table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td>Target</td><td>One website origin registered in WVS, such as <code>https://shop.example.com</code>.</td></tr>
+  <tr><td>Ownership verification</td><td>Proving you control a target by publishing a token as a DNS TXT record or a well-known file.</td></tr>
+  <tr><td>Verified IP set</td><td>The addresses a target resolved to when it was verified. Scan traffic is only sent to these.</td></tr>
+  <tr><td>Path prefix</td><td>The start of a URL path. <code>/backup</code> matches <code>/backup/</code>, <code>/backup/db.sql</code> and <code>/backup.zip</code>.</td></tr>
+  <tr><td>Scan profile</td><td>A preset of scan limits: Passive, Standard or Thorough.</td></tr>
+  <tr><td>Detector</td><td>One automated check, with an ID such as <code>P-21</code> or <code>A-02</code>. Passive (P) detectors only read normal responses; active (A) detectors send harmless test inputs.</td></tr>
+  <tr><td>Finding</td><td>A possible vulnerability reported by a detector.</td></tr>
+  <tr><td>Severity</td><td>How serious a finding is: Critical, High, Medium, Low or Info.</td></tr>
+  <tr><td>Confidence</td><td>How sure the detector is: <code>CONFIRMED</code>, <code>FIRM</code> or <code>TENTATIVE</code>.</td></tr>
+  <tr><td>Posture</td><td>The findings of a target's most recent completed scan.</td></tr>
+  <tr><td>Triage</td><td>A person's judgement about a finding, such as Confirmed or False positive.</td></tr>
+  <tr><td>Diff status</td><td>How a finding compares with the previous scan: New or Persisting.</td></tr>
+  <tr><td>CVSS</td><td>Common Vulnerability Scoring System: a 0 to 10 score of how severe a known vulnerability is.</td></tr>
+  <tr><td>EPSS</td><td>Exploit Prediction Scoring System: the estimated chance that a known vulnerability will be exploited in the next 30 days.</td></tr>
+  <tr><td>CWE</td><td>Common Weakness Enumeration: a standard ID for a type of weakness, such as CWE-89 for SQL injection.</td></tr>
+  <tr><td>OWASP category</td><td>The OWASP Top 10 (2021) category a finding belongs to, such as A03:2021 (Injection).</td></tr>
+  <tr><td>SARIF</td><td>Static Analysis Results Interchange Format: a JSON format that tools such as GitHub code scanning can import.</td></tr>
+  <tr><td>Kill switch</td><td>An administrator control that halts all scanning in the deployment.</td></tr>
+</table>
+
+<section class="note" id="notes">
+  <strong>NOTE:</strong>
+  <ul>
+    <li>WVS scans without signing in to the target. Pages behind a login are not tested, so a report with few findings is not a complete security assessment.</li>
+    <li>WVS never exploits a finding, never guesses passwords and never load-tests a site. Scans are limited to 10 requests per second, and every request identifies itself as coming from WVS.</li>
+    <li>Ownership verification expires after 90 days. Re-verify before then to keep scanning the target.</li>
+    <li>Finding evidence is deleted when the retention period ends (90 days by default).</li>
+    <li>Treat report share links as secrets: anyone who has one can download the report until it expires or is revoked.</li>
+  </ul>
+</section>
+
+<div class="end"><span></span><span></span><span></span></div>
+</main>
+
+</body>
+</html>
