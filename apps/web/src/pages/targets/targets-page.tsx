@@ -158,7 +158,7 @@ export function TargetsPage() {
                           {target.label}
                         </Link>
                         {target.isArchived && (
-                          <span className="text-[11px] text-muted-foreground italic">Archived</span>
+                          <span className="text-[12px] text-muted-foreground italic">Archived</span>
                         )}
                       </div>
                     </TableCell>

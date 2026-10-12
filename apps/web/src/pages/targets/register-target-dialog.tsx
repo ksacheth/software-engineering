@@ -216,7 +216,7 @@ export function RegisterTargetDialog({ open, onOpenChange }: RegisterTargetDialo
                 <FieldDescription className="text-xs leading-relaxed text-foreground/90">
                   I attest that I own this target or possess explicit written permission from the owner to conduct security scanning against it. I acknowledge that unauthorised security testing and scanning of computer systems is a criminal offence.
                 </FieldDescription>
-                <span className="text-[11px] text-muted-foreground mt-1">
+                <span className="text-[12px] text-muted-foreground mt-1">
                   This attestation is permanently recorded once upon registration and cannot be edited.
                 </span>
               </FieldContent>
