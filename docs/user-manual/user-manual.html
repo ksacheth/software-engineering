@@ -4,17 +4,20 @@
 <meta charset="utf-8">
 <title>WVS User Manual</title>
 <style>
+  /* Noto Sans, the DBIM typeface, from the web app's font package. */
+  @font-face { font-family: "Noto Sans"; font-style: normal; font-weight: 100 900; src: url("../../apps/web/node_modules/@fontsource-variable/noto-sans/files/noto-sans-latin-wght-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Noto Sans"; font-style: italic; font-weight: 100 900; src: url("../../apps/web/node_modules/@fontsource-variable/noto-sans/files/noto-sans-latin-wght-italic.woff2") format("woff2"); }
   /* The blue band across the top of every page after the first, as in the
      IRIS manuals. Page one draws its own masthead and band instead. */
   @page {
     size: A4;
     margin: 22mm 0 16mm 0;
-    @top-left-corner { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
-    @top-left { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
-    @top-center { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
-    @top-right { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
-    @top-right-corner { content: ""; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8) top / 100% 7mm no-repeat; }
-    @bottom-center { content: counter(page); font: 8pt Helvetica, Arial, sans-serif; color: #999; }
+    @top-left-corner { content: ""; background: linear-gradient(#162f6a, #214aab) top / 100% 7mm no-repeat; }
+    @top-left { content: ""; background: linear-gradient(#162f6a, #214aab) top / 100% 7mm no-repeat; }
+    @top-center { content: ""; background: linear-gradient(#162f6a, #214aab) top / 100% 7mm no-repeat; }
+    @top-right { content: ""; background: linear-gradient(#162f6a, #214aab) top / 100% 7mm no-repeat; }
+    @top-right-corner { content: ""; background: linear-gradient(#162f6a, #214aab) top / 100% 7mm no-repeat; }
+    @bottom-center { content: counter(page); font: 9pt "Noto Sans", sans-serif; color: #606060; }
   }
   @page :first {
     margin-top: 0;
@@ -22,44 +25,44 @@
   }
 
   :root {
-    --blue: #1f9ad6;
-    --blue-dark: #1677b0;
-    --ink: #2b2b2b;
-    --title: #424242;
-    --frame: #8a80cf;
+    --blue: #214aab;
+    --blue-dark: #162f6a;
+    --ink: #150202;
+    --title: #162f6a;
+    --frame: #a3bbf3;
   }
 
   * { box-sizing: border-box; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body {
     margin: 0;
-    font-family: "Proxima Nova", "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: 11pt;
+    font-family: "Noto Sans", sans-serif;
+    font-size: 12pt;
     line-height: 1.5;
     color: var(--ink);
   }
 
   /* Page-one masthead, modelled on the IRIS manuals. */
   .masthead { display: flex; align-items: center; justify-content: space-between; padding: 6mm 9mm 4mm; }
-  .wordmark { font-weight: 200; font-size: 34pt; letter-spacing: 0.45em; color: #111; margin-right: -0.45em; }
-  .brand { display: flex; flex-direction: column; align-items: center; color: #1b2a41; }
+  .wordmark { font-weight: 200; font-size: 34pt; letter-spacing: 0.45em; color: var(--blue-dark); margin-right: -0.45em; }
+  .brand { display: flex; flex-direction: column; align-items: center; color: var(--blue-dark); }
   .brand svg { width: 13mm; height: 13mm; }
   .brand span { font-size: 6.5pt; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 1mm; }
-  .band { height: 7mm; background: linear-gradient(#1873a8, #23a8e8 45%, #23a8e8); }
+  .band { height: 7mm; background: linear-gradient(#162f6a, #214aab); }
 
   main { padding: 0 25mm; }
 
   .cover { padding-top: 14mm; }
-  .team { font-size: 20pt; font-weight: 300; margin: 0; color: #111; }
+  .team { font-size: 20pt; font-weight: 300; margin: 0; color: var(--blue); }
   h1 { font-size: 30pt; line-height: 1.15; color: var(--title); margin: 1mm 0 5mm; font-weight: 700; }
   .meta { margin: 0 0 3mm; }
   .accent { width: 13mm; height: 2mm; background: var(--blue); margin: 8mm 0 6mm 1mm; }
   .intro-label { margin: 0 0 2mm; }
 
-  h2 { color: var(--blue); font-weight: 400; font-size: 19pt; margin: 9mm 0 3mm; break-after: avoid; }
+  h2 { color: var(--blue); font-weight: 600; font-size: 18pt; margin: 9mm 0 3mm; break-after: avoid; }
   h2.page { break-before: page; margin-top: 0; }
-  h3 { color: #4a4a4a; font-weight: 400; font-size: 14.5pt; margin: 7mm 0 2mm; break-after: avoid; }
-  h4 { font-size: 11.5pt; margin: 5mm 0 1mm; break-after: avoid; }
+  h3 { color: var(--blue-dark); font-weight: 600; font-size: 15pt; margin: 7mm 0 2mm; break-after: avoid; }
+  h4 { font-size: 12pt; margin: 5mm 0 1mm; break-after: avoid; }
   p { margin: 0 0 3mm; }
   ul, ol { margin: 0 0 3mm; padding-left: 7mm; }
   li { margin-bottom: 1.2mm; }
@@ -69,7 +72,7 @@
 
   figure { margin: 3mm 0 6mm; break-inside: avoid; text-align: center; }
   figure img { border: 1px solid var(--frame); display: block; margin: 0 auto; max-width: 100%; }
-  figcaption { font-size: 8.5pt; color: #777; margin-top: 1.5mm; }
+  figcaption { font-size: 9pt; color: #606060; margin-top: 1.5mm; }
   .w100 img { width: 100%; }
   .w85 img { width: 85%; }
   .w70 img { width: 70%; }
@@ -77,23 +80,26 @@
   .w45 img { width: 45%; }
   .w35 img { width: 35%; }
 
-  table { border-collapse: collapse; width: 100%; margin: 2mm 0 5mm; font-size: 10pt; break-inside: avoid; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 5mm; font-size: 10.5pt; break-inside: avoid; }
   th, td { border: 1px solid #d6d6d6; padding: 1.6mm 2.4mm; text-align: left; vertical-align: top; }
-  th { background: #eef6fb; font-weight: 600; }
+  th { background: #d2dfff; font-weight: 600; }
 
   .note { margin-top: 6mm; }
   .note strong { display: block; margin-bottom: 2mm; }
-  .tip { border-left: 1mm solid var(--blue); background: #f2f9fd; padding: 2.5mm 4mm; margin: 2mm 0 5mm; break-inside: avoid; }
+  .tip { border-left: 1mm solid var(--blue); background: #ebeaea; padding: 2.5mm 4mm; margin: 2mm 0 5mm; break-inside: avoid; }
 
-  .toc { font-size: 10.5pt; list-style: none; padding-left: 0; }
+  .toc { font-size: 12pt; list-style: none; padding-left: 0; }
   .toc ul { list-style: none; padding-left: 5mm; margin: 1mm 0 2mm; }
-  .toc a { color: var(--ink); text-decoration: none; }
+  .toc a { color: var(--ink); text-decoration: none; display: flex; align-items: baseline; }
+  /* Dotted leader and page number, added by build-pdf.ts once it knows where each heading falls. */
+  .toc .leader { flex: 1; border-bottom: 1px dotted #aaa; margin: 0 2mm; }
+  .toc .pg { font-weight: 400; font-variant-numeric: tabular-nums; }
   .toc li { break-inside: avoid; margin-bottom: 0.8mm; }
   .toc > li > a { font-weight: 600; }
 
   .end { display: flex; gap: 4mm; margin: 10mm 0 6mm; }
   .end span { width: 2.2mm; height: 2.2mm; background: var(--blue); }
-  kbd, code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5pt; background: #f3f3f3; padding: 0 1mm; border-radius: 1mm; }
+  kbd, code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 10.5pt; background: #ebeaea; padding: 0 1mm; border-radius: 1mm; }
 </style>
 </head>
 <body>
@@ -113,7 +119,7 @@
   <p class="team">Team WVS</p>
   <h1>Website Vulnerability Scanner<br>User Manual</h1>
   <p class="meta">12/10/2026</p>
-  <p class="meta">Document prepared by: Deepthi, Jasmine and Sacheth Koushal</p>
+  <p class="meta">Document prepared by: Deepthi (241IT021), Jasmine (241IT051) and Sacheth Koushal (241IT058)</p>
   <div class="accent"></div>
 
   <p class="intro-label">Introduction</p>
@@ -245,7 +251,6 @@
 <figure class="w100"><img src="images/04-main-navigation.png" alt="Main navigation"></figure>
 <ul>
   <li><b>Targets</b>: the websites you have registered, and where you prove ownership and start scans.</li>
-  <li><b>Dashboard</b>: currently empty. A posture overview is planned.</li>
   <li><b>Scans</b>: every scan your organisation has run.</li>
   <li><b>Findings</b>: what the latest scan of each target found.</li>
   <li><b>Reports</b>: generated reports, ready to download or share.</li>
