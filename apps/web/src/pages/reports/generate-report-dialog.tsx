@@ -90,7 +90,11 @@ function CompletedScanSelect({
     <Field>
       <FieldLabel htmlFor="report-scan">Scan</FieldLabel>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id="report-scan" aria-label="Scan">
+        <SelectTrigger
+          id="report-scan"
+          aria-label="Scan"
+          className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
+        >
           <SelectValue placeholder={isLoading ? "Loading scans" : "Choose a completed scan"} />
         </SelectTrigger>
         <SelectContent>
@@ -155,7 +159,8 @@ export function GenerateReportDialog({ scanId }: GenerateReportDialogProps) {
         </DialogHeader>
 
         <form
-          className="flex flex-col gap-6"
+          // min-w-0 lets a long scan name truncate instead of widening the dialog.
+          className="flex min-w-0 flex-col gap-6"
           onSubmit={(event) => {
             event.preventDefault();
             mutation.mutate();
