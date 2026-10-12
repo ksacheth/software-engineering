@@ -4,7 +4,6 @@ import { useRole } from '@/lib/use-role';
 
 const navItems = [
   { name: 'Targets', href: '/targets' },
-  { name: 'Dashboard', href: '/dashboard' },
   { name: 'Scans', href: '/scans' },
   { name: 'Findings', href: '/findings' },
   { name: 'Reports', href: '/reports' },
