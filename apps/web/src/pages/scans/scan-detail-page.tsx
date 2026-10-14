@@ -54,6 +54,10 @@ import {
   TriageBadge,
 } from "../findings/components/finding-badges";
 import { FindingsTable } from "../findings/components/findings-table";
+import {
+  formatCvss,
+  formatEpss,
+} from "../findings/components/findings-result-table";
 import { ScanReportsCard } from "../reports/scan-reports-card";
 
 function ConnectionBadge({
@@ -120,6 +124,9 @@ function FindingTable({ findings }: { findings: ScanFindingSummary[] }) {
           <TableHead>Finding</TableHead>
           <TableHead>Detector</TableHead>
           <TableHead>Location</TableHead>
+          <TableHead>CVE</TableHead>
+          <TableHead className="text-right">CVSS</TableHead>
+          <TableHead className="text-right">EPSS</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -148,6 +155,15 @@ function FindingTable({ findings }: { findings: ScanFindingSummary[] }) {
             </TableCell>
             <TableCell className="max-w-80 truncate font-mono text-xs text-muted-foreground">
               {finding.affectedUrl}
+            </TableCell>
+            <TableCell className="font-mono text-xs whitespace-nowrap">
+              {finding.cveId ?? "-"}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">
+              {formatCvss(finding.cvssScore)}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">
+              {formatEpss(finding.epssScore)}
             </TableCell>
           </TableRow>
         ))}

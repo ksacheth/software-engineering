@@ -415,6 +415,9 @@ describe("accumulating findings", () => {
         name: "From the projection",
         severity: "MEDIUM",
         affectedUrl: "https://a.test/x",
+        cveId: null,
+        cvssScore: null,
+        epssScore: null,
         createdAt: T0,
       },
     ]);
@@ -426,6 +429,39 @@ describe("accumulating findings", () => {
 
     const names = result.current.findings.map((f) => f.name).sort();
     expect(names).toEqual(["From the projection", "Streamed"]);
+  });
+
+  test("replaces a streamed finding with its saved row, in place", async () => {
+    // Only the saved row has an id to link to and the advisory data enrichment
+    // added, so when it is read back after the scan ends it takes the streamed
+    // finding's place rather than being dropped as a duplicate.
+    rows.set("scan-1", scanRow("scan-1"));
+    const { result } = renderLiveScan("scan-1");
+    await waitFor(() => expect(result.current.scan).toBeDefined());
+
+    emit(findingEvent("scan-1", "fp-1", { name: "Outdated jQuery" }));
+    emit(findingEvent("scan-1", "fp-2", { name: "Missing header" }));
+    expect(result.current.findings[0]?.id).toBe("fp-1");
+
+    durableFindings.set("scan-1", [
+      {
+        id: "f-1",
+        fingerprint: "fp-1",
+        detectorId: "P-18",
+        name: "Outdated jQuery",
+        severity: "INFO",
+        affectedUrl: "https://a.test/",
+        cveId: "CVE-2019-11358",
+        cvssScore: 6.1,
+        epssScore: 0.8682,
+        createdAt: T0,
+      },
+    ]);
+    emit({ type: "scan.status", scanJobId: "scan-1", at: T2, status: "COMPLETED", phase: "COMPLETED" });
+
+    await waitFor(() => expect(result.current.findings[0]?.id).toBe("f-1"));
+    expect(result.current.findings[0]).toMatchObject({ cveId: "CVE-2019-11358", cvssScore: 6.1 });
+    expect(result.current.findings.map((f) => f.fingerprint)).toEqual(["fp-1", "fp-2"]);
   });
 
   test("ignores a finding belonging to another scan", async () => {

@@ -96,6 +96,25 @@ describe("the default view", () => {
     expect(within(row).getByText("9.8")).toBeTruthy();
   });
 
+  test("shows the CVE, CVSS and EPSS a finding was enriched with", async () => {
+    await renderFindings([
+      aFinding({
+        name: "Technology and component fingerprinting",
+        detectorId: "P-18",
+        cveId: "CVE-2019-11358",
+        cvssScore: 6.1,
+        epssScore: 0.8682,
+      }),
+    ]);
+
+    const row = (
+      await screen.findByRole("link", { name: "Technology and component fingerprinting" })
+    ).closest("tr")!;
+    expect(within(row).getByText("CVE-2019-11358")).toBeTruthy();
+    expect(within(row).getByText("6.1")).toBeTruthy();
+    expect(within(row).getByText("86.8%")).toBeTruthy();
+  });
+
   test("explains that judged findings are hidden when nothing matches", async () => {
     await renderFindings([]);
 

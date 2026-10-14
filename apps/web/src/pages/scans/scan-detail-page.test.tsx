@@ -434,6 +434,9 @@ describe("findings", () => {
     name: "Missing security header",
     severity: "HIGH",
     affectedUrl: "https://a.test/login",
+    cveId: null,
+    cvssScore: null,
+    epssScore: null,
     createdAt: "2026-09-21T10:00:00.000Z",
     ...overrides,
   });
@@ -452,6 +455,23 @@ describe("findings", () => {
     expect(within(cells).getByText("High")).toBeTruthy();
     expect(within(cells).getByText("P-01")).toBeTruthy();
     expect(within(cells).getByText("https://a.test/login")).toBeTruthy();
+  });
+
+  test("show the advisory data enrichment added", async () => {
+    findings = [
+      finding({ name: "Outdated jQuery", cveId: "CVE-2019-11358", cvssScore: 6.1, epssScore: 0.8682 }),
+      finding({ id: "f-2", fingerprint: "fp-2", name: "Missing CSP" }),
+    ];
+    await showScan();
+
+    const enriched = (await screen.findByText("Outdated jQuery")).closest("tr")!;
+    expect(within(enriched).getByText("CVE-2019-11358")).toBeTruthy();
+    expect(within(enriched).getByText("6.1")).toBeTruthy();
+    expect(within(enriched).getByText("86.8%")).toBeTruthy();
+
+    // A configuration finding has no CVE, so all three read as a dash.
+    const plain = screen.getByText("Missing CSP").closest("tr")!;
+    expect(within(plain).getAllByText("-")).toHaveLength(3);
   });
 
   test("render a severity the dashboard does not know about", async () => {
@@ -495,6 +515,9 @@ describe("findings once the scan completes", () => {
         name: "Stored finding",
         severity: "LOW",
         affectedUrl: "https://a.test/",
+        cveId: null,
+        cvssScore: null,
+        epssScore: null,
         createdAt: "2026-09-21T10:00:00.000Z",
       },
       {
@@ -504,6 +527,9 @@ describe("findings once the scan completes", () => {
         name: "Streamed finding",
         severity: "LOW",
         affectedUrl: "https://a.test/",
+        cveId: null,
+        cvssScore: null,
+        epssScore: null,
         createdAt: "2026-09-21T10:00:00.000Z",
       },
     ];

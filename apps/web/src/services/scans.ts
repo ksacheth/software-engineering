@@ -164,6 +164,10 @@ export interface ScanFindingSummary {
   name: string;
   severity: string;
   affectedUrl: string;
+  /** Null on a finding streamed live, which carries no advisory data. */
+  cveId: string | null;
+  cvssScore: number | null;
+  epssScore: number | null;
   createdAt: string;
 }
 

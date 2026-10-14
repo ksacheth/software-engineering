@@ -114,7 +114,64 @@ describe("AdvisoryEnricher", () => {
     expect(enriched.epssScore).toBe(0.952);
     expect(enriched.epssPercentile).toBe(0.991);
     expect(enriched.cvssVector).toBe("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N");
+    expect(enriched.cvssScore).toBe(7.5);
     expect(enriched.advisoryData).toBeDefined();
+  });
+
+  test("scores the v3 vector when OSV lists a v4 one first", async () => {
+    const mockOsv = {
+      queryPackage: async () => [
+        {
+          id: "GHSA-v4v3",
+          aliases: ["CVE-2023-2222"],
+          severity: [
+            { type: "CVSS_V4", score: "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N" },
+            { type: "CVSS_V3", score: "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N" },
+          ],
+        },
+      ],
+    };
+    const enricher = new AdvisoryEnricher(mockOsv as any, { getScore: async () => null } as any);
+
+    const finding: RawFinding = {
+      detectorId: "P-18",
+      name: "Technology and component fingerprinting",
+      description: "jQuery 1.12.4",
+      remediation: "Upgrade",
+      severity: "INFO",
+      confidence: "FIRM",
+      affectedUrl: "https://example.com/",
+      evidence: { component: "jquery@1.12.4" } as any,
+    };
+    const enriched = await enricher.enrichFinding(finding);
+
+    expect(enriched.cvssVector).toBe("CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N");
+    expect(enriched.cvssScore).toBe(6.1);
+  });
+
+  test("keeps the vector but no score when only a v4 vector is given", async () => {
+    const v4 = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N";
+    const mockOsv = {
+      queryPackage: async () => [
+        { id: "GHSA-v4only", aliases: ["CVE-2024-3333"], severity: [{ type: "CVSS_V4", score: v4 }] },
+      ],
+    };
+    const enricher = new AdvisoryEnricher(mockOsv as any, { getScore: async () => null } as any);
+
+    const finding: RawFinding = {
+      detectorId: "P-18",
+      name: "Technology and component fingerprinting",
+      description: "lodash 4.17.19",
+      remediation: "Upgrade",
+      severity: "INFO",
+      confidence: "FIRM",
+      affectedUrl: "https://example.com/",
+      evidence: { component: "lodash@4.17.19" } as any,
+    };
+    const enriched = await enricher.enrichFinding(finding);
+
+    expect(enriched.cvssVector).toBe(v4);
+    expect(enriched.cvssScore).toBeUndefined();
   });
 
   test("looks up scoped npm packages by their full name", async () => {

@@ -22,11 +22,11 @@ export interface RowSelection {
   onToggleAll: () => void;
 }
 
-function formatCvss(value: number | null): string {
+export function formatCvss(value: number | null): string {
   return value === null ? "-" : value.toFixed(1);
 }
 
-function formatEpss(value: number | null): string {
+export function formatEpss(value: number | null): string {
   return value === null ? "-" : `${(value * 100).toFixed(1)}%`;
 }
 
@@ -63,6 +63,7 @@ export function FindingsResultTable({
           {showTarget && <TableHead>Target</TableHead>}
           <TableHead>Diff</TableHead>
           <TableHead>Triage</TableHead>
+          <TableHead>CVE</TableHead>
           <TableHead className="text-right">CVSS</TableHead>
           <TableHead className="text-right">EPSS</TableHead>
         </TableRow>
@@ -110,6 +111,9 @@ export function FindingsResultTable({
             </TableCell>
             <TableCell>
               <TriageBadge state={finding.triage.state} />
+            </TableCell>
+            <TableCell className="font-mono text-sm whitespace-nowrap">
+              {finding.cveId ?? "-"}
             </TableCell>
             <TableCell className="text-right font-mono text-sm">
               {formatCvss(finding.cvssScore)}

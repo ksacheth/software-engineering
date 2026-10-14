@@ -42,6 +42,7 @@ export interface FindingSummary {
   owaspCategory: string | null;
   affectedUrl: string;
   affectedParameter: string | null;
+  cveId: string | null;
   cvssScore: number | null;
   epssScore: number | null;
   occurrenceCount: number;
@@ -78,7 +79,6 @@ export interface FindingDetail extends FindingSummary {
   description: string;
   remediation: string;
   cvssVector: string | null;
-  cveId: string | null;
   epssPercentile: number | null;
   advisoryData: unknown;
   occurrences: unknown;
