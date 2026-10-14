@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>WVS Experimental Results</title><style>
+@font-face { font-family: "Noto Sans"; font-weight: 100 900; src: url("../../apps/web/node_modules/@fontsource-variable/noto-sans/files/noto-sans-latin-wght-normal.woff2") format("woff2"); }
+@page { size: A4; margin: 18mm 16mm 16mm; @bottom-center { content: counter(page); font: 9pt "Noto Sans", sans-serif; color: #606060; } }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font: 11pt/1.5 "Noto Sans", sans-serif; color: #150202; margin: 0; }
+.band { height: 6mm; background: linear-gradient(90deg, #162f6a, #214aab); margin-bottom: 8mm; }
+h1 { color: #162f6a; font-size: 24pt; margin: 0 0 1mm; }
+.meta { color: #606060; margin: 0 0 6mm; }
+h2 { color: #214aab; font-size: 16pt; margin: 8mm 0 2mm; break-after: avoid; }
+table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 2mm 0 4mm; }
+th, td { border: 1px solid #c6c6c6; padding: 1.5mm 2mm; text-align: left; vertical-align: top; }
+th { background: #d2dfff; }
+td.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr.miss td { background: #fcdada; }
+tr { break-inside: avoid; }
+code { font: 9pt Menlo, monospace; }
+.kpis { display: flex; gap: 4mm; margin: 3mm 0 5mm; }
+.kpi { flex: 1; border: 1px solid #a3bbf3; border-radius: 2mm; padding: 3mm; background: #f4f7ff; }
+.kpi b { display: block; font-size: 18pt; color: #162f6a; }
+.kpi span { font-size: 9pt; color: #606060; }
+figure { margin: 4mm 0 6mm; break-inside: avoid; text-align: center; }
+figure img { max-width: 100%; max-height: 120mm; border: 1px solid #a3bbf3; }
+figcaption { font-size: 9pt; color: #606060; margin-top: 1.5mm; }
+</style></head><body>
+<div class="band"></div>
+<h1>Website Vulnerability Scanner: Experimental Results</h1>
+<p class="meta">Team WVS: Deepthi (241IT021), Jasmine (241IT051) and Sacheth Koushal (241IT058). Software Engineering (IT303), October 12, 2026.</p>
+
+<h2>1. Aim</h2>
+<p>Measure how well WVS finds real weaknesses on a website it is allowed to scan, how long a scan takes, and whether the code behaves as specified.</p>
+
+<h2>2. Setup</h2>
+<ul>
+<li><b>Target:</b> <code>vuln-lab</code>, a deliberately weak test website (source in <code>tools/vuln-lab</code>), deployed at <code>http://vuln-lab.sacheth.tech</code>. Each weakness is planted for one or more detectors, as listed in <code>tools/vuln-lab/README.md</code>.</li>
+<li><b>Ownership:</b> verified with the well-known file method before scanning, as WVS requires.</li>
+<li><b>Scan:</b> STANDARD profile (10 requests per second, concurrency 5, depth 5, at most 200 pages and 2,000 requests). Only <code>/logout</code> was excluded from scope.</li>
+<li><b>Scan ID:</b> <code>cmv4r3v5f0009x8p455ba5tyj</code>, run on October 12, 2026.</li>
+<li><b>Stack:</b> WVS running locally (React web app, Express API, BullMQ scan worker, PostgreSQL 16, Redis 7).</li>
+</ul>
+
+<h2>3. Results at a glance</h2>
+<div class="kpis">
+<div class="kpi"><b>33 / 34</b><span>planted detector checks found (97%)</span></div>
+<div class="kpi"><b>64</b><span>findings reported</span></div>
+<div class="kpi"><b>52 s</b><span>scan time (32 pages, 126 requests)</span></div>
+<div class="kpi"><b>1,233</b><span>automated tests passed, 0 failed</span></div>
+</div>
+<table style="width:45%"><tr><th>Severity</th><th>Findings</th></tr><tr><td>Critical</td><td class="n">17</td></tr><tr><td>High</td><td class="n">8</td></tr><tr><td>Medium</td><td class="n">20</td></tr><tr><td>Low</td><td class="n">13</td></tr><tr><td>Info</td><td class="n">6</td></tr><tr><th>Total</th><th class="n">64</th></tr></table>
+<p>No detector raised an execution error during the scan.</p>
+
+<h2>4. Planted weaknesses compared with findings</h2>
+<table><tr><th>Detector(s)</th><th>Planted weakness</th><th>Found by the scan</th><th>Result</th></tr><tr class=""><td><code>P-01, P-03..P-06, A-06</code></td><td>No security headers on any HTML page</td><td>P-01, P-03, P-04, P-05, P-06, A-06 all reported</td><td>Detected</td></tr><tr class=""><td><code>P-07, P-08, P-09</code></td><td>PHPSESSID cookie with no flags</td><td>2 cookies each for Secure, HttpOnly, SameSite</td><td>Detected</td></tr><tr class=""><td><code>P-10</code></td><td>lab_theme cookie scoped to Domain=sacheth.tech</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>P-17</code></td><td>Server: Apache/2.4.49, X-Powered-By: PHP/5.6.40</td><td>2</td><td>Detected</td></tr><tr class=""><td><code>P-18</code></td><td>Same headers, jQuery 1.12.4, WordPress 4.7 generator</td><td>4</td><td>Detected</td></tr><tr class=""><td><code>P-20</code></td><td>/error, /legacy.php, /product?id=&#x27;</td><td>2 of 3 (/product?id=&#x27; is reported as SQL injection by A-02)</td><td>Detected</td></tr><tr class=""><td><code>P-21</code></td><td>/.git/HEAD, /.git/config, /.svn/wc.db, /.hg/requires</td><td>4 of 4</td><td>Detected</td></tr><tr class=""><td><code>P-22</code></td><td>/.env, /web.config, /wp-config.php, /application.yml, /appsettings.json, /docker-compose.yml, /.npmrc</td><td>7 of 7 (plus /config.php.bak)</td><td>Detected</td></tr><tr class=""><td><code>P-23</code></td><td>/backup/</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>P-24</code></td><td>/config.php.bak, /backup/db.sql.old, /index.php~</td><td>2 of 3 (/config.php.bak is reported by P-22)</td><td>Detected</td></tr><tr class=""><td><code>P-26</code></td><td>code.jquery.com script without integrity</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>P-27</code></td><td>AWS key and api_key on /, /keys/deploy_key</td><td>3</td><td>Detected</td></tr><tr class=""><td><code>P-28</code></td><td>Contact address on /</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>P-29</code></td><td>/login, /account with no Cache-Control</td><td>3</td><td>Detected</td></tr><tr class=""><td><code>P-30</code></td><td>No /.well-known/security.txt</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>P-31</code></td><td>/login password field without autocomplete</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-01</code></td><td>/search?q= echoed raw</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-02</code></td><td>/product?id= (error-based SQL injection)</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-03</code></td><td>/product?id= (boolean-based SQL injection)</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-04</code></td><td>/go?url= open redirect</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-05</code></td><td>Any Origin reflected with credentials</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-07</code></td><td>OPTIONS advertises PUT, DELETE, TRACE</td><td>1</td><td>Detected</td></tr><tr class=""><td><code>A-09, A-13</code></td><td>/admin, /administrator, /.git/config, /.env, /backup, /backup.zip, /config.php.bak, /phpinfo.php, /server-status</td><td>A-09: 9 of 9; A-13: 1</td><td>Detected</td></tr><tr class=""><td><code>A-10</code></td><td>/login POST form without a CSRF token</td><td>1</td><td>Detected</td></tr><tr class="miss"><td><code>A-11</code></td><td>/download?file= path traversal</td><td>0</td><td>Missed</td></tr><tr class=""><td><code>A-12</code></td><td>/greet?name= template injection</td><td>1</td><td>Detected</td></tr></table>
+<p><b>Missed:</b> A-11 (path traversal) did not report <code>/download?file=</code>. This is the one planted weakness the scan did not find, and it is the main item for future work.</p>
+<p><b>Not testable on this lab:</b> P-02, P-11 to P-16, P-25 and A-14 need an HTTPS origin, and A-08 (host header injection) never reaches the lab because the web server sends unknown hosts to its default site.</p>
+
+<h2>5. Automated tests</h2>
+<p>Each package's suite was run with <code>bun run test</code> on October 12, 2026.</p>
+<table><tr><th>Package</th><th>Passed</th><th>Failed</th><th>Files</th><th>Time</th></tr><tr><td><code>apps/api</code></td><td class="n">342</td><td class="n">0</td><td class="n">21</td><td class="n">56.9 s</td></tr><tr><td><code>apps/web</code></td><td class="n">304</td><td class="n">0</td><td class="n">18</td><td class="n">12.6 s</td></tr><tr><td><code>apps/worker</code></td><td class="n">119</td><td class="n">0</td><td class="n">13</td><td class="n">5.3 s</td></tr><tr><td><code>packages/detectors</code></td><td class="n">185</td><td class="n">0</td><td class="n">7</td><td class="n">0.3 s</td></tr><tr><td><code>packages/scope-guard</code></td><td class="n">52</td><td class="n">0</td><td class="n">4</td><td class="n">&lt;0.1 s</td></tr><tr><td><code>packages/scope-rules</code></td><td class="n">92</td><td class="n">0</td><td class="n">4</td><td class="n">&lt;0.1 s</td></tr><tr><td><code>packages/shared</code></td><td class="n">139</td><td class="n">0</td><td class="n">6</td><td class="n">&lt;0.1 s</td></tr><tr><th>Total</th><th class="n">1,233</th><th class="n">0</th><th class="n">73</th><th></th></tr></table>
+
+<h2>6. Screenshots</h2>
+<figure><img src="screenshots/01-scan-summary.png"><figcaption>Figure 1: The completed scan: 32 pages crawled, 126 requests, 64 findings.</figcaption></figure><figure><img src="screenshots/03-findings-list.png"><figcaption>Figure 2: Every finding from the scan, most severe first.</figcaption></figure><figure><img src="screenshots/05-test-results.png"><figcaption>Figure 3: The automated test suite: 1,233 tests, none failing.</figcaption></figure><figure><img src="screenshots/06-report-executive-summary.png"><figcaption>Figure 4: First page of the Executive Summary report generated from the scan.</figcaption></figure><figure><img src="screenshots/07-report-technical-finding.png"><figcaption>Figure 5: A finding as it appears in the Technical Report.</figcaption></figure>
+
+<h2>7. Conclusion</h2>
+<p>WVS found 33 of the 34 detector checks planted in the test website, a 97% detection rate, in under a minute and within its request-rate limit. Its output is triaged in the app and exported as executive and technical reports. All 1,233 automated tests pass. The missed path traversal case (A-11) is the main item for future work.</p>
+</body></html>

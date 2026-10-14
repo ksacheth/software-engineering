@@ -1,0 +1,738 @@
+// WVS database schema (PostgreSQL), generated from packages/database/prisma/schema.prisma.
+// Paste into https://dbdiagram.io. Append-only stores have no foreign keys by design (ADR-0002),
+// so audit_log and url_ledger appear without relationship lines.
+
+Table "user" {
+  id text [pk, default: `cuid()`]
+  name text [not null]
+  email text [unique, not null]
+  emailVerified boolean [not null, default: false]
+  image text
+  role Role [not null, default: 'ANALYST']
+  failedLoginCount integer [not null, default: 0]
+  lockedUntil timestamptz
+  suspendedAt timestamptz [note: 'F.8: an administrator\'s indefinite block on sign-in. Distinct from lockedUntil, which follows failed sign-ins and expires on its own.']
+  twoFactorEnabled boolean [default: false]
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+}
+
+Table "session" {
+  id text [pk, default: `cuid()`]
+  expiresAt timestamptz [not null]
+  token text [unique, not null]
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+  ipAddress text
+  userAgent text
+  userId text [not null]
+  activeOrganizationId text
+
+  indexes {
+    userId
+  }
+}
+
+Table "account" {
+  id text [pk, default: `cuid()`]
+  accountId text [not null]
+  providerId text [not null]
+  userId text [not null]
+  accessToken text
+  refreshToken text
+  idToken text
+  accessTokenExpiresAt timestamptz
+  refreshTokenExpiresAt timestamptz
+  scope text
+  password text
+  issuer text
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+
+  indexes {
+    userId
+  }
+}
+
+Table "verification" {
+  id text [pk, default: `cuid()`]
+  identifier text [not null]
+  value text [not null]
+  expiresAt timestamptz [not null]
+  createdAt timestamptz [default: `now()`]
+  updatedAt timestamptz [note: 'updated automatically']
+}
+
+Table "two_factor" {
+  id text [pk, default: `cuid()`]
+  secret text [not null]
+  backupCodes text [not null]
+  userId text [not null]
+  verified boolean [not null, default: false]
+  failedVerificationCount integer [not null, default: 0]
+  lockedUntil timestamptz
+
+  indexes {
+    userId
+  }
+}
+
+Table "organization" {
+  id text [pk, default: `cuid()`]
+  name text [not null]
+  slug text [unique]
+  logo text
+  metadata text
+  maxConcurrentScans integer [not null, default: 2]
+  scanRateLimit integer [not null, default: 10]
+  createdAt timestamptz [not null, default: `now()`]
+}
+
+Table "member" {
+  id text [pk, default: `cuid()`]
+  organizationId text [not null]
+  userId text [unique, not null]
+  role text [not null, default: 'member']
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    organizationId
+  }
+}
+
+Table "invitation" {
+  id text [pk, default: `cuid()`]
+  organizationId text [not null]
+  email text [not null]
+  role text [default: 'member']
+  status text [not null, default: 'pending']
+  expiresAt timestamptz [not null]
+  inviterId text [not null]
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    organizationId
+    inviterId
+    email
+  }
+}
+
+Table "target" {
+  id text [pk, default: `cuid()`]
+  organizationId text [not null]
+  origin text [not null]
+  label text [not null]
+  verificationToken text [unique, not null]
+  verificationMethod VerificationMethod [not null, default: 'DNS_TXT']
+  verificationStatus TargetVerificationStatus [not null, default: 'UNVERIFIED']
+  verifiedAt timestamptz
+  verificationExpiresAt timestamptz
+  authorisationAck boolean [not null, default: false]
+  authorisationAckAt timestamptz
+  authorisationAckById text
+  verifiedIpRanges "text[]" [not null, default: '{}']
+  includedPaths "text[]" [not null, default: '{}']
+  excludedPaths "text[]" [not null, default: '{}']
+  maxDepth integer [not null, default: 5]
+  maxPages integer [not null, default: 200]
+  maxRequests integer [not null, default: 2000]
+  rateLimit integer [not null, default: 10]
+  isArchived boolean [not null, default: false]
+  archivedAt timestamptz
+  createdById text
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+
+  indexes {
+    (organizationId, origin) [unique]
+    origin
+    createdById
+    authorisationAckById
+  }
+}
+
+Table "network_blocklist" {
+  id text [pk, default: `cuid()`]
+  pattern text [not null]
+  patternType NetworkBlocklistType [not null, default: 'HOST_SUFFIX']
+  reason text [not null]
+  isActive boolean [not null, default: true]
+  createdById text
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+
+  indexes {
+    pattern
+    createdById
+  }
+}
+
+Table "scan_schedule" {
+  id text [pk, default: `cuid()`]
+  targetId text [not null]
+  organizationId text [not null]
+  cronSchedule text [not null]
+  profile ScanProfile [not null, default: 'STANDARD']
+  isActive boolean [not null, default: true]
+  nextRunAt timestamptz
+  lastRunAt timestamptz
+  rateLimit integer [not null, default: 10]
+  concurrency integer [not null, default: 5]
+  maxDepth integer [not null, default: 5]
+  maxPages integer [not null, default: 200]
+  maxRequests integer [not null, default: 2000]
+  createdById text
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+
+  indexes {
+    targetId
+    organizationId
+    (isActive, nextRunAt)
+    createdById
+  }
+}
+
+Table "scan_job" {
+  id text [pk, default: `cuid()`]
+  scheduleId text
+  targetId text [not null]
+  organizationId text [not null]
+  profile ScanProfile [not null, default: 'STANDARD']
+  status ScanStatus [not null, default: 'QUEUED']
+  phase ScanPhase [not null, default: 'DISCOVERY']
+  workerId text
+  attempt integer [not null, default: 1, note: '1-based delivery count, incremented by a resume so the orchestrator continues from its checkpoint rather than crawling the target again. Carried in the queue payload; see ADR-0006 and ADR-0007.']
+  rateLimit integer [not null, default: 10]
+  concurrency integer [not null, default: 5]
+  maxDepth integer [not null, default: 5]
+  includedPaths "text[]" [not null, default: '{}']
+  excludedPaths "text[]" [not null, default: '{}']
+  maxPages integer [not null, default: 200]
+  maxRequests integer [not null, default: 2000]
+  detectorVersions jsonb
+  pagesCrawled integer [not null, default: 0]
+  requestsMade integer [not null, default: 0]
+  findingsCount integer [not null, default: 0]
+  progressPercentage float8 [not null, default: 0]
+  isDegraded boolean [not null, default: false]
+  degradations jsonb [not null, default: '[]']
+  blockingDetected boolean [not null, default: false]
+  blockingDetectedAt timestamptz
+  queuedAt timestamptz [not null, default: `now()`]
+  startedAt timestamptz
+  completedAt timestamptz
+  pausedAt timestamptz
+  cancelledAt timestamptz
+  failureReason text
+  bindingLimit CrawlLimitType
+  createdById text
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+
+  indexes {
+    targetId
+    (organizationId, status)
+    status
+    scheduleId
+    createdById
+  }
+}
+
+Table "scan_checkpoint" {
+  id text [pk, default: `cuid()`]
+  scanJobId text [unique, not null]
+  phase ScanPhase [not null]
+  crawlFrontier jsonb [not null]
+  crawledUrls jsonb [not null]
+  completedDetectors jsonb [not null]
+  pendingDetectors jsonb [not null]
+  checkpointedAt timestamptz [not null, default: `now()`, note: 'updated automatically']
+  metadata jsonb
+}
+
+Table "crawled_page" {
+  id text [pk, default: `cuid()`]
+  scanJobId text [not null]
+  url text [not null]
+  normalizedUrl text [not null]
+  method text [not null, default: 'GET']
+  statusCode integer [not null]
+  contentType text
+  depth integer [not null, default: 0]
+  responseTimeMs integer
+  requestHeaders jsonb
+  responseHeaders jsonb
+  forms jsonb
+  parameters jsonb
+  linksFound jsonb
+  isBlocked boolean [not null, default: false]
+  reducedConfidence boolean [not null, default: false]
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (scanJobId, normalizedUrl, method) [unique]
+  }
+}
+
+Table "finding" {
+  id text [pk, default: `cuid()`]
+  fingerprint text [not null]
+  scanJobId text [not null]
+  targetId text [not null]
+  detectorId text [not null]
+  name text [not null]
+  description text [not null]
+  remediation text [not null]
+  severity FindingSeverity [not null]
+  confidence FindingConfidence [not null]
+  cwe text
+  owaspCategory text
+  affectedUrl text [not null]
+  affectedParameter text
+  cvssScore float8
+  cvssVector text
+  cveId text
+  epssScore float8
+  epssPercentile float8
+  advisoryData jsonb
+  occurrenceCount integer [not null, default: 1]
+  occurrences jsonb
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (scanJobId, fingerprint) [unique]
+    (targetId, fingerprint, createdAt)
+    fingerprint
+    severity
+  }
+}
+
+Table "scan_finding_diff" {
+  id text [pk, default: `cuid()`]
+  scanJobId text [not null]
+  targetId text [not null]
+  fingerprint text [not null]
+  status ComparisonStatus [not null]
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (scanJobId, fingerprint) [unique]
+    (targetId, status)
+    (targetId, fingerprint)
+    (scanJobId, status)
+  }
+}
+
+Table "finding_evidence" {
+  id text [pk, default: `cuid()`]
+  findingId text [unique, not null]
+  requestHeaders jsonb
+  requestBody text
+  responseHeaders jsonb
+  responseBody text
+  curlCommand text
+  extractedSnippet text
+  isRedacted boolean [not null, default: false]
+  redactionVersion integer [not null, default: 1]
+  isPurged boolean [not null, default: false]
+  purgedAt timestamptz
+  expiresAt timestamptz [not null]
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (expiresAt, isPurged)
+  }
+}
+
+Table "target_finding_triage" {
+  targetId text [not null]
+  findingFingerprint text [not null]
+  state TriageState [not null, default: 'OPEN']
+  justification text
+  updatedById text
+  lastHistoryId text
+  updatedAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (targetId, findingFingerprint) [pk]
+    (targetId, state)
+    updatedById
+  }
+}
+
+Table "finding_triage_history" {
+  id text [pk, default: `cuid()`]
+  findingFingerprint text [not null]
+  targetId text [not null]
+  state TriageState [not null, default: 'OPEN']
+  justification text
+  userId text
+  createdAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (targetId, findingFingerprint, createdAt)
+    findingFingerprint
+    userId
+  }
+}
+
+Table "detector_execution_error" {
+  id text [pk, default: `cuid()`]
+  scanJobId text [not null]
+  detectorId text [not null]
+  url text
+  parameter text
+  errorType DetectorErrorType [not null]
+  message text [not null]
+  occurrenceCount integer [not null, default: 1]
+  occurredAt timestamptz [not null, default: `now()`]
+
+  indexes {
+    (scanJobId, detectorId, errorType) [unique]
+    (detectorId, errorType)
+  }
+}
+
+Table "audit_log" {
+  id text [pk, default: `cuid()`]
+  timestamp timestamptz [not null, default: `now()`]
+  action AuditAction [not null]
+  organizationId text
+  userId text
+  ipAddress text
+  userAgent text
+  resourceType text
+  resourceId text
+  metadata jsonb
+
+  indexes {
+    (organizationId, timestamp)
+    action
+    timestamp
+  }
+}
+
+Table "url_ledger" {
+  id text [pk, default: `cuid()`]
+  scanJobId text [not null]
+  timestamp timestamptz [not null, default: `now()`]
+  url text [not null]
+  resolvedIp text [not null]
+  httpMethod text [not null, default: 'GET']
+  statusCode integer
+  decision ScopeDecision [not null]
+  decisionReason text
+  responseTimeMs integer
+  bytesSent integer
+  bytesReceived integer
+
+  indexes {
+    (scanJobId, timestamp)
+  }
+}
+
+Table "system_setting" {
+  key text [pk]
+  value text [not null]
+  description text
+  updatedAt timestamptz [not null, note: 'updated automatically']
+}
+
+Table "scan_report" {
+  id text [pk, default: `cuid()`]
+  scanJobId text [not null]
+  template ReportTemplate [not null]
+  format ReportFormat [not null]
+  status ReportStatus [not null, default: 'QUEUED']
+  failureReason text
+  filePath text [note: 'Relative to REPORT_STORAGE_PATH. Null until the report is READY.']
+  fileSize integer
+  shareTokenHash text [unique, note: 'SHA-256 of the share token. The token itself is a credential and is shown once, when the link is created; see ADR-0011.']
+  shareExpiresAt timestamptz
+  minSeverityFilter FindingSeverity
+  triageStateFilter TriageState [not null, default: '{}', note: 'Empty means every triage state.']
+  coverageLimitations text [note: 'The statement the generated report carries, one limitation per line. Null until generation has worked it out.']
+  includesEvidence boolean [not null, default: false, note: 'Whether the file holds raw evidence (ADR-0010, ADR-0011).']
+  expiresAt timestamptz [note: 'C.7: when the earliest evidence in the file reaches its retention expiry. The file is not served after this.']
+  createdById text
+  createdAt timestamptz [not null, default: `now()`]
+  completedAt timestamptz
+
+  indexes {
+    scanJobId
+    createdById
+  }
+}
+
+Table "email_outbox" {
+  id text [pk, default: `cuid()`]
+  createdAt timestamptz [not null, default: `now()`]
+  updatedAt timestamptz [not null, note: 'updated automatically']
+  recipient text [not null]
+  subject text [not null]
+  text text [not null]
+  html text
+  kind text [not null]
+  status EmailStatus [not null, default: 'FAILED']
+  attempts integer [not null, default: 1]
+  lastError text
+  lastAttemptAt timestamptz [not null]
+  nextAttemptAt timestamptz [not null]
+  sentAt timestamptz
+  userId text
+
+  indexes {
+    (status, nextAttemptAt)
+    createdAt
+  }
+}
+
+Ref: "session".userId > "user".id [delete: cascade]
+Ref: "account".userId > "user".id [delete: cascade]
+Ref: "two_factor".userId > "user".id [delete: cascade]
+Ref: "member".organizationId > "organization".id [delete: cascade]
+Ref: "member".userId - "user".id [delete: cascade]
+Ref: "invitation".organizationId > "organization".id [delete: cascade]
+Ref: "invitation".inviterId > "user".id [delete: cascade]
+Ref: "target".organizationId > "organization".id [delete: cascade]
+Ref: "target".authorisationAckById > "user".id [delete: set null]
+Ref: "target".createdById > "user".id [delete: set null]
+Ref: "network_blocklist".createdById > "user".id [delete: set null]
+Ref: "scan_schedule".targetId > "target".id [delete: cascade]
+Ref: "scan_schedule".organizationId > "organization".id [delete: cascade]
+Ref: "scan_schedule".createdById > "user".id [delete: set null]
+Ref: "scan_job".scheduleId > "scan_schedule".id [delete: set null]
+Ref: "scan_job".targetId > "target".id [delete: cascade]
+Ref: "scan_job".organizationId > "organization".id [delete: cascade]
+Ref: "scan_job".createdById > "user".id [delete: set null]
+Ref: "scan_checkpoint".scanJobId - "scan_job".id [delete: cascade]
+Ref: "crawled_page".scanJobId > "scan_job".id [delete: cascade]
+Ref: "finding".scanJobId > "scan_job".id [delete: cascade]
+Ref: "finding".targetId > "target".id [delete: cascade]
+Ref: "scan_finding_diff".scanJobId > "scan_job".id [delete: cascade]
+Ref: "scan_finding_diff".targetId > "target".id [delete: cascade]
+Ref: "finding_evidence".findingId - "finding".id [delete: cascade]
+Ref: "target_finding_triage".targetId > "target".id [delete: cascade]
+Ref: "target_finding_triage".updatedById > "user".id [delete: set null]
+Ref: "detector_execution_error".scanJobId > "scan_job".id [delete: cascade]
+Ref: "scan_report".scanJobId > "scan_job".id [delete: cascade]
+Ref: "scan_report".createdById > "user".id [delete: set null]
+
+Enum Role {
+  ADMIN
+  ANALYST
+  DEVELOPER
+  VIEWER
+}
+
+Enum VerificationMethod {
+  DNS_TXT
+  WELL_KNOWN
+}
+
+Enum TargetVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
+}
+
+Enum NetworkBlocklistType {
+  CIDR
+  HOST_SUFFIX
+  IP_RANGE
+  REGEX
+}
+
+Enum ScanProfile {
+  PASSIVE
+  STANDARD
+  THOROUGH
+}
+
+Enum ScanStatus {
+  QUEUED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+  ABORTED_SAFETY
+}
+
+Enum ScanPhase {
+  DISCOVERY
+  DETECTION
+  REPORTING
+  COMPLETED
+}
+
+Enum CrawlLimitType {
+  DEPTH_REACHED
+  PAGE_CEILING_REACHED
+  REQUEST_CEILING_REACHED
+  QUEUE_EXHAUSTED
+  CANCELLED
+  TIMEOUT
+  SAFETY_ABORT
+}
+
+Enum FindingSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+Enum FindingConfidence {
+  CONFIRMED
+  FIRM
+  TENTATIVE
+}
+
+Enum ComparisonStatus {
+  NEW
+  PERSISTING
+  RESOLVED
+}
+
+Enum TriageState {
+  OPEN
+  CONFIRMED
+  FALSE_POSITIVE
+  ACCEPTED_RISK
+  RESOLVED
+}
+
+Enum DetectorErrorType {
+  TIMEOUT
+  UNEXPECTED_RESPONSE
+  PARSE_FAILURE
+  TEMPLATE_ERROR
+  INTERNAL
+}
+
+Enum AuditAction {
+  AUTH_REGISTER
+  AUTH_LOGIN
+  AUTH_LOGOUT
+  AUTH_FAILED
+  AUTH_LOCKOUT
+  AUTH_MFA_ENABLED
+  TARGET_CREATED
+  TARGET_VERIFIED
+  TARGET_VERIFICATION_FAILED
+  TARGET_REFUSED
+  TARGET_SCOPE_CHANGED
+  TARGET_ARCHIVED
+  TARGET_DELETED
+  SCAN_QUEUED
+  SCAN_STARTED
+  SCAN_PAUSED
+  SCAN_RESUMED
+  SCAN_CANCELLED
+  SCAN_ABORTED_SAFETY
+  SCAN_FAILED
+  FINDING_TRIAGED
+  EVIDENCE_PURGED
+  REPORT_EXPORTED
+  REPORT_SHARED
+  REPORT_SHARE_REVOKED
+  ADMIN_KILL_SWITCH_ENGAGED
+  ADMIN_KILL_SWITCH_DISENGAGED
+  ADMIN_BLOCKLIST_CREATED
+  ADMIN_BLOCKLIST_UPDATED
+  ADMIN_BLOCKLIST_DELETED
+  ADMIN_QUOTA_CHANGED
+  ADMIN_ROLE_GRANTED
+  ADMIN_USER_ROLE_CHANGED
+  ADMIN_USER_SUSPENDED
+  ADMIN_USER_UNSUSPENDED
+}
+
+Enum ScopeDecision {
+  ALLOWED
+  BLOCKED_VERIFICATION
+  BLOCKED_SCOPE
+  BLOCKED_BLOCKLIST
+  BLOCKED_RATE_LIMIT
+  BLOCKED_CEILING
+  BLOCKED_DNS_REBINDING
+  BLOCKED_KILL_SWITCH
+  ERROR
+}
+
+Enum ReportTemplate {
+  EXECUTIVE_SUMMARY
+  TECHNICAL_REPORT
+}
+
+Enum ReportFormat {
+  PDF
+  HTML
+  JSON
+  CSV
+  SARIF
+}
+
+Enum ReportStatus {
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+}
+
+Enum EmailStatus {
+  FAILED
+  SENT
+  DEAD_LETTER
+}
+
+TableGroup D1_accounts_organisations_sessions {
+  "user"
+  "session"
+  "account"
+  "verification"
+  "two_factor"
+  "organization"
+  "member"
+  "invitation"
+}
+
+TableGroup D2_targets_scope {
+  "target"
+  "network_blocklist"
+}
+
+TableGroup D3_jobs_checkpoints {
+  "scan_schedule"
+  "scan_job"
+  "scan_checkpoint"
+}
+
+TableGroup D4_scan_records {
+  "crawled_page"
+}
+
+TableGroup D5_findings_triage_evidence {
+  "finding"
+  "scan_finding_diff"
+  "finding_evidence"
+  "target_finding_triage"
+  "finding_triage_history"
+  "detector_execution_error"
+}
+
+TableGroup D6_audit_log_url_ledger {
+  "audit_log"
+  "url_ledger"
+}
+
+TableGroup operations_reports_settings_email {
+  "system_setting"
+  "scan_report"
+  "email_outbox"
+}
