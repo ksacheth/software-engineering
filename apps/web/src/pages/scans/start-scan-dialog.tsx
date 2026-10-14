@@ -163,7 +163,7 @@ export function StartScanDialog({ target, scannable }: StartScanDialogProps) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Play className="size-5 text-primary" />
