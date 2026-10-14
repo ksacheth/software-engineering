@@ -46,6 +46,12 @@ export function useMe(): MeResponse | undefined {
   return data;
 }
 
+/** Whether anyone is signed in; null until the session check answers. */
+export function useSignedIn(): boolean | null {
+  const { data: session, isPending } = useSession(authClient);
+  return isPending ? null : Boolean(session);
+}
+
 export function useRole(): Role | null {
   return useMe()?.user.role ?? null;
 }

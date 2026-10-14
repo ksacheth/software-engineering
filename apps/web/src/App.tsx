@@ -18,6 +18,7 @@ import { WebSocketProvider } from "@/providers/websocket-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthPage } from "@/pages/auth/auth-page";
+import { LandingPage } from "@/pages/landing/landing-page";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { TargetsPage } from "@/pages/targets/targets-page";
 import { TargetDetailPage } from "@/pages/targets/target-detail-page";
@@ -46,7 +47,7 @@ function AuthProviderWrapper({ children }: { children: ReactNode }) {
   const redirectTo =
     requestedRedirect?.startsWith("/") && !requestedRedirect.startsWith("//")
       ? requestedRedirect
-      : "/targets";
+      : "/dashboard";
 
   return (
     <AuthProvider
@@ -81,7 +82,8 @@ export function App() {
           <WebSocketProvider>
             <TooltipProvider>
               <Routes>
-                {/* Auth routes */}
+                {/* Public routes */}
+                <Route path="/" element={<LandingPage />} />
                 <Route path="/auth/*" element={<AuthPage />} />
 
                 {/* Protected dashboard routes */}
@@ -92,7 +94,6 @@ export function App() {
                     </RequireAuth>
                   }
                 >
-                  <Route index element={<Navigate to="/targets" replace />} />
                   <Route path="/targets" element={<TargetsPage />} />
                   <Route path="/targets/:id" element={<TargetDetailPage />} />
                   <Route
@@ -112,8 +113,8 @@ export function App() {
                   <Route path="/settings/*" element={<SettingsPage />} />
                 </Route>
 
-                {/* Catch-all redirect to /targets */}
-                <Route path="*" element={<Navigate to="/targets" replace />} />
+                {/* Catch-all redirect to the landing page */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <Toaster />
             </TooltipProvider>

@@ -175,3 +175,16 @@
     @apply font-sans;
     }
 }
+
+/* The landing page illustration's scan line, swept only for readers who have
+   not asked their system to reduce motion. */
+@keyframes hero-scan {
+    from { transform: translateY(0); }
+    to { transform: translateY(236px); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .hero-scan {
+        animation: hero-scan 3.5s ease-in-out infinite alternate;
+    }
+}
