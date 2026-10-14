@@ -110,7 +110,7 @@ export function RegisterTargetDialog({ open, onOpenChange }: RegisterTargetDialo
         onOpenChange(isOpen);
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="size-5 text-primary" />

@@ -62,6 +62,7 @@ const realToast = await import("sonner");
 const realAdmin = await import("@/services/admin");
 const realKillSwitch = await import("@/lib/use-kill-switch");
 const realReports = await import("@/services/reports");
+const realDashboard = await import("@/services/dashboard");
 
 const scansMock = overridable(realScans);
 const targetsMock = overridable(realTargets);
@@ -72,6 +73,7 @@ const toastMock = overridable(realToast.toast as unknown as Record<string, unkno
 const adminMock = overridable(realAdmin);
 const killSwitchMock = overridable(realKillSwitch);
 const reportsMock = overridable(realReports);
+const dashboardMock = overridable(realDashboard);
 
 mock.module("@/services/scans", () => scansMock.exports);
 mock.module("@/services/targets", () => targetsMock.exports);
@@ -82,6 +84,7 @@ mock.module("sonner", () => ({ ...realToast, toast: toastMock.exports }));
 mock.module("@/services/admin", () => adminMock.exports);
 mock.module("@/lib/use-kill-switch", () => killSwitchMock.exports);
 mock.module("@/services/reports", () => reportsMock.exports);
+mock.module("@/services/dashboard", () => dashboardMock.exports);
 
 /** Redirect one export of a module, for the duration of a test. */
 export const stub = {
@@ -101,6 +104,8 @@ export const stub = {
     killSwitchMock.set(key, implementation),
   reports: (key: keyof typeof realReports, implementation: Fn) =>
     reportsMock.set(key, implementation),
+  dashboard: (key: keyof typeof realDashboard, implementation: Fn) =>
+    dashboardMock.set(key, implementation),
 };
 
 /** Toasts raised during a test, newest last. */
@@ -116,6 +121,7 @@ export function resetMocks(): void {
   adminMock.clear();
   killSwitchMock.clear();
   reportsMock.clear();
+  dashboardMock.clear();
   toasts.length = 0;
 
   // Hooks that would otherwise poll the API or read a session. A test about

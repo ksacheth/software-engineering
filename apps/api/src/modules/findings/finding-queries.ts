@@ -7,6 +7,8 @@ import {
   type Target,
 } from "@wvs/database";
 import {
+  ACTIONABLE_TRIAGE_STATES,
+  FINDING_SEVERITIES,
   TRIAGE_STATES,
   type ComparisonStatus,
   type FindingConfidence,
@@ -226,7 +228,7 @@ interface FindingScope {
  */
 async function resolveScope(
   ctx: AuthContext,
-  query: FindingListQuery,
+  query: Pick<FindingListQuery, "scanId" | "targetId">,
 ): Promise<FindingScope | "SCAN_NOT_FOUND"> {
   if (query.scanId) {
     const scan = await prisma.scanJob.findFirst({
@@ -332,7 +334,7 @@ async function diffFilter(
  */
 async function stateConditions(
   scope: FindingScope,
-  query: FindingListQuery,
+  query: Pick<FindingListQuery, "triageStates" | "diffStatuses">,
 ): Promise<Prisma.FindingWhereInput[] | null> {
   const [triage, diff] = await Promise.all([
     query.triageStates ? triageFilter(scope.targetIds, query.triageStates) : {},
@@ -404,6 +406,35 @@ export async function listFindings(
       ? encodeFindingCursor(page[page.length - 1]!, query.sort, query.direction)
       : null,
   };
+}
+
+/**
+ * The current posture counted by severity, with the findings list's default
+ * triage filter (OPEN and CONFIRMED), so the dashboard's numbers are the ones
+ * the Findings page shows unfiltered.
+ */
+export async function countPostureBySeverity(
+  ctx: AuthContext,
+): Promise<Record<FindingSeverity, number>> {
+  const counts = Object.fromEntries(
+    FINDING_SEVERITIES.map((severity) => [severity, 0]),
+  ) as Record<FindingSeverity, number>;
+
+  const scope = await resolveScope(ctx, {});
+  if (scope === "SCAN_NOT_FOUND" || scope.scanIds.length === 0) return counts;
+
+  const stateFilters = await stateConditions(scope, {
+    triageStates: [...ACTIONABLE_TRIAGE_STATES],
+  });
+  if (!stateFilters) return counts;
+
+  const groups = await prisma.finding.groupBy({
+    by: ["severity"],
+    where: { AND: [{ scanJobId: { in: scope.scanIds } }, ...stateFilters] },
+    _count: { _all: true },
+  });
+  for (const group of groups) counts[group.severity] = group._count._all;
+  return counts;
 }
 
 // ---------------------------------------------------- resolved since last ---

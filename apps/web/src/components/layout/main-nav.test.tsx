@@ -28,6 +28,13 @@ describe("the main navigation", () => {
     expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
     expect(screen.getByRole("link", { name: "Targets" })).toBeTruthy();
   });
+
+  test("leads with the dashboard", () => {
+    renderPage(<MainNav />);
+    const first = screen.getAllByRole("link")[0]!;
+    expect(first.textContent).toBe("Dashboard");
+    expect(first.getAttribute("href")).toBe("/dashboard");
+  });
 });
 
 describe("the kill switch banner", () => {

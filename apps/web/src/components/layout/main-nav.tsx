@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useRole } from '@/lib/use-role';
 
 const navItems = [
+  { name: 'Dashboard', href: '/dashboard' },
   { name: 'Targets', href: '/targets' },
   { name: 'Scans', href: '/scans' },
   { name: 'Findings', href: '/findings' },
