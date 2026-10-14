@@ -1,5 +1,6 @@
 import { OSVClient } from "./osv-client.js";
 import { EPSSClient } from "./epss-client.js";
+import { cvssBaseScore } from "./cvss.js";
 import type { RawFinding } from "../detectors/mock-detector.js";
 
 export class AdvisoryEnricher {
@@ -34,8 +35,13 @@ export class AdvisoryEnricher {
             vulns: vulns.map((v) => ({ id: v.id, summary: v.summary })),
           };
 
-          if (primaryVuln.severity && primaryVuln.severity.length > 0) {
-            enriched.cvssVector = primaryVuln.severity[0].score;
+          // OSV gives a vector, not a score. Prefer the v3 entry, which is the
+          // one that can be scored, and work the base score out from it.
+          const severity =
+            primaryVuln.severity?.find((s) => s.type === "CVSS_V3") ?? primaryVuln.severity?.[0];
+          if (severity) {
+            enriched.cvssVector = severity.score;
+            enriched.cvssScore = cvssBaseScore(severity.score) ?? undefined;
           }
         }
       }

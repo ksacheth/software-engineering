@@ -141,8 +141,13 @@ function EvidenceSection({ evidence }: { evidence: FindingEvidence }) {
   }
 }
 
+/**
+ * A finding written before the score was derived from the vector carries the
+ * vector alone, and findings are immutable, so the vector is still worth
+ * showing on its own.
+ */
 function formatCvss(finding: FindingDetail): string {
-  if (finding.cvssScore === null) return "-";
+  if (finding.cvssScore === null) return finding.cvssVector ?? "-";
   const vector = finding.cvssVector ? ` · ${finding.cvssVector}` : "";
   return `${finding.cvssScore.toFixed(1)}${vector}`;
 }

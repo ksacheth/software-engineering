@@ -47,11 +47,27 @@ export interface LiveScanState {
   refresh: () => void;
 }
 
+/** A finding streamed live, keyed by its fingerprint until the saved row is read. */
+function isStreamed(finding: ScanFindingSummary): boolean {
+  return finding.id === finding.fingerprint;
+}
+
+/**
+ * Whether a finding takes the place of the one held for its fingerprint. The
+ * saved row replaces a streamed one, because only it has an id to link to and
+ * the advisory data enrichment added; a streamed row never replaces anything.
+ */
+function supersedes(incoming: ScanFindingSummary, held: ScanFindingSummary | undefined): boolean {
+  if (held === undefined) return true;
+  return isStreamed(held) && !isStreamed(incoming);
+}
+
+/** Adds or upgrades a finding, keeping its place in the list. */
 function upsertFinding(
   findings: Map<string, ScanFindingSummary>,
   finding: ScanFindingSummary,
 ): boolean {
-  if (findings.has(finding.fingerprint)) return false;
+  if (!supersedes(finding, findings.get(finding.fingerprint))) return false;
   findings.set(finding.fingerprint, finding);
   return true;
 }
@@ -184,6 +200,9 @@ export function useLiveScan(
             name: message.name,
             severity: message.severity,
             affectedUrl: message.affectedUrl,
+            cveId: null,
+            cvssScore: null,
+            epssScore: null,
             createdAt: message.at,
           });
           if (added) setFindings([...findingsRef.current.values()]);

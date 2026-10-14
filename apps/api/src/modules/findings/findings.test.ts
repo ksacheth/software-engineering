@@ -202,6 +202,18 @@ describe("current posture", () => {
     });
   });
 
+  test("carries each finding's CVE, CVSS and EPSS in the list", async () => {
+    const { session, target } = await world();
+    const scan = await scanOf(session, target);
+    await findingIn(scan, "fp-jquery", { cveId: "CVE-2019-11358", cvssScore: 6.1, epssScore: 0.8682 });
+    await findingIn(scan, "fp-header");
+
+    const body = await list(session);
+    const byFingerprint = new Map(body.findings.map((f) => [f.fingerprint, f as unknown as Record<string, unknown>]));
+    expect(byFingerprint.get("fp-jquery")).toMatchObject({ cveId: "CVE-2019-11358", cvssScore: 6.1, epssScore: 0.8682 });
+    expect(byFingerprint.get("fp-header")).toMatchObject({ cveId: null, cvssScore: null, epssScore: null });
+  });
+
   test("never includes another organisation's findings", async () => {
     const { session } = await world();
     const other = await world();

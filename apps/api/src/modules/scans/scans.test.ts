@@ -862,6 +862,37 @@ describe("reading scans", () => {
     });
   });
 
+  test("carries the advisory data enrichment added", async () => {
+    const session = await createSession("ANALYST");
+    const target = await createVerifiedTarget(session.organizationId);
+    const scan = await seedScan(session, target, "COMPLETED");
+    await prisma.finding.create({
+      data: {
+        fingerprint: "fp-jquery",
+        scanJobId: scan.id,
+        targetId: target.id,
+        detectorId: "P-18",
+        name: "Technology and component fingerprinting",
+        description: "jQuery 1.12.4 is in use.",
+        remediation: "Upgrade jQuery.",
+        severity: "INFO",
+        confidence: "FIRM",
+        affectedUrl: `${target.origin}/`,
+        cveId: "CVE-2019-11358",
+        cvssScore: 6.1,
+        epssScore: 0.8682,
+      },
+    });
+
+    const res = await request(api, session, `/api/scans/${scan.id}/findings`);
+    const body = (await res.json()) as { findings: Record<string, unknown>[] };
+    expect(body.findings[0]).toMatchObject({
+      cveId: "CVE-2019-11358",
+      cvssScore: 6.1,
+      epssScore: 0.8682,
+    });
+  });
+
   test("does not expose another organisation's findings", async () => {
     const session = await createSession("ANALYST");
     const other = await createSession("ANALYST");

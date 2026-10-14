@@ -72,6 +72,24 @@ describe("reading a finding", () => {
     expect(follows("Mark the cookie HttpOnly.", "CWE-1004")).toBe(true);
   });
 
+  test("shows the advisory data with the CVSS score and its vector", async () => {
+    const vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N";
+    await showFinding(
+      aFindingDetail({ cveId: "CVE-2019-11358", cvssScore: 6.1, cvssVector: vector, epssScore: 0.8682, epssPercentile: 0.99742 }),
+    );
+
+    expect(screen.getByText("CVE-2019-11358")).toBeTruthy();
+    expect(screen.getByText(`6.1 · ${vector}`)).toBeTruthy();
+    expect(screen.getByText("86.82% · percentile 100")).toBeTruthy();
+  });
+
+  test("shows the vector alone for a finding saved before scores were derived", async () => {
+    const vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N";
+    await showFinding(aFindingDetail({ cveId: "CVE-2019-11358", cvssScore: null, cvssVector: vector }));
+
+    expect(screen.getByText(vector)).toBeTruthy();
+  });
+
   test("keeps redacted evidence behind a disclosure", async () => {
     await showFinding(
       aFindingDetail({

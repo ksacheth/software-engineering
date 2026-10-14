@@ -7,12 +7,12 @@ import {
   ListChecks,
   Radar,
   ScrollText,
-  ShieldAlert,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { REPORT_FORMATS } from "@wvs/shared";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/layout/brand-mark";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { useSignedIn } from "@/lib/use-role";
 import { HeroIllustration } from "./hero-illustration";
@@ -100,10 +100,13 @@ type SignedIn = boolean | null;
 function LandingHeader({ signedIn }: { signedIn: SignedIn }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-        <Link to="/" className="flex items-center gap-2 font-semibold">
-          <ShieldAlert className="size-5 text-primary" />
-          <span>WVS</span>
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <Link
+          to="/"
+          aria-label="WVS home"
+          className="rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <BrandMark />
         </Link>
         <nav className="flex items-center gap-2" aria-label="Account">
           {signedIn ? (

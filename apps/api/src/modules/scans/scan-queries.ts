@@ -136,6 +136,10 @@ export interface ScanFindingDto {
   name: string;
   severity: string;
   affectedUrl: string;
+  /** Advisory data, set only when enrichment matched a known CVE. */
+  cveId: string | null;
+  cvssScore: number | null;
+  epssScore: number | null;
   createdAt: Date;
 }
 
@@ -152,6 +156,9 @@ export async function listScanFindings(
       name: true,
       severity: true,
       affectedUrl: true,
+      cveId: true,
+      cvssScore: true,
+      epssScore: true,
       createdAt: true,
     },
   });
